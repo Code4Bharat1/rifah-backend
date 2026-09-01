@@ -59,6 +59,47 @@ export const reportService = {
       ]),
     ]);
 
+    // Aggregate Membership Mix
+    const membershipMixAgg = await Business.aggregate([
+      { $group: { _id: "$membership", count: { $sum: 1 } } }
+    ]);
+    const membershipMix = { Basic: 0, Premium: 0, Enterprise: 0 };
+    membershipMixAgg.forEach(item => {
+      const tier = String(item._id || "").toLowerCase();
+      if (tier.includes("enterprise")) membershipMix.Enterprise += item.count;
+      else if (tier.includes("premium")) membershipMix.Premium += item.count;
+      else membershipMix.Basic += item.count; 
+    });
+
+    // Aggregate Chapters distribution
+    const chaptersAgg = await Business.aggregate([
+      { $match: { chapter: { $exists: true, $ne: "" } } },
+      { $group: { _id: "$chapter", members: { $sum: 1 } } },
+      { $sort: { members: -1 } },
+      { $limit: 6 }
+    ]);
+    const chaptersDistribution = chaptersAgg.map(c => ({ name: c._id, members: c.members }));
+
+    // Membership Growth (last 6 months cumulative businesses)
+    const growth = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      // Last day of the month
+      const d = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+      const count = await Business.countDocuments({ createdAt: { $lte: d } });
+      const monthName = new Date(now.getFullYear(), now.getMonth() - i, 1).toLocaleString('default', { month: 'short' });
+      
+      // Calculate new registrations for that specific month to compute renewal rate if needed
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const newThisMonth = await Business.countDocuments({ createdAt: { $gte: startOfMonth, $lte: d } });
+
+      growth.push({
+        name: monthName,
+        total: count,
+        new: newThisMonth
+      });
+    }
+
     const revenue = paymentsAgg[0]?.totalRevenue || 0;
     const paidTransactions = paymentsAgg[0]?.count || 0;
 
@@ -73,6 +114,9 @@ export const reportService = {
         totalRevenue: revenue,
         paidTransactions,
       },
+      membershipMix,
+      chaptersDistribution,
+      membershipGrowth: growth
     };
   },
 };
