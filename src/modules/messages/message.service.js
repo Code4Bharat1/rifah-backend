@@ -2,6 +2,8 @@ import { Message } from "./message.model.js";
 import { User } from "../users/user.model.js";
 import { NotFoundError } from "../../shared/errors/errors.js";
 
+import { emitToUser } from "../../infrastructure/socket/socket.js";
+
 export const messageService = {
   /**
    * Helper to derive deterministic conversationId between two user IDs
@@ -14,10 +16,15 @@ export const messageService = {
   /**
    * Send a direct message
    */
-  sendMessage: async ({ recipientId, text, enquiryId, attachments }, senderId) => {
+  sendMessage: async ({ recipientId, text, body, enquiryId, attachments }, senderId) => {
     const recipient = await User.findById(recipientId);
     if (!recipient) {
       throw new NotFoundError("Recipient user not found");
+    }
+
+    const messageContent = (text || body || "").trim();
+    if (!messageContent) {
+      throw new Error("Message content cannot be empty");
     }
 
     const conversationId = messageService.getConversationId(senderId, recipientId, enquiryId);
@@ -27,11 +34,20 @@ export const messageService = {
       enquiry: enquiryId || null,
       sender: senderId,
       recipient: recipientId,
-      text: text.trim(),
+      text: messageContent,
       attachments: attachments || [],
     });
 
-    return message;
+    const populated = await Message.findById(message._id)
+      .populate("sender", "name email avatar role")
+      .populate("recipient", "name email avatar role");
+
+    // Real-time socket emission to recipient and sender
+    emitToUser(recipientId, "receive_message", populated);
+    emitToUser(recipientId, "update_conversations", populated);
+    emitToUser(senderId, "update_conversations", populated);
+
+    return populated;
   },
 
   /**

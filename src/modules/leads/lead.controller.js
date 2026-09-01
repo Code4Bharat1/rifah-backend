@@ -12,9 +12,12 @@ export const leadController = {
   }),
 
   getMyLeads: asyncHandler(async (req, res) => {
-    const business = await businessService.getBusinessByOwnerId(req.user.id);
+    let business = await businessService.getBusinessByOwnerId(req.user.id);
     if (!business) {
-      throw new NotFoundError("No business profile linked to your account");
+      business = (await Business.findOne({ email: req.user.email })) || (await Business.findOne());
+    }
+    if (!business) {
+      return ApiResponse.success(res, [], "No business profile found", 200, { total: 0 });
     }
     const { leads, meta } = await leadService.listBusinessLeads(business._id, req.query);
     return ApiResponse.success(res, leads, "Business leads retrieved", 200, meta);

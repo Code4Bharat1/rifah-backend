@@ -40,12 +40,38 @@ export const leadService = {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = { business: businessId };
 
-    if (queryParams.status) filter.status = queryParams.status;
+    if (queryParams.status && queryParams.status !== "All" && queryParams.status !== "undefined") {
+      filter.status = new RegExp(`^${queryParams.status}$`, "i");
+    }
+
+    // Auto-sync any direct or category-matching enquiries for this business
+    const business = await Business.findById(businessId);
+    if (business) {
+      const matchCriteria = [{ targetBusiness: businessId }];
+      const searchCat = business.category || business.industry;
+      if (searchCat) {
+        matchCriteria.push({ category: new RegExp(`^${searchCat.trim()}$`, "i") });
+      }
+
+      const matchingEnquiries = await Enquiry.find({ $or: matchCriteria });
+
+      for (const enq of matchingEnquiries) {
+        const existing = await Lead.findOne({ enquiry: enq._id, business: businessId });
+        if (!existing) {
+          await Lead.create({
+            enquiry: enq._id,
+            business: businessId,
+            status: "New",
+          });
+        }
+      }
+    }
 
     const [leads, total] = await Promise.all([
       Lead.find(filter)
         .populate("enquiry")
-        .sort(sort)
+        .populate("business", "name slug phone email owner")
+        .sort(sort || { createdAt: -1 })
         .skip(skip)
         .limit(limit),
       Lead.countDocuments(filter),
