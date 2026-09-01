@@ -28,10 +28,10 @@ export const errorMiddleware = (err, req, res, next) => {
   }
 
   // Handle Mongoose ValidationError
-  if (err.name === "ValidationError") {
+  if (err.name === "ValidationError" && err.errors) {
     statusCode = 422;
     code = ERROR_CODES.VALIDATION_ERROR;
-    details = Object.values(err.errors || {}).map((e) => ({
+    details = Object.values(err.errors).map((e) => ({
       field: e.path,
       message: e.message,
     }));
