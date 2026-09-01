@@ -24,6 +24,12 @@ router.get("/:id", authMiddleware, enquiryController.getEnquiryById);
 
 // Admin chamber-wide enquiry monitoring
 router.get(
+  "/",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  enquiryController.listAllEnquiries
+);
+router.get(
   "/admin/all",
   authMiddleware,
   requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),

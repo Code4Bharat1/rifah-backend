@@ -9,6 +9,7 @@ const router = Router();
 
 router.get("/conversations", authMiddleware, messageController.listConversations);
 router.get("/conversation/:otherUserId", authMiddleware, validateObjectIdParam("otherUserId"), messageController.getConversation);
+router.get("/user/:otherUserId", authMiddleware, validateObjectIdParam("otherUserId"), messageController.getConversation);
 router.post("/", authMiddleware, validateRequest(validateSendMessage), messageController.sendMessage);
 
 export { router as messageRoutes };

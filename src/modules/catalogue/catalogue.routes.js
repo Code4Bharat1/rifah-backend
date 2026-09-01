@@ -30,6 +30,13 @@ router.patch(
   validateRequest(validateUpdateCatalogueItem),
   catalogueController.updateItem
 );
+router.put(
+  "/:id",
+  authMiddleware,
+  validateObjectIdParam("id"),
+  validateRequest(validateUpdateCatalogueItem),
+  catalogueController.updateItem
+);
 
 router.post(
   "/:id/images",

@@ -14,6 +14,12 @@ export const chapterController = {
     return ApiResponse.success(res, chapter, "Chapter retrieved");
   }),
 
+  getChapterById: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const chapter = await chapterService.getChapterById(id);
+    return ApiResponse.success(res, chapter, "Chapter retrieved");
+  }),
+
   createChapter: asyncHandler(async (req, res) => {
     const created = await chapterService.createChapter(req.body);
     return ApiResponse.created(res, created, "Chapter created successfully");

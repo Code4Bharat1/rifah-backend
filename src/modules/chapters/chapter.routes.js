@@ -16,6 +16,7 @@ const router = Router();
 // Public routes
 router.get("/", chapterController.listChapters);
 router.get("/slug/:slug", chapterController.getChapterBySlug);
+router.get("/:id", validateObjectIdParam("id"), chapterController.getChapterById);
 
 // Admin routes
 router.post(

@@ -7,9 +7,11 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
+router.get("/", authMiddleware, notificationController.getMyNotifications);
 router.get("/me", authMiddleware, notificationController.getMyNotifications);
 router.patch("/:id/read", authMiddleware, validateObjectIdParam("id"), notificationController.markAsRead);
 router.patch("/read-all", authMiddleware, notificationController.markAllAsRead);
+router.patch("/mark-read", authMiddleware, notificationController.markAllAsRead);
 
 // Admin broadcast notification
 router.post(

@@ -16,9 +16,16 @@ router.post(
 );
 
 router.get("/me", authMiddleware, paymentController.getMyPayments);
+router.get("/my", authMiddleware, paymentController.getMyPayments);
 router.get("/invoice/:identifier", authMiddleware, paymentController.getInvoice);
 
 // Admin all transactions ledger
+router.get(
+  "/",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  paymentController.listAllPayments
+);
 router.get(
   "/admin/all",
   authMiddleware,

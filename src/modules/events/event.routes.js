@@ -16,6 +16,7 @@ const router = Router();
 // Public routes
 router.get("/", eventController.listEvents);
 router.get("/detail/:identifier", eventController.getEventBySlugOrId);
+router.get("/:identifier", eventController.getEventBySlugOrId);
 
 // User event RSVP
 router.post(
@@ -35,6 +36,14 @@ router.post(
 );
 
 router.patch(
+  "/:id",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  validateRequest(validateUpdateEvent),
+  eventController.updateEvent
+);
+router.put(
   "/:id",
   authMiddleware,
   requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),

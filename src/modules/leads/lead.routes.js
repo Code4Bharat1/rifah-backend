@@ -15,6 +15,7 @@ const router = Router();
 
 // Business Owner workspace leads
 router.get("/me", authMiddleware, leadController.getMyLeads);
+router.get("/my-leads", authMiddleware, leadController.getMyLeads);
 router.get("/:id", authMiddleware, validateObjectIdParam("id"), leadController.getLeadById);
 
 router.post(

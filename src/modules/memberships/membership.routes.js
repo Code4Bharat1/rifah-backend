@@ -11,6 +11,7 @@ router.get("/plans", membershipController.getPlans);
 
 // Business Owner membership management
 router.get("/me", authMiddleware, membershipController.getMyMembership);
+router.get("/my", authMiddleware, membershipController.getMyMembership);
 router.post(
   "/upgrade",
   authMiddleware,

@@ -2,7 +2,9 @@ import { app } from "./app.js";
 import { env } from "./config/env.js";
 import { connectDatabase, disconnectDatabase } from "./infrastructure/database/mongoose.js";
 import { logger } from "./infrastructure/logger/logger.js";
-
+import dns from "dns";
+dns.setDefaultResultOrder("ipv4first");
+dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 let server;
 
 const startServer = async () => {

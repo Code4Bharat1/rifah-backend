@@ -19,6 +19,7 @@ router.get("/detail/:identifier", businessController.getBusinessByIdOrSlug);
 
 // Authenticated Business Owner routes
 router.get("/me", authMiddleware, businessController.getMyBusiness);
+router.get("/:identifier", businessController.getBusinessByIdOrSlug);
 router.post(
   "/",
   authMiddleware,
@@ -26,6 +27,13 @@ router.post(
   businessController.createBusiness
 );
 router.patch(
+  "/:id",
+  authMiddleware,
+  validateObjectIdParam("id"),
+  validateRequest(validateUpdateBusiness),
+  businessController.updateBusiness
+);
+router.put(
   "/:id",
   authMiddleware,
   validateObjectIdParam("id"),

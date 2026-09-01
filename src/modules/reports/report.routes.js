@@ -8,8 +8,15 @@ const router = Router();
 
 // Business Owner Analytics
 router.get("/business/me", authMiddleware, reportController.getBusinessAnalytics);
+router.get("/business-analytics", authMiddleware, reportController.getBusinessAnalytics);
 
 // Admin Secretariat Chamber-wide KPIs
+router.get(
+  "/overview",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  reportController.getAdminOverview
+);
 router.get(
   "/admin/overview",
   authMiddleware,
