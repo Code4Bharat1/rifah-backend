@@ -10,18 +10,18 @@ const seedAdmin = async () => {
     console.log("Connecting to MongoDB for Admin Seeding...");
     await mongoose.connect(env.DATABASE.URI);
 
-    const adminEmail = "secretariat@rifah.org";
+    const adminEmail = "admin@gmail.com";
     const existingAdmin = await User.findOne({ email: adminEmail });
 
     if (existingAdmin) {
       console.log(`Admin account already exists (${adminEmail}). Updating credentials...`);
-      existingAdmin.passwordHash = await hashPassword("Admin@123456");
+      existingAdmin.passwordHash = await hashPassword("12345678");
       existingAdmin.role = ROLES.SUPER_ADMIN;
       existingAdmin.status = STATUSES.USER.ACTIVE;
       await existingAdmin.save();
       console.log(`✅ Admin account (${adminEmail}) updated successfully!`);
     } else {
-      const passwordHash = await hashPassword("Admin@123456");
+      const passwordHash = await hashPassword("12345678");
       await User.create({
         name: "RIFAH Secretariat General",
         email: adminEmail,
@@ -31,7 +31,7 @@ const seedAdmin = async () => {
         status: STATUSES.USER.ACTIVE,
         chapter: "Mumbai Chapter",
       });
-      console.log(`✅ Super Admin created successfully: ${adminEmail} / Admin@123456`);
+      console.log(`✅ Super Admin created successfully: ${adminEmail} / 12345678`);
     }
 
     await mongoose.disconnect();
