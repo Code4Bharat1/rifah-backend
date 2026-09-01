@@ -12,7 +12,7 @@ const startServer = async () => {
 
     // 2. Start HTTP Server
     server = app.listen(env.PORT, () => {
-      logger.info(`Port        : ${env.PORT}`);
+      logger.info(`Port:${env.PORT}`);
       logger.info(`Health Check: http://localhost:${env.PORT}/health`);
     });
   } catch (error) {

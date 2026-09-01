@@ -7,10 +7,10 @@ export const connectDatabase = async () => {
     mongoose.set("strictQuery", true);
     const conn = await mongoose.connect(databaseConfig.uri, databaseConfig.options);
 
-    logger.info(`MongoDB Connected successfully to ${conn.connection.host}/${conn.connection.name}`);
+    logger.info(`Database connected successfully`);
 
     mongoose.connection.on("error", (err) => {
-      logger.error("MongoDB runtime connection error:", err);
+      logger.error("Database runtime connection error:", err);
     });
 
     mongoose.connection.on("disconnected", () => {
