@@ -25,6 +25,13 @@ router.post(
   validateRequest(validateCreateBusiness),
   businessController.createBusiness
 );
+router.put(
+  "/:id",
+  authMiddleware,
+  validateObjectIdParam("id"),
+  validateRequest(validateUpdateBusiness),
+  businessController.updateBusiness
+);
 router.patch(
   "/:id",
   authMiddleware,
