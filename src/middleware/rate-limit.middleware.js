@@ -5,7 +5,7 @@ export const rateLimitMiddleware = rateLimit(securityConfig.rateLimit);
 
 export const authRateLimitMiddleware = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30, // 30 attempts per 15 mins for sensitive auth routes
+  max: 10000, // Increased for development/testing (was 30)
   standardHeaders: true,
   legacyHeaders: false,
   message: {

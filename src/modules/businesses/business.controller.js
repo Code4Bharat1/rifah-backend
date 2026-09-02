@@ -5,7 +5,7 @@ import { storageService } from "../../infrastructure/storage/storage.service.js"
 
 export const businessController = {
   searchDirectory: asyncHandler(async (req, res) => {
-    const { businesses, meta } = await businessService.searchDirectory(req.query);
+    const { businesses, meta } = await businessService.searchDirectory(req.query, req.user);
     return ApiResponse.success(res, businesses, "Businesses directory retrieved", 200, meta);
   }),
 

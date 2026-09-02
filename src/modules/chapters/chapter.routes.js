@@ -53,5 +53,14 @@ router.delete(
   chapterController.removeUnit
 );
 
+router.post(
+  "/:id/admins",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  validateObjectIdParam("id"),
+  // TODO: Add validation for name and email
+  chapterController.assignAdmin
+);
+
 export { router as chapterRoutes };
 export default router;

@@ -2,6 +2,7 @@ import { Verification } from "./verification.model.js";
 import { Business } from "../businesses/business.model.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
+import { ROLES } from "../../shared/constants/roles.js";
 
 export const verificationService = {
   /**
@@ -51,9 +52,17 @@ export const verificationService = {
   /**
    * List all pending/submitted verification requests (Admin queue)
    */
-  listVerifications: async (queryParams = {}) => {
+  listVerifications: async (queryParams = {}, requester = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
+
+    // RBAC: Chapter Admin Scope Enforcement
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
+      const chapterBusinesses = await Business.find({ chapter: requester.chapter }).select('_id');
+      const businessIds = chapterBusinesses.map(b => b._id);
+      filter.business = { $in: businessIds };
+    }
+
     if (queryParams.status) {
       filter.status = queryParams.status;
     }

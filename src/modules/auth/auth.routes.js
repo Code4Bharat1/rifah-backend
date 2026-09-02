@@ -8,6 +8,10 @@ import {
   validateRegisterBusiness,
   validateLogin,
   validateRefreshToken,
+  validateChangePassword,
+  validateForgotPassword,
+  validateResetPassword,
+  validateCompleteOnboarding,
 } from "./auth.validation.js";
 
 const router = Router();
@@ -41,6 +45,34 @@ router.post(
 
 router.get("/me", authMiddleware, authController.getMe);
 router.post("/logout", authMiddleware, authController.logout);
+router.patch("/change-password", authMiddleware, authController.changePassword);
+
+router.post(
+  "/forgot-password",
+  authRateLimitMiddleware,
+  validateRequest(validateForgotPassword),
+  authController.forgotPassword
+);
+
+router.post(
+  "/reset-password",
+  authRateLimitMiddleware,
+  validateRequest(validateResetPassword),
+  authController.resetPassword
+);
+
+router.post(
+  "/google",
+  authRateLimitMiddleware,
+  authController.googleAuth
+);
+
+router.post(
+  "/complete-onboarding",
+  authMiddleware,
+  validateRequest(validateCompleteOnboarding),
+  authController.completeOnboarding
+);
 
 export { router as authRoutes };
 export default router;

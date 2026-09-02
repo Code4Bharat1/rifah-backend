@@ -24,7 +24,7 @@ export const userController = {
   }),
 
   listUsers: asyncHandler(async (req, res) => {
-    const { users, meta } = await userService.listUsers(req.query);
+    const { users, meta } = await userService.listUsers(req.query, req.user);
     return ApiResponse.success(res, users, "Users list retrieved", 200, meta);
   }),
 
@@ -32,5 +32,10 @@ export const userController = {
     const { id } = req.params;
     const updated = await userService.updateUserStatus(id, req.body);
     return ApiResponse.success(res, updated, "User status updated successfully");
+  }),
+
+  deactivateMe: asyncHandler(async (req, res) => {
+    const result = await userService.deactivateAccount(req.user.id, req.body);
+    return ApiResponse.success(res, result, "Account has been deactivated");
   }),
 };

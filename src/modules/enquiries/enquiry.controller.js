@@ -20,7 +20,7 @@ export const enquiryController = {
   }),
 
   listAllEnquiries: asyncHandler(async (req, res) => {
-    const { enquiries, meta } = await enquiryService.listAllEnquiries(req.query);
+    const { enquiries, meta } = await enquiryService.listAllEnquiries(req.query, req.user);
     return ApiResponse.success(res, enquiries, "All enquiries retrieved", 200, meta);
   }),
 

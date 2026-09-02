@@ -33,7 +33,7 @@ export const verificationController = {
   }),
 
   listVerifications: asyncHandler(async (req, res) => {
-    const { verifications, meta } = await verificationService.listVerifications(req.query);
+    const { verifications, meta } = await verificationService.listVerifications(req.query, req.user);
     return ApiResponse.success(res, verifications, "Verification queue retrieved", 200, meta);
   }),
 

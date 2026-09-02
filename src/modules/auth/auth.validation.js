@@ -49,3 +49,52 @@ export const validateRefreshToken = (data = {}) => {
   }
   return { valid: errors.length === 0, errors };
 };
+
+export const validateChangePassword = (data = {}) => {
+  const errors = [];
+  if (!data.currentPassword || typeof data.currentPassword !== "string") {
+    errors.push({ field: "currentPassword", message: "Current password is required" });
+  }
+  if (!data.newPassword || typeof data.newPassword !== "string" || data.newPassword.length < 6) {
+    errors.push({ field: "newPassword", message: "New password must be at least 6 characters" });
+  }
+  return { valid: errors.length === 0, errors };
+};
+
+export const validateForgotPassword = (data = {}) => {
+  const errors = [];
+  if (!data.email || !isValidEmail(data.email)) {
+    errors.push({ field: "email", message: "A valid email address is required" });
+  }
+  return { valid: errors.length === 0, errors };
+};
+
+export const validateResetPassword = (data = {}) => {
+  const errors = [];
+  if (!data.email || !isValidEmail(data.email)) {
+    errors.push({ field: "email", message: "A valid email address is required" });
+  }
+  if (!data.resetToken || typeof data.resetToken !== "string") {
+    errors.push({ field: "resetToken", message: "Verification code is required" });
+  }
+  if (!data.newPassword || typeof data.newPassword !== "string" || data.newPassword.length < 6) {
+    errors.push({ field: "newPassword", message: "New password must be at least 6 characters" });
+  }
+  return { valid: errors.length === 0, errors };
+};
+
+export const validateCompleteOnboarding = (data = {}) => {
+  const errors = [];
+  if (!data.password || typeof data.password !== "string" || data.password.length < 6) {
+    errors.push({ field: "password", message: "Password must be at least 6 characters" });
+  }
+  if (!data.phone || typeof data.phone !== "string" || data.phone.trim().length < 5) {
+    errors.push({ field: "phone", message: "A valid phone number is required" });
+  }
+  if (data.role === "business_owner") {
+    if (!data.businessName || typeof data.businessName !== "string" || data.businessName.trim().length < 2) {
+      errors.push({ field: "businessName", message: "Business name is required" });
+    }
+  }
+  return { valid: errors.length === 0, errors };
+};
