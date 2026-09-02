@@ -1,6 +1,8 @@
 import { Enquiry } from "./enquiry.model.js";
 import { Business } from "../businesses/business.model.js";
+import { User } from "../users/user.model.js";
 import { notificationService } from "../notifications/notification.service.js";
+import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
@@ -44,6 +46,34 @@ export const enquiryService = {
             entityId: enquiry._id,
             link: "/biz/enquiries",
           });
+
+          let targetEmail = null;
+          let ownerName = targetBiz.name;
+
+          if (targetBiz.owner) {
+            const ownerUser = await User.findById(targetBiz.owner);
+            if (ownerUser?.email) {
+              targetEmail = ownerUser.email;
+              ownerName = ownerUser.name;
+            }
+          }
+
+          if (!targetEmail && targetBiz.email) {
+            targetEmail = targetBiz.email;
+          }
+
+          if (targetEmail) {
+            await emailService.sendNewLeadEmail({
+              email: targetEmail,
+              businessOwnerName: ownerName,
+              leadTitle: enquiry.title,
+              category: enquiry.category,
+              quantity: enquiry.quantity,
+              budget: enquiry.budget,
+              location: enquiry.city,
+              buyerName: enquiry.requesterName,
+            });
+          }
         }
       } catch (err) {}
     }

@@ -2,6 +2,7 @@ import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
 import { hashPassword, comparePassword } from "../../infrastructure/auth/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../infrastructure/auth/jwt.js";
+import { emailService } from "../../infrastructure/email/email.service.js";
 import {
   ConflictError,
   UnauthorizedError,
@@ -41,6 +42,10 @@ export const authService = {
       isProfileComplete: true,
     });
 
+    try {
+      await emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role });
+    } catch (err) {}
+
     const tokenPayload = {
       id: user._id,
       email: user.email,
@@ -72,6 +77,10 @@ export const authService = {
       role: ROLES.BUSINESS_OWNER,
       isProfileComplete: true,
     });
+
+    try {
+      await emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role });
+    } catch (err) {}
 
     const tokenPayload = {
       id: user._id,
