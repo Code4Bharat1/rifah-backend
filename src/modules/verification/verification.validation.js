@@ -8,8 +8,9 @@ export const validateSubmitVerification = (data = {}) => {
 
 export const validateReviewVerification = (data = {}) => {
   const errors = [];
-  const allowed = ["verified", "rejected", "correction_requested", "under_review"];
-  if (!data.status || !allowed.includes(data.status)) {
+  const statusOrDecision = data.status || data.decision;
+  const allowed = ["verified", "approved", "rejected", "correction_requested", "correction", "under_review"];
+  if (!statusOrDecision || !allowed.includes(statusOrDecision)) {
     errors.push({ field: "status", message: `Status must be one of: ${allowed.join(", ")}` });
   }
   return { valid: errors.length === 0, errors };

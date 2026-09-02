@@ -12,13 +12,16 @@ export const ENUMS = Object.freeze({
   EVENT_MODES: ["In-person", "Online", "Hybrid"],
   NOTIFICATION_TYPES: [
     "Lead",
+    "Enquiry",
     "Message",
     "Membership",
     "Payment",
     "Event",
     "Review",
     "Account",
+    "Verification",
     "System",
+    "General",
   ],
   PAYMENT_METHODS: ["Card", "Bank transfer", "UPI", "Net Banking"],
   AUDIT_ACTIONS: [

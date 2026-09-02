@@ -1,4 +1,6 @@
 import { Event } from "./event.model.js";
+import { User } from "../users/user.model.js";
+import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
@@ -88,6 +90,20 @@ export const eventService = {
     event.registeredUsers.push(userId);
     event.registeredCount += 1;
     await event.save();
+
+    try {
+      const user = await User.findById(userId);
+      if (user?.email) {
+        await emailService.sendEventRegistrationEmail({
+          email: user.email,
+          userName: user.name,
+          eventTitle: event.title,
+          eventDate: event.date || "Upcoming Chamber Event",
+          location: event.location || "Chamber Main Hall",
+          ticketType: "Member Pass",
+        });
+      }
+    } catch (err) {}
 
     return event;
   },
