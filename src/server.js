@@ -2,6 +2,7 @@ import { app } from "./app.js";
 import { env } from "./config/env.js";
 import { connectDatabase, disconnectDatabase } from "./infrastructure/database/mongoose.js";
 import { logger } from "./infrastructure/logger/logger.js";
+import { initSocket } from "./infrastructure/socket/socket.js";
 import dns from "dns";
 dns.setDefaultResultOrder("ipv4first");
 dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
@@ -17,6 +18,9 @@ const startServer = async () => {
       logger.info(`Port:${env.PORT}`);
       logger.info(`Health Check: http://localhost:${env.PORT}/health`);
     });
+
+    // 3. Initialize Socket.io Server
+    initSocket(server);
   } catch (error) {
     logger.error("Failed to start server:", error);
     process.exit(1);

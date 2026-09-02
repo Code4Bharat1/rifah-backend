@@ -70,6 +70,13 @@ router.post(
   upload.array("gallery", 10),
   businessController.uploadGallery
 );
+router.post(
+  "/:id/certificates",
+  authMiddleware,
+  validateObjectIdParam("id"),
+  upload.single("certificate"),
+  businessController.uploadCertificate
+);
 
 // Admin moderation
 router.patch(

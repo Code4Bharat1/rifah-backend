@@ -16,9 +16,24 @@ export const validateUpdateProfile = (data = {}) => {
 
 export const validateUpdateStatus = (data = {}) => {
   const errors = [];
-  const allowed = ["Active", "Pending", "Suspended", "Deactivated"];
-  if (!data.status || !allowed.includes(data.status)) {
-    errors.push({ field: "status", message: `Status must be one of: ${allowed.join(", ")}` });
+  
+  if (data.status) {
+    const allowedStatuses = ["Active", "Pending", "Suspended", "Deactivated"];
+    if (!allowedStatuses.includes(data.status)) {
+      errors.push({ field: "status", message: `Status must be one of: ${allowedStatuses.join(", ")}` });
+    }
   }
+
+  if (data.role) {
+    const allowedRoles = ["customer", "business_owner", "chapter_admin", "secretariat", "super_admin"];
+    if (!allowedRoles.includes(data.role)) {
+      errors.push({ field: "role", message: `Role must be one of: ${allowedRoles.join(", ")}` });
+    }
+  }
+
+  if (!data.status && !data.role) {
+    errors.push({ field: "body", message: "Must provide status or role to update" });
+  }
+
   return { valid: errors.length === 0, errors };
 };

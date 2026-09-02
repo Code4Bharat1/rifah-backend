@@ -1,3 +1,4 @@
+import { Catalogue } from "./catalogue.model.js";
 import { catalogueService } from "./catalogue.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
@@ -32,8 +33,11 @@ export const catalogueController = {
       return ApiResponse.error(res, "No image files uploaded", 400);
     }
     const newImageUrls = req.files.map((f) => storageService.getPublicUrl(f.filename, "catalogue"));
-    const updated = await catalogueService.updateItem(id, { images: newImageUrls }, req.user);
-    return ApiResponse.success(res, { images: newImageUrls, item: updated }, "Images uploaded successfully");
+    const existingItem = await Catalogue.findById(id);
+    const currentImages = Array.isArray(existingItem?.images) ? existingItem.images : [];
+    const combinedImages = [...currentImages, ...newImageUrls];
+    const updated = await catalogueService.updateItem(id, { images: combinedImages }, req.user);
+    return ApiResponse.success(res, { images: combinedImages, item: updated }, "Images uploaded successfully");
   }),
 
   deleteItem: asyncHandler(async (req, res) => {

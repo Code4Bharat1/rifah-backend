@@ -4,8 +4,25 @@ import { STATUSES } from "../../shared/constants/statuses.js";
 const documentSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ["Udyam Registration", "GST Certificate", "FSSAI License", "PAN Card", "Company Incorporation", "Other"],
+    enum: [
+      "Udyam Registration",
+      "msme_udyam",
+      "GST Certificate",
+      "gst_certificate",
+      "FSSAI License",
+      "fssai_license",
+      "PAN Card",
+      "pan_card",
+      "Company Incorporation",
+      "trade_license",
+      "Other",
+    ],
     required: true,
+  },
+  name: {
+    type: String,
+    trim: true,
+    default: "",
   },
   number: {
     type: String,
@@ -15,6 +32,11 @@ const documentSchema = new mongoose.Schema({
   fileUrl: {
     type: String,
     required: true,
+  },
+  status: {
+    type: String,
+    enum: ["pending", "under_review", "approved", "rejected"],
+    default: "pending",
   },
 });
 
