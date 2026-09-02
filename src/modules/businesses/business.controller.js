@@ -63,6 +63,18 @@ export const businessController = {
     return ApiResponse.success(res, { gallery: updatedGallery, business: updated }, "Gallery photos uploaded successfully");
   }),
 
+  uploadCertificate: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!req.file) {
+      return ApiResponse.error(res, "No certificate file uploaded", 400);
+    }
+    const fileUrl = storageService.getPublicUrl(req.file.filename, "certificates");
+    const business = await businessService.getBusinessBySlugOrId(id);
+    const updatedCertificates = [...(business.certifications || []), fileUrl];
+    const updated = await businessService.updateBusiness(id, { certifications: updatedCertificates }, req.user);
+    return ApiResponse.success(res, { certificates: updatedCertificates, business: updated }, "Certificate uploaded successfully");
+  }),
+
   updateStatus: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updated = await businessService.updateStatus(id, req.body);

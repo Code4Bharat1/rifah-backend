@@ -90,7 +90,7 @@ export const messageService = {
           String(msg.sender._id) === String(currentUserId) ? msg.recipient : msg.sender;
         conversationMap.set(msg.conversationId, {
           conversationId: msg.conversationId,
-          lastMessage: msg.text,
+          lastMessage: { body: msg.text, text: msg.text },
           lastMessageAt: msg.createdAt,
           isRead: msg.isRead || String(msg.sender._id) === String(currentUserId),
           otherUser,

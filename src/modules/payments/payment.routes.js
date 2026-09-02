@@ -8,6 +8,9 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
+router.post("/order", authMiddleware, paymentController.createOrder);
+router.post("/verify", authMiddleware, paymentController.verifyPayment);
+
 router.post(
   "/",
   authMiddleware,

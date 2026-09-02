@@ -19,6 +19,11 @@ const documentSchema = new mongoose.Schema({
     ],
     required: true,
   },
+  name: {
+    type: String,
+    trim: true,
+    default: "",
+  },
   number: {
     type: String,
     trim: true,
@@ -27,6 +32,11 @@ const documentSchema = new mongoose.Schema({
   fileUrl: {
     type: String,
     required: true,
+  },
+  status: {
+    type: String,
+    enum: ["pending", "under_review", "approved", "rejected"],
+    default: "pending",
   },
 });
 

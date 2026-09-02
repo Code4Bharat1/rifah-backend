@@ -46,6 +46,11 @@ export const env = {
     FROM: process.env.EMAIL_FROM || "RIFAH Chamber <no-reply@rifah.org>",
   },
 
+  RAZORPAY: {
+    KEY_ID: process.env.RAZORPAY_KEY_ID || "rzp_test_TTykh9OVkLKNHl",
+    KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || "7F7NmMGfMcDVTHqlO35raX2u",
+  },
+
   isDevelopment: () => (process.env.NODE_ENV || "development") === "development",
   isProduction: () => process.env.NODE_ENV === "production",
   isTest: () => process.env.NODE_ENV === "test",
