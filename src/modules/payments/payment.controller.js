@@ -19,8 +19,8 @@ export const paymentController = {
   }),
 
   getMyPayments: asyncHandler(async (req, res) => {
-    const { payments, meta } = await paymentService.listUserPayments(req.user.id, req.query);
-    return ApiResponse.success(res, payments, "My transactions retrieved", 200, meta);
+    const { payments, summary, meta } = await paymentService.listUserPayments(req.user.id, req.query);
+    return ApiResponse.success(res, { payments, summary }, "My transactions retrieved", 200, meta);
   }),
 
   getInvoice: asyncHandler(async (req, res) => {

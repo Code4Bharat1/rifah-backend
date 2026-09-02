@@ -1,4 +1,6 @@
 import { Enquiry } from "./enquiry.model.js";
+import { Business } from "../businesses/business.model.js";
+import { notificationService } from "../notifications/notification.service.js";
 import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
@@ -20,7 +22,7 @@ export const enquiryService = {
       { label: "Enquiry closed", at: "Pending", done: false },
     ];
 
-    return Enquiry.create({
+    const enquiry = await Enquiry.create({
       ...data,
       referenceId,
       requester: user.id,
@@ -28,6 +30,24 @@ export const enquiryService = {
       requesterRole: user.role === "customer" ? "Customer / Buyer" : "Member Buyer",
       timeline: initialTimeline,
     });
+
+    if (data.targetBusiness) {
+      try {
+        const targetBiz = await Business.findById(data.targetBusiness);
+        if (targetBiz?.owner) {
+          await notificationService.createNotification({
+            recipientId: targetBiz.owner,
+            type: "Enquiry",
+            title: "New Direct Enquiry",
+            body: `New requirement "${enquiry.title}" received from ${enquiry.requesterName}.`,
+            entityId: enquiry._id,
+            link: "/biz/enquiries",
+          });
+        }
+      } catch (err) {}
+    }
+
+    return enquiry;
   },
 
   /**

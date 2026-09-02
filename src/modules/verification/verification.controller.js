@@ -39,7 +39,13 @@ export const verificationController = {
 
   reviewVerification: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const reviewed = await verificationService.reviewVerification(id, req.body, req.user.id);
+    const status = req.body.status || req.body.decision;
+    const remarks = req.body.remarks || req.body.notes || "";
+    const reviewed = await verificationService.reviewVerification(
+      id,
+      { status, remarks },
+      req.user.id
+    );
     return ApiResponse.success(res, reviewed, "Verification status updated successfully");
   }),
 };

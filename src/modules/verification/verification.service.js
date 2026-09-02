@@ -83,16 +83,33 @@ export const verificationService = {
       throw new NotFoundError("Verification request not found");
     }
 
-    verification.status = status;
+    let finalStatus = status;
+    if (status === "approved") finalStatus = "verified";
+    if (status === "correction") finalStatus = "correction_requested";
+
+    verification.status = finalStatus;
     verification.remarks = remarks || "";
     verification.reviewedBy = reviewerId;
     verification.reviewedAt = new Date();
+
+    if (Array.isArray(verification.documents)) {
+      verification.documents.forEach((doc) => {
+        if (finalStatus === "verified") {
+          doc.status = "approved";
+        } else if (finalStatus === "rejected") {
+          doc.status = "rejected";
+        } else if (finalStatus === "correction_requested") {
+          doc.status = "under_review";
+        }
+      });
+    }
+
     await verification.save();
 
     // Update business profile verification status
     const business = await Business.findById(verification.business);
     if (business) {
-      business.verification = status;
+      business.verification = finalStatus;
       await business.save();
     }
 
