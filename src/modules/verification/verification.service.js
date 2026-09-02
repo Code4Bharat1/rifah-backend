@@ -1,5 +1,7 @@
 import { Verification } from "./verification.model.js";
 import { Business } from "../businesses/business.model.js";
+import { User } from "../users/user.model.js";
+import { emailService } from "../../infrastructure/email/email.service.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { ROLES } from "../../shared/constants/roles.js";
@@ -120,6 +122,21 @@ export const verificationService = {
     if (business) {
       business.verification = finalStatus;
       await business.save();
+
+      if (business.owner) {
+        try {
+          const ownerUser = await User.findById(business.owner);
+          if (ownerUser?.email) {
+            await emailService.sendVerificationStatusEmail({
+              email: ownerUser.email,
+              ownerName: ownerUser.name,
+              businessName: business.name,
+              status: finalStatus,
+              notes: remarks,
+            });
+          }
+        } catch (err) {}
+      }
     }
 
     return verification;

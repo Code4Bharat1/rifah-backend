@@ -1,8 +1,11 @@
 import crypto from "crypto";
 import { Payment } from "./payment.model.js";
+import { User } from "../users/user.model.js";
+import { Business } from "../businesses/business.model.js";
 import { env } from "../../config/env.js";
 import { membershipService } from "../memberships/membership.service.js";
 import { notificationService } from "../notifications/notification.service.js";
+import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
@@ -104,7 +107,26 @@ export const paymentService = {
         body: `Payment of ₹${payment.amount} (Invoice #${payment.invoiceNumber}) was verified successfully.`,
         link: "/biz/payments",
       });
-    } catch (err) {}
+
+      const userDoc = await User.findById(user.id);
+      const businessDoc = businessId ? await Business.findById(businessId) : null;
+      const targetEmail = payload.billingEmail || userDoc?.email;
+      if (targetEmail) {
+        await emailService.sendMembershipInvoiceEmail({
+          email: targetEmail,
+          name: userDoc?.name || "Member",
+          businessName: businessDoc?.name || payload.businessName || "Member Business",
+          planName: (planId || "Membership").toUpperCase(),
+          amount: payment.amount,
+          invoiceNumber: payment.invoiceNumber,
+          paidAt: payment.paidAt,
+          transactionId: payment.transactionId || razorpay_payment_id,
+          paymentMethod: "Razorpay Online Payment",
+        });
+      }
+    } catch (err) {
+      console.error("Payment notification / email error:", err);
+    }
 
     return {
       verified: true,
@@ -139,7 +161,26 @@ export const paymentService = {
         body: `Invoice #${payment.invoiceNumber} for ₹${payment.amount} has been issued.`,
         link: "/biz/payments",
       });
-    } catch (err) {}
+
+      const userDoc = await User.findById(user.id);
+      const businessDoc = data.business ? await Business.findById(data.business) : null;
+      const targetEmail = data.billingEmail || userDoc?.email;
+      if (targetEmail) {
+        await emailService.sendMembershipInvoiceEmail({
+          email: targetEmail,
+          name: userDoc?.name || "Member",
+          businessName: businessDoc?.name || data.businessName || "Member Business",
+          planName: (data.itemType || "Membership").toUpperCase(),
+          amount: payment.amount,
+          invoiceNumber: payment.invoiceNumber,
+          paidAt: payment.paidAt,
+          transactionId: payment.transactionId,
+          paymentMethod: data.method || "Online Transfer",
+        });
+      }
+    } catch (err) {
+      console.error("Payment notification / email error:", err);
+    }
 
     return payment;
   },

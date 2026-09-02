@@ -12,42 +12,72 @@ export const businessService = {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
     
-    // Only apply active status filter for public/customer users
+    // Allow Active or unset status for public users
     if (!user || ![ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN].includes(user.role)) {
-      filter.status = "Active";
+      filter.status = { $ne: "Suspended" };
     }
 
     // RBAC: Chapter Admin Scope Enforcement
     if (user && user.role === ROLES.CHAPTER_ADMIN) {
       filter.chapter = user.chapter;
-    } else if (queryParams.chapter) {
-      // Normal filtering if not forced by RBAC
-      filter.chapter = queryParams.chapter;
+    } else if (
+      queryParams.chapter &&
+      queryParams.chapter !== "undefined" &&
+      queryParams.chapter !== "null" &&
+      queryParams.chapter.toLowerCase() !== "all" &&
+      queryParams.chapter !== "All chapters"
+    ) {
+      filter.chapter = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
     }
 
-    if (queryParams.search) {
+    if (queryParams.search && queryParams.search !== "undefined" && queryParams.search.trim()) {
+      const searchRegex = new RegExp(queryParams.search.trim(), "i");
       filter.$or = [
-        { name: { $regex: queryParams.search, $options: "i" } },
-        { tagline: { $regex: queryParams.search, $options: "i" } },
-        { about: { $regex: queryParams.search, $options: "i" } },
-        { categories: { $regex: queryParams.search, $options: "i" } },
+        { name: searchRegex },
+        { tagline: searchRegex },
+        { about: searchRegex },
+        { categories: searchRegex },
+        { industry: searchRegex },
+        { city: searchRegex },
       ];
     }
 
-    if (queryParams.category) {
-      filter.categories = { $in: [queryParams.category] };
+    if (
+      queryParams.category &&
+      queryParams.category !== "undefined" &&
+      queryParams.category !== "null" &&
+      queryParams.category.toLowerCase() !== "all"
+    ) {
+      filter.categories = { $in: [new RegExp(queryParams.category, "i")] };
     }
 
-    if (queryParams.industry) {
-      filter.industry = queryParams.industry;
+    if (
+      queryParams.industry &&
+      queryParams.industry !== "undefined" &&
+      queryParams.industry !== "null" &&
+      queryParams.industry.toLowerCase() !== "all" &&
+      queryParams.industry !== "All industries"
+    ) {
+      filter.industry = new RegExp(`^${queryParams.industry.trim()}$`, "i");
     }
 
-    if (queryParams.city) {
-      filter.city = queryParams.city;
+    if (
+      queryParams.city &&
+      queryParams.city !== "undefined" &&
+      queryParams.city !== "null" &&
+      queryParams.city.toLowerCase() !== "all" &&
+      queryParams.city !== "All cities"
+    ) {
+      filter.city = new RegExp(`^${queryParams.city.trim()}$`, "i");
     }
 
-    if (queryParams.membership) {
-      filter.membership = queryParams.membership;
+    if (
+      queryParams.membership &&
+      queryParams.membership !== "undefined" &&
+      queryParams.membership !== "null" &&
+      queryParams.membership.toLowerCase() !== "all"
+    ) {
+      filter.membership = new RegExp(`^${queryParams.membership.trim()}$`, "i");
     }
 
     if (queryParams.verified === "true") {
