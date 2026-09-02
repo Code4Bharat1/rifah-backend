@@ -5,7 +5,7 @@ export const validateUpdateProfile = (data = {}) => {
   if (data.name !== undefined && (typeof data.name !== "string" || data.name.trim().length < 2)) {
     errors.push({ field: "name", message: "Name must be at least 2 characters" });
   }
-  if (data.email !== undefined && !isValidEmail(data.email)) {
+  if (data.email !== undefined && data.email !== "" && !isValidEmail(data.email)) {
     errors.push({ field: "email", message: "Invalid email format" });
   }
   if (data.phone !== undefined && data.phone !== "" && !isValidPhone(data.phone)) {

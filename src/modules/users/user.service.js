@@ -1,5 +1,7 @@
 import { User } from "./user.model.js";
-import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
+import { NotFoundError, BadRequestError, UnauthorizedError } from "../../shared/errors/errors.js";
+import { comparePassword } from "../../infrastructure/auth/password.js";
+import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 
 export const userService = {
@@ -18,7 +20,7 @@ export const userService = {
    * Update own user profile
    */
   updateProfile: async (userId, updateData) => {
-    const allowedUpdates = ["name", "phone", "chapter", "avatar"];
+    const allowedUpdates = ["name", "email", "phone", "chapter", "organization", "city", "taxId", "avatar"];
     const filteredUpdates = {};
     for (const key of allowedUpdates) {
       if (updateData[key] !== undefined) {
@@ -110,5 +112,27 @@ export const userService = {
       throw new NotFoundError("User not found");
     }
     return user;
+  },
+
+  /**
+   * Deactivate own user account
+   */
+  deactivateAccount: async (userId, { password, reason } = {}) => {
+    const user = await User.findById(userId).select("+passwordHash");
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    if (password) {
+      const isMatch = await comparePassword(password, user.passwordHash);
+      if (!isMatch) {
+        throw new UnauthorizedError("Incorrect password confirmation", ERROR_CODES.INVALID_CREDENTIALS);
+      }
+    }
+
+    user.status = "Deactivated";
+    await user.save();
+
+    return { message: "Account has been deactivated successfully" };
   },
 };

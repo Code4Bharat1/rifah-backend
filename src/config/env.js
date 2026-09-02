@@ -46,6 +46,11 @@ export const env = {
     FROM: process.env.EMAIL_FROM || "RIFAH Chamber <no-reply@rifah.org>",
   },
 
+  GOOGLE: {
+    CLIENT_ID: process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
+    CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
+  },
+
   isDevelopment: () => (process.env.NODE_ENV || "development") === "development",
   isProduction: () => process.env.NODE_ENV === "production",
   isTest: () => process.env.NODE_ENV === "test",
