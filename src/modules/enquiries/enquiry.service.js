@@ -56,7 +56,13 @@ export const enquiryService = {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = { requester: userId };
 
-    if (queryParams.status) filter.status = queryParams.status;
+    if (queryParams.status && queryParams.status !== "undefined" && queryParams.status !== "null" && queryParams.status.toLowerCase() !== "all") {
+      if (queryParams.status.toLowerCase() === "submitted" || queryParams.status.toLowerCase() === "new") {
+        filter.status = { $in: ["New", "Submitted"] };
+      } else {
+        filter.status = new RegExp(`^${queryParams.status}$`, "i");
+      }
+    }
 
     const [enquiries, total] = await Promise.all([
       Enquiry.find(filter)

@@ -8,6 +8,10 @@ import {
   validateRegisterBusiness,
   validateLogin,
   validateRefreshToken,
+  validateChangePassword,
+  validateForgotPassword,
+  validateResetPassword,
+  validateCompleteOnboarding,
 } from "./auth.validation.js";
 
 const router = Router();

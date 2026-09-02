@@ -1,4 +1,5 @@
 import { User } from "../users/user.model.js";
+import { Business } from "../businesses/business.model.js";
 import { hashPassword, comparePassword } from "../../infrastructure/auth/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../infrastructure/auth/jwt.js";
 import {
@@ -9,12 +10,17 @@ import {
 } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { ERROR_CODES } from "../../shared/errors/error-codes.js";
+import { OAuth2Client } from "google-auth-library";
+import { env } from "../../config/env.js";
+import { generateSlug } from "../../shared/utils/generate-id.js";
+
+const googleClient = new OAuth2Client(env.GOOGLE.CLIENT_ID || undefined);
 
 export const authService = {
   /**
    * Register a new standard user / customer / buyer
    */
-  register: async ({ name, email, password, phone, chapter }) => {
+  register: async ({ name, email, password, phone, chapter, organization, city, sourcingInterest }) => {
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
       throw new ConflictError("An account with this email address already exists");
@@ -27,7 +33,12 @@ export const authService = {
       passwordHash,
       phone: phone || "",
       chapter: chapter || "Mumbai Chapter",
+      organization: organization || "",
+      city: city || "Mumbai",
+      sourcingInterest: sourcingInterest ? sourcingInterest.trim() : "",
+      sourcingInterests: sourcingInterest ? [sourcingInterest.trim()] : [],
       role: ROLES.CUSTOMER,
+      isProfileComplete: true,
     });
 
     const tokenPayload = {
@@ -59,6 +70,7 @@ export const authService = {
       phone: phone || "",
       chapter: chapter || "Mumbai Chapter",
       role: ROLES.BUSINESS_OWNER,
+      isProfileComplete: true,
     });
 
     const tokenPayload = {

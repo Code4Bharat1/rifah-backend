@@ -23,6 +23,11 @@ router.post(
   validateObjectIdParam("businessId"),
   userController.toggleSaveBusiness
 );
+router.post(
+  "/me/deactivate",
+  authMiddleware,
+  userController.deactivateMe
+);
 
 // Admin User Management Routes
 router.get(

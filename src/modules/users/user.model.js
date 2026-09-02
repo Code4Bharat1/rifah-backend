@@ -21,8 +21,24 @@ const userSchema = new mongoose.Schema(
     },
     passwordHash: {
       type: String,
-      required: [true, "Password hash is required"],
+      required: false,
+      default: "",
       select: false,
+    },
+    googleId: {
+      type: String,
+      default: "",
+      index: true,
+      sparse: true,
+    },
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
+    isProfileComplete: {
+      type: Boolean,
+      default: false,
     },
     phone: {
       type: String,
@@ -45,6 +61,32 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "Mumbai Chapter",
+    },
+    organization: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    city: {
+      type: String,
+      trim: true,
+      default: "Mumbai",
+    },
+    sourcingInterest: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    sourcingInterests: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    taxId: {
+      type: String,
+      trim: true,
+      default: "",
     },
     avatar: {
       type: String,
@@ -76,6 +118,8 @@ const userSchema = new mongoose.Schema(
     toJSON: {
       transform: (doc, ret) => {
         delete ret.passwordHash;
+        delete ret.resetPasswordToken;
+        delete ret.resetPasswordExpires;
         delete ret.__v;
         return ret;
       },

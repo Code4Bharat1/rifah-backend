@@ -99,6 +99,11 @@ const businessSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    taxId: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     phone: {
       type: String,
       default: "",

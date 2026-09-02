@@ -33,4 +33,9 @@ export const userController = {
     const updated = await userService.updateUserStatus(id, req.body);
     return ApiResponse.success(res, updated, "User status updated successfully");
   }),
+
+  deactivateMe: asyncHandler(async (req, res) => {
+    const result = await userService.deactivateAccount(req.user.id, req.body);
+    return ApiResponse.success(res, result, "Account has been deactivated");
+  }),
 };

@@ -51,6 +51,11 @@ export const env = {
     KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || "7F7NmMGfMcDVTHqlO35raX2u",
   },
 
+  GOOGLE: {
+    CLIENT_ID: process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
+    CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
+  },
+
   isDevelopment: () => (process.env.NODE_ENV || "development") === "development",
   isProduction: () => process.env.NODE_ENV === "production",
   isTest: () => process.env.NODE_ENV === "test",
