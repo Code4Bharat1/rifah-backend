@@ -8,9 +8,15 @@ import { ROLES } from "../../shared/constants/roles.js";
 import crypto from "crypto";
 
 export const chapterService = {
-  listChapters: async (filter = {}) => {
+  listChapters: async (filter = {}, user) => {
     const query = {};
     if (filter.status) query.status = filter.status;
+    
+    // RBAC: Chapter Admin Scope Enforcement
+    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+      query.name = user.chapter;
+    }
+    
     return Chapter.find(query).sort({ name: 1 });
   },
 

@@ -4,7 +4,7 @@ import { ApiResponse } from "../../shared/utils/response.js";
 
 export const chapterController = {
   listChapters: asyncHandler(async (req, res) => {
-    const chapters = await chapterService.listChapters(req.query);
+    const chapters = await chapterService.listChapters(req.query, req.user);
     return ApiResponse.success(res, chapters, "Chapters retrieved");
   }),
 

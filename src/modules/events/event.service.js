@@ -2,17 +2,24 @@ import { Event } from "./event.model.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
+import { ROLES } from "../../shared/constants/roles.js";
 
 export const eventService = {
   /**
    * Browse public events
    */
-  listEvents: async (queryParams = {}) => {
+  listEvents: async (queryParams = {}, user) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
 
+    // RBAC: Chapter Admin Scope Enforcement
+    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+      filter.chapter = user.chapter;
+    } else if (queryParams.chapter) {
+      filter.chapter = queryParams.chapter;
+    }
+
     if (queryParams.status) filter.status = queryParams.status;
-    if (queryParams.chapter) filter.chapter = queryParams.chapter;
     if (queryParams.city) filter.city = queryParams.city;
     if (queryParams.mode) filter.mode = queryParams.mode;
 

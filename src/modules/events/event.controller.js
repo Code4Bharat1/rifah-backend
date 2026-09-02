@@ -5,7 +5,7 @@ import { storageService } from "../../infrastructure/storage/storage.service.js"
 
 export const eventController = {
   listEvents: asyncHandler(async (req, res) => {
-    const { events, meta } = await eventService.listEvents(req.query);
+    const { events, meta } = await eventService.listEvents(req.query, req.user);
     return ApiResponse.success(res, events, "Events retrieved", 200, meta);
   }),
 
