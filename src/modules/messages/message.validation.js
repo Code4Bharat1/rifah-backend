@@ -3,7 +3,8 @@ export const validateSendMessage = (data = {}) => {
   if (!data.recipientId) {
     errors.push({ field: "recipientId", message: "Recipient ID is required" });
   }
-  if (!data.text || typeof data.text !== "string" || data.text.trim().length === 0) {
+  const messageText = data.text || data.body;
+  if (!messageText || typeof messageText !== "string" || messageText.trim().length === 0) {
     errors.push({ field: "text", message: "Message text cannot be empty" });
   }
   return { valid: errors.length === 0, errors };

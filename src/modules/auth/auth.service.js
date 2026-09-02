@@ -197,4 +197,313 @@ export const authService = {
 
     return { user, accessToken, refreshToken };
   },
+
+  /**
+   * Request password reset code
+   */
+  forgotPassword: async (email) => {
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
+      throw new NotFoundError("No account found with this email address");
+    }
+
+    // Generate 6-digit verification code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    user.resetPasswordToken = resetCode;
+    user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    await user.save();
+
+    return {
+      message: "Password reset verification code generated",
+      email: user.email,
+      resetToken: resetCode,
+    };
+  },
+
+  /**
+   * Reset password with verification code
+   */
+  resetPassword: async ({ email, resetToken, newPassword }) => {
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+      resetPasswordToken: resetToken,
+      resetPasswordExpires: { $gt: new Date() },
+    }).select("+passwordHash +resetPasswordToken +resetPasswordExpires");
+
+    if (!user) {
+      throw new BadRequestError("Invalid or expired password reset code");
+    }
+
+    user.passwordHash = await hashPassword(newPassword);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    return { message: "Password has been successfully reset. Please log in with your new password." };
+  },
+
+  /**
+   * Google OAuth 2.0 Authenticate / Provision User
+   * NOTE: Admin / Secretariat roles are strictly barred from Google OAuth.
+   */
+  googleAuth: async ({ credential, roleTarget = ROLES.CUSTOMER }) => {
+    if (!credential) {
+      throw new BadRequestError("Google credential token is required");
+    }
+
+    let googlePayload;
+    try {
+      const isJwt = typeof credential === "string" && credential.split(".").length === 3;
+      if (isJwt) {
+        if (env.GOOGLE.CLIENT_ID) {
+          try {
+            const ticket = await googleClient.verifyIdToken({
+              idToken: credential,
+              audience: env.GOOGLE.CLIENT_ID,
+            });
+            googlePayload = ticket.getPayload();
+          } catch (jwtErr) {
+            // Fallback to tokeninfo endpoint
+            const tokenInfoRes = await fetch(
+              `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`
+            );
+            if (!tokenInfoRes.ok) throw jwtErr;
+            googlePayload = await tokenInfoRes.json();
+          }
+        } else {
+          const tokenInfoRes = await fetch(
+            `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`
+          );
+          if (!tokenInfoRes.ok) {
+            throw new Error("Google verification failed");
+          }
+          googlePayload = await tokenInfoRes.json();
+        }
+      } else {
+        // It's an OAuth2 Access Token (e.g. from Google popup token client)
+        const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { Authorization: `Bearer ${credential}` },
+        });
+        if (userinfoRes.ok) {
+          googlePayload = await userinfoRes.json();
+        } else {
+          // Fallback to tokeninfo with access_token
+          const tokenInfoRes = await fetch(
+            `https://oauth2.googleapis.com/tokeninfo?access_token=${credential}`
+          );
+          if (!tokenInfoRes.ok) {
+            throw new Error("Google access token verification failed");
+          }
+          googlePayload = await tokenInfoRes.json();
+        }
+      }
+    } catch (err) {
+      console.error("Google Auth verification error:", err.message);
+      throw new UnauthorizedError("Google authentication failed. Invalid token.");
+    }
+
+    if (!googlePayload || !googlePayload.email) {
+      throw new UnauthorizedError("Google token does not contain a valid email address");
+    }
+
+    const email = googlePayload.email.toLowerCase().trim();
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      // SECURITY GUARD: Strictly block Admin / Secretariat Google OAuth login
+      if (
+        existingUser.role === ROLES.SUPER_ADMIN ||
+        existingUser.role === ROLES.SECRETARIAT ||
+        existingUser.role === ROLES.CHAPTER_ADMIN
+      ) {
+        throw new UnauthorizedError(
+          "Admin and Secretariat accounts must sign in using email and password credentials.",
+          ERROR_CODES.FORBIDDEN
+        );
+      }
+
+      if (existingUser.status === "Suspended" || existingUser.status === "Deactivated") {
+        throw new UnauthorizedError(`Account is ${existingUser.status.toLowerCase()}. Please contact support.`);
+      }
+
+      // Link Google ID if not linked
+      if (!existingUser.googleId) existingUser.googleId = googlePayload.sub;
+      if (!existingUser.avatar && googlePayload.picture) existingUser.avatar = googlePayload.picture;
+      existingUser.lastLoginAt = new Date();
+      await existingUser.save();
+
+      const tokenPayload = {
+        id: existingUser._id,
+        email: existingUser.email,
+        role: existingUser.role,
+      };
+
+      const accessToken = signAccessToken(tokenPayload);
+      const refreshToken = signRefreshToken(tokenPayload);
+
+      return {
+        user: existingUser.toJSON(),
+        accessToken,
+        refreshToken,
+        isNewUser: false,
+        isProfileComplete: existingUser.isProfileComplete !== false,
+      };
+    }
+
+    // New User Provisioning (Customer or Business Owner initially with isProfileComplete: false)
+    const assignedRole =
+      roleTarget === ROLES.BUSINESS_OWNER ? ROLES.BUSINESS_OWNER : ROLES.CUSTOMER;
+
+    const newUser = await User.create({
+      name: googlePayload.name || email.split("@")[0],
+      email: email,
+      googleId: googlePayload.sub,
+      avatar: googlePayload.picture || "",
+      authProvider: "google",
+      role: assignedRole,
+      chapter: "Mumbai Chapter",
+      city: "Mumbai",
+      status: "Active",
+      isProfileComplete: false,
+    });
+
+    const tokenPayload = {
+      id: newUser._id,
+      email: newUser.email,
+      role: newUser.role,
+    };
+
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshToken = signRefreshToken(tokenPayload);
+
+    return {
+      user: newUser.toJSON(),
+      accessToken,
+      refreshToken,
+      isNewUser: true,
+      isProfileComplete: false,
+    };
+  },
+
+  /**
+   * Complete onboarding for post-OAuth or new user
+   * Sets account password, role (buyer/business_owner), contact info, and provisions Business profile if supplier.
+   */
+  completeOnboarding: async (userId, data) => {
+    const user = await User.findById(userId).select("+passwordHash");
+    if (!user) {
+      throw new NotFoundError("User account not found");
+    }
+
+    const {
+      role = ROLES.CUSTOMER,
+      password,
+      phone,
+      city,
+      state = "Maharashtra",
+      address = "",
+      chapter,
+      organization,
+      businessName,
+      industry,
+      businessType,
+      founded,
+      employees,
+      about,
+      contactPerson,
+      taxId,
+      membershipTier,
+      sourcingInterest,
+    } = data;
+
+    if (!password || password.length < 6) {
+      throw new BadRequestError("Password must be at least 6 characters");
+    }
+
+    // Set hashed password so user can log in with email/password anytime
+    user.passwordHash = await hashPassword(password);
+
+    // Set role and profile details
+    user.role = role === ROLES.BUSINESS_OWNER ? ROLES.BUSINESS_OWNER : ROLES.CUSTOMER;
+    if (contactPerson && contactPerson.trim()) user.name = contactPerson.trim();
+    if (phone) user.phone = phone.trim();
+    if (city) user.city = city.trim();
+    if (chapter) user.chapter = chapter.trim();
+    if (organization) user.organization = organization.trim();
+    if (sourcingInterest) {
+      user.sourcingInterest = sourcingInterest.trim();
+      user.sourcingInterests = [sourcingInterest.trim()];
+    }
+    user.isProfileComplete = true;
+    user.status = "Active";
+
+    await user.save();
+
+    // If role is Business Owner, create or update complete Business document
+    if (user.role === ROLES.BUSINESS_OWNER) {
+      const existingBiz = await Business.findOne({ owner: user._id });
+      const finalBizName = (businessName && businessName.trim()) || `${user.name}'s Enterprise`;
+
+      // Standardize membership tier to enum format ("Free", "Basic", "Premium", "Enterprise")
+      const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
+      const formattedTier =
+        validTiers.find((t) => t.toLowerCase() === (membershipTier || "free").toLowerCase()) ||
+        "Free";
+
+      if (existingBiz) {
+        existingBiz.name = finalBizName;
+        existingBiz.industry = industry || existingBiz.industry || "Manufacturing";
+        existingBiz.businessType = businessType || existingBiz.businessType || "Proprietorship";
+        if (founded) existingBiz.founded = founded.trim();
+        if (employees) existingBiz.employees = employees.trim();
+        if (about) existingBiz.about = about.trim();
+        if (phone) existingBiz.phone = phone.trim();
+        if (address) existingBiz.address = address.trim();
+        if (city) existingBiz.city = city.trim();
+        if (state) existingBiz.state = state.trim();
+        if (chapter) existingBiz.chapter = chapter.trim();
+        if (taxId) existingBiz.taxId = taxId.trim();
+        existingBiz.membership = formattedTier;
+        existingBiz.verification = "pending";
+        await existingBiz.save();
+      } else {
+        let slug = generateSlug(finalBizName);
+        const slugConflict = await Business.findOne({ slug });
+        if (slugConflict) {
+          slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+
+        await Business.create({
+          name: finalBizName,
+          slug,
+          owner: user._id,
+          industry: industry || "Manufacturing",
+          businessType: businessType || "Proprietorship",
+          founded: founded ? founded.trim() : "",
+          employees: employees ? employees.trim() : "10–50",
+          about: about ? about.trim() : "",
+          phone: (phone || user.phone || "").trim(),
+          email: user.email,
+          address: (address || "").trim(),
+          city: user.city || "Mumbai",
+          state: state || "Maharashtra",
+          chapter: user.chapter || "Mumbai Chapter",
+          taxId: taxId ? taxId.trim() : "",
+          membership: formattedTier,
+          verification: "pending",
+        });
+      }
+    }
+
+    const tokenPayload = {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+    };
+
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshToken = signRefreshToken(tokenPayload);
+
+    return { user: user.toJSON(), accessToken, refreshToken };
+  },
 };
