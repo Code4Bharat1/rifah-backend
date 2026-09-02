@@ -98,6 +98,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      forcePasswordChange: user.forcePasswordChange,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -148,5 +149,31 @@ export const authService = {
       throw new NotFoundError("User not found");
     }
     return user;
+  },
+
+  /**
+   * Change password (forced or manual)
+   */
+  changePassword: async (userId, { newPassword }) => {
+    const user = await User.findById(userId).select("+passwordHash");
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    user.passwordHash = await hashPassword(newPassword);
+    user.forcePasswordChange = false;
+    await user.save();
+
+    const tokenPayload = {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      forcePasswordChange: false,
+    };
+
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshToken = signRefreshToken(tokenPayload);
+
+    return { user, accessToken, refreshToken };
   },
 };

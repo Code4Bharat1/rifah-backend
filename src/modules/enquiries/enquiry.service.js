@@ -1,7 +1,9 @@
 import { Enquiry } from "./enquiry.model.js";
+import { Business } from "../businesses/business.model.js";
 import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
+import { ROLES } from "../../shared/constants/roles.js";
 
 export const enquiryService = {
   /**
@@ -74,9 +76,16 @@ export const enquiryService = {
   /**
    * List all enquiries chamber-wide (Admin)
    */
-  listAllEnquiries: async (queryParams = {}) => {
+  listAllEnquiries: async (queryParams = {}, requester = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
+
+    // RBAC: Chapter Admin Scope Enforcement
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
+      const chapterBusinesses = await Business.find({ chapter: requester.chapter }).select('_id');
+      const businessIds = chapterBusinesses.map(b => b._id);
+      filter.targetBusiness = { $in: businessIds };
+    }
 
     if (queryParams.status) filter.status = queryParams.status;
     if (queryParams.category) filter.category = queryParams.category;

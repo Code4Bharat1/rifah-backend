@@ -1,6 +1,11 @@
 import { Chapter } from "./chapter.model.js";
+import { User } from "../users/user.model.js";
+import { hashPassword } from "../../infrastructure/auth/password.js";
+import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { NotFoundError, ConflictError } from "../../shared/errors/errors.js";
+import { ROLES } from "../../shared/constants/roles.js";
+import crypto from "crypto";
 
 export const chapterService = {
   listChapters: async (filter = {}) => {
@@ -67,5 +72,35 @@ export const chapterService = {
     chapter.units = chapter.units.filter((u) => String(u._id) !== String(unitId));
     await chapter.save();
     return chapter;
+  },
+
+  assignAdmin: async (chapterId, { name, email }) => {
+    const chapter = await Chapter.findById(chapterId);
+    if (!chapter) {
+      throw new NotFoundError("Chapter not found");
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      throw new ConflictError("User with this email already exists");
+    }
+
+    // Generate random password
+    const password = crypto.randomBytes(8).toString('hex');
+    const passwordHash = await hashPassword(password);
+
+    const admin = await User.create({
+      name,
+      email,
+      passwordHash,
+      role: ROLES.CHAPTER_ADMIN,
+      chapter: chapter.name,
+      forcePasswordChange: true,
+    });
+
+    // Send email with credentials
+    await emailService.sendChapterAdminInvite(email, password, chapter.name, name);
+
+    return admin;
   },
 };

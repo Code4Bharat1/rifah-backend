@@ -42,4 +42,10 @@ export const chapterController = {
     const updated = await chapterService.removeUnit(id, unitId);
     return ApiResponse.success(res, updated, "Unit removed from chapter successfully");
   }),
+
+  assignAdmin: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const admin = await chapterService.assignAdmin(id, req.body);
+    return ApiResponse.created(res, admin, "Chapter Admin created and invitation sent");
+  }),
 };

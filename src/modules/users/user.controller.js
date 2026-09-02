@@ -24,7 +24,7 @@ export const userController = {
   }),
 
   listUsers: asyncHandler(async (req, res) => {
-    const { users, meta } = await userService.listUsers(req.query);
+    const { users, meta } = await userService.listUsers(req.query, req.user);
     return ApiResponse.success(res, users, "Users list retrieved", 200, meta);
   }),
 

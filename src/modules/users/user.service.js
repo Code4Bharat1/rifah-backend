@@ -1,6 +1,7 @@
 import { User } from "./user.model.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
+import { ROLES } from "../../shared/constants/roles.js";
 
 export const userService = {
   /**
@@ -69,9 +70,16 @@ export const userService = {
   /**
    * List all users (admin)
    */
-  listUsers: async (queryParams = {}) => {
+  listUsers: async (queryParams = {}, requester = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
+
+    // RBAC: Chapter Admin Scope Enforcement
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
+      filter.chapter = requester.chapter;
+    } else if (queryParams.chapter) {
+      filter.chapter = queryParams.chapter;
+    }
 
     if (queryParams.role) {
       filter.role = queryParams.role;

@@ -2,14 +2,28 @@ import { Business } from "./business.model.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError, ConflictError } from "../../shared/errors/errors.js";
+import { ROLES } from "../../shared/constants/roles.js";
 
 export const businessService = {
   /**
    * Public directory search & filtering
    */
-  searchDirectory: async (queryParams = {}) => {
+  searchDirectory: async (queryParams = {}, user = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
-    const filter = { status: "Active" };
+    const filter = {};
+    
+    // Only apply active status filter for public/customer users
+    if (!user || ![ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN].includes(user.role)) {
+      filter.status = "Active";
+    }
+
+    // RBAC: Chapter Admin Scope Enforcement
+    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+      filter.chapter = user.chapter;
+    } else if (queryParams.chapter) {
+      // Normal filtering if not forced by RBAC
+      filter.chapter = queryParams.chapter;
+    }
 
     if (queryParams.search) {
       filter.$or = [
@@ -30,10 +44,6 @@ export const businessService = {
 
     if (queryParams.city) {
       filter.city = queryParams.city;
-    }
-
-    if (queryParams.chapter) {
-      filter.chapter = queryParams.chapter;
     }
 
     if (queryParams.membership) {

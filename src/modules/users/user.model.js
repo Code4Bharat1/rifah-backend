@@ -66,6 +66,10 @@ const userSchema = new mongoose.Schema(
     lastLoginAt: {
       type: Date,
     },
+    forcePasswordChange: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

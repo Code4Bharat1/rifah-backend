@@ -29,6 +29,11 @@ export const authController = {
     return ApiResponse.success(res, user, "Session profile retrieved");
   }),
 
+  changePassword: asyncHandler(async (req, res) => {
+    const result = await authService.changePassword(req.user.id, req.body);
+    return ApiResponse.success(res, result, "Password changed successfully");
+  }),
+
   logout: asyncHandler(async (req, res) => {
     return ApiResponse.success(res, null, "Logged out successfully");
   }),
