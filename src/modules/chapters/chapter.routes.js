@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { chapterController } from "./chapter.controller.js";
-import { authMiddleware } from "../../middleware/auth.middleware.js";
+import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
 import {
@@ -14,8 +14,8 @@ import { ROLES } from "../../shared/constants/roles.js";
 const router = Router();
 
 // Public routes
-router.get("/", chapterController.listChapters);
-router.get("/slug/:slug", chapterController.getChapterBySlug);
+router.get("/", optionalAuthMiddleware, chapterController.listChapters);
+router.get("/slug/:slug", optionalAuthMiddleware, chapterController.getChapterBySlug);
 router.get("/:id", validateObjectIdParam("id"), chapterController.getChapterById);
 
 // Admin routes
