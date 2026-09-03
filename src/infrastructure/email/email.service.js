@@ -398,4 +398,38 @@ export const emailService = {
     const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
     return emailService.sendEmail({ to: email, subject, html, attachments });
   },
+
+  /**
+   * Sends Password Reset OTP Verification Email
+   */
+  sendPasswordResetEmail: async ({ email, name, resetCode }) => {
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+    const subject = `🔐 Your Password Reset Verification Code: ${resetCode}`;
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+        <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
+        <div style="padding: 32px;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`}
+          <span style="background-color: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">PASSWORD RECOVERY</span>
+          <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">Reset Your RIFAH Password</h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${name || "Member"}</strong>,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">We received a request to reset the password for your RIFAH account (<strong>${email}</strong>). Use the verification code below to complete your password reset:</p>
+          
+          <div style="background-color: #f8fafc; border: 1px dashed #0284c7; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
+            <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">YOUR VERIFICATION CODE</p>
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0284c7; font-family: monospace;">${resetCode}</div>
+            <p style="margin: 8px 0 0 0; font-size: 11px; color: #94a3b8;">This code will expire in 15 minutes.</p>
+          </div>
+
+          <p style="color: #64748b; font-size: 13px; line-height: 1.5;">If you did not request a password reset, please disregard this email or contact support if you suspect unauthorized access.</p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Security Operations</p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
 };

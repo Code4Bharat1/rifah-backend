@@ -4,8 +4,9 @@ export const validateSendMessage = (data = {}) => {
     errors.push({ field: "recipientId", message: "Recipient ID is required" });
   }
   const messageText = data.text || data.body;
-  if (!messageText || typeof messageText !== "string" || messageText.trim().length === 0) {
-    errors.push({ field: "text", message: "Message text cannot be empty" });
+  const hasAttachments = Array.isArray(data.attachments) && data.attachments.length > 0;
+  if ((!messageText || typeof messageText !== "string" || messageText.trim().length === 0) && !hasAttachments) {
+    errors.push({ field: "text", message: "Message text or file attachment is required" });
   }
   return { valid: errors.length === 0, errors };
 };

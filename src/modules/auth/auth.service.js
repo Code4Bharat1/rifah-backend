@@ -213,11 +213,38 @@ export const authService = {
     user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     await user.save();
 
+    try {
+      await emailService.sendPasswordResetEmail({
+        email: user.email,
+        name: user.name,
+        resetCode,
+      });
+    } catch (err) {
+      console.error("Failed to dispatch password reset email:", err);
+    }
+
     return {
-      message: "Password reset verification code generated",
+      message: "Password reset verification code has been sent to your email.",
       email: user.email,
       resetToken: resetCode,
     };
+  },
+
+  /**
+   * Verify password reset verification code
+   */
+  verifyResetCode: async ({ email, resetToken }) => {
+    const user = await User.findOne({
+      email: email.toLowerCase().trim(),
+      resetPasswordToken: String(resetToken).trim(),
+      resetPasswordExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      throw new BadRequestError("Invalid or expired verification code");
+    }
+
+    return { valid: true, message: "Verification code verified successfully." };
   },
 
   /**

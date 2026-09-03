@@ -46,7 +46,12 @@ export const authController = {
   forgotPassword: asyncHandler(async (req, res) => {
     const { email } = req.body;
     const result = await authService.forgotPassword(email);
-    return ApiResponse.success(res, result, "Password reset code generated");
+    return ApiResponse.success(res, result, result.message || "Password reset code generated");
+  }),
+
+  verifyResetCode: asyncHandler(async (req, res) => {
+    const result = await authService.verifyResetCode(req.body);
+    return ApiResponse.success(res, result, result.message || "Verification code is valid");
   }),
 
   resetPassword: asyncHandler(async (req, res) => {

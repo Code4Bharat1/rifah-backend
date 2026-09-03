@@ -20,6 +20,7 @@ const storage = multer.diskStorage({
     else if (file.fieldname === "gallery") subfolder = "gallery";
     else if (file.fieldname === "document" || file.fieldname === "verification") subfolder = "documents";
     else if (file.fieldname === "catalogue" || file.fieldname === "product") subfolder = "catalogue";
+    else if (file.fieldname === "attachment" || file.fieldname === "file" || file.fieldname === "media") subfolder = "attachments";
 
     const targetDir = path.join(baseUploadPath, subfolder);
     if (!fs.existsSync(targetDir)) {
@@ -34,25 +35,35 @@ const storage = multer.diskStorage({
   },
 });
 
-// File filter (images, PDFs, documents)
+// File filter (images, videos, audio, PDFs, documents, archives)
 const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = [
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/webp",
-    "image/svg+xml",
+  // Allow all standard image, video, audio, document, and archive mime types
+  const isImage = file.mimetype.startsWith("image/");
+  const isVideo = file.mimetype.startsWith("video/");
+  const isAudio = file.mimetype.startsWith("audio/");
+
+  const allowedDocMimeTypes = [
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "text/csv",
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/x-rar-compressed",
+    "application/octet-stream",
   ];
 
-  if (allowedMimeTypes.includes(file.mimetype)) {
+  if (isImage || isVideo || isAudio || allowedDocMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
     cb(
       new BadRequestError(
-        `Unsupported file type: ${file.mimetype}. Allowed: JPG, PNG, WEBP, SVG, PDF, DOC.`
+        `Unsupported file type: ${file.mimetype}. Allowed: Images, Videos, Audio, PDF, Word, Excel, PowerPoint, Text, and Zip files.`
       ),
       false
     );
@@ -63,6 +74,6 @@ export const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: env.STORAGE.MAX_FILE_SIZE_MB * 1024 * 1024,
+    fileSize: 50 * 1024 * 1024, // 50 MB limit for media/documents
   },
 });

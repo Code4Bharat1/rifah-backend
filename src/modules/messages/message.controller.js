@@ -23,4 +23,21 @@ export const messageController = {
     const conversations = await messageService.listUserConversations(req.user.id);
     return ApiResponse.success(res, conversations, "User conversations retrieved");
   }),
+
+  uploadAttachment: asyncHandler(async (req, res) => {
+    if (!req.file) {
+      return ApiResponse.error(res, "No attachment file uploaded", 400);
+    }
+    const fileUrl = `/uploads/attachments/${req.file.filename}`;
+    return ApiResponse.success(
+      res,
+      {
+        fileUrl,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+      },
+      "Attachment uploaded successfully"
+    );
+  }),
 };

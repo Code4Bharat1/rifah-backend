@@ -23,8 +23,8 @@ export const messageService = {
     }
 
     const messageContent = (text || body || "").trim();
-    if (!messageContent) {
-      throw new Error("Message content cannot be empty");
+    if (!messageContent && (!attachments || attachments.length === 0)) {
+      throw new Error("Message text or file attachment is required");
     }
 
     const conversationId = messageService.getConversationId(senderId, recipientId, enquiryId);
@@ -34,7 +34,7 @@ export const messageService = {
       enquiry: enquiryId || null,
       sender: senderId,
       recipient: recipientId,
-      text: messageContent,
+      text: messageContent || "",
       attachments: attachments || [],
     });
 
