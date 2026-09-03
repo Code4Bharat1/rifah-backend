@@ -1,6 +1,7 @@
 import { Event } from "./event.model.js";
 import { User } from "../users/user.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { notificationService } from "../notifications/notification.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
@@ -103,6 +104,16 @@ export const eventService = {
           ticketType: "Member Pass",
         });
       }
+
+      // In-app notification for the customer
+      await notificationService.createNotification({
+        recipientId: userId,
+        type: "Event",
+        title: "Event Registration Confirmed",
+        body: `Your registration for "${event.title}" is confirmed!`,
+        entityId: event._id,
+        link: "/events"
+      });
     } catch (err) {}
 
     return event;
