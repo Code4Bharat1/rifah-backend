@@ -58,13 +58,43 @@ export const leadService = {
                 buyerName: enquiry.requesterName,
               });
             }
+
+            // Notify Business Owner
+            if (biz.owner) {
+              await notificationService.createNotification({
+                recipientId: biz.owner,
+                type: "Lead",
+                title: "New Lead Assigned",
+                body: `You have received a new lead matching your business: "${enquiry.title}".`,
+                link: "/biz/leads",
+                entityId: lead._id
+              });
+            }
           }
-        } catch (err) {}
+        } catch (err) {
+          console.error("Error sending lead notification/email:", err);
+        }
       }
     }
 
     enquiry.status = "Routed";
     await enquiry.save();
+
+    // Notify the Customer (Buyer) who created the enquiry
+    if (enquiry.requester && createdLeads.length > 0) {
+      try {
+        await notificationService.createNotification({
+          recipientId: enquiry.requester,
+          type: "System",
+          title: "Enquiry Routed to Suppliers",
+          body: `Your enquiry "${enquiry.title}" has been reviewed and routed to verified suppliers.`,
+          link: "/me/enquiries",
+          entityId: enquiry._id
+        });
+      } catch (err) {
+        console.error("Error notifying customer about routed enquiry:", err);
+      }
+    }
 
     return createdLeads;
   },
