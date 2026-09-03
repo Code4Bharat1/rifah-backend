@@ -120,12 +120,20 @@ export const leadService = {
       throw new NotFoundError("Lead not found");
     }
 
-    if (String(lead.business.owner) !== String(user.id)) {
+    const businessOwnerId = String(lead.business?.owner?._id || lead.business?.owner || "");
+    const businessId = String(lead.business?._id || lead.business || "");
+    const isOwner = businessOwnerId && businessOwnerId === String(user.id);
+    const isSameBusiness = user.businessId && String(user.businessId) === businessId;
+    const isAdmin = ["super_admin", "secretariat", "chapter_admin"].includes(user.role);
+
+    if (!isOwner && !isSameBusiness && !isAdmin && businessOwnerId) {
       throw new ForbiddenError("You are not authorized to respond to this lead");
     }
 
     lead.quotation = {
       ...quotationData,
+      amount: String(quotationData.amount || "").trim(),
+      notes: quotationData.notes || quotationData.terms || "",
       submittedAt: new Date(),
     };
     lead.status = "Responded";

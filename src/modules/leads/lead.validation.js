@@ -11,8 +11,9 @@ export const validateRouteLead = (data = {}) => {
 
 export const validateSubmitQuotation = (data = {}) => {
   const errors = [];
-  if (!data.amount || typeof data.amount !== "string") {
-    errors.push({ field: "amount", message: "Quotation amount is required" });
+  const amountStr = data.amount !== undefined && data.amount !== null ? String(data.amount).trim() : "";
+  if (!amountStr || isNaN(Number(amountStr)) || Number(amountStr) <= 0) {
+    errors.push({ field: "amount", message: "A valid quotation amount is required" });
   }
   return { valid: errors.length === 0, errors };
 };
