@@ -18,4 +18,22 @@ export const reportController = {
     const stats = await reportService.getAdminOverview();
     return ApiResponse.success(res, stats, "Chamber KPI metrics retrieved");
   }),
+
+  exportAdminCsv: asyncHandler(async (req, res) => {
+    const stats = await reportService.getAdminOverview();
+    const headers = ["Metric", "Value"];
+    const rows = [
+      ["Total Businesses", stats.kpi.totalBusinesses],
+      ["Total Enquiries", stats.kpi.totalEnquiries],
+      ["Total Chapters", stats.kpi.totalChapters],
+    ];
+    stats.membershipGrowth.forEach((m) => rows.push([`Growth ${m.month}`, m.count]));
+    stats.chaptersDistribution.forEach((c) => rows.push([`Chapter ${c.chapter}`, c.count]));
+
+    const csvData = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="admin_reports.csv"');
+    return res.status(200).send(csvData);
+  }),
 };

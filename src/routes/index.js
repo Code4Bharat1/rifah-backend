@@ -17,6 +17,7 @@ import { eventRoutes } from "../modules/events/event.routes.js";
 import { reviewRoutes } from "../modules/reviews/review.routes.js";
 import { reportRoutes } from "../modules/reports/report.routes.js";
 import { auditRoutes } from "../modules/audit/audit.routes.js";
+import { settingsRoutes } from "../modules/settings/settings.routes.js";
 
 const apiRouter = Router();
 
@@ -41,6 +42,7 @@ apiRouter.use("/events", eventRoutes);
 apiRouter.use("/reviews", reviewRoutes);
 apiRouter.use("/reports", reportRoutes);
 apiRouter.use("/audit", auditRoutes);
+apiRouter.use("/settings", settingsRoutes);
 
 export { apiRouter };
 export default apiRouter;

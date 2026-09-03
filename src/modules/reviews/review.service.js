@@ -18,6 +18,11 @@ export const reviewService = {
       throw new ConflictError("You have already submitted a review for this business");
     }
 
+    const { Settings } = await import("../settings/settings.model.js");
+    const settings = await Settings.findOne({ isSingleton: "global" });
+    const isModerate = settings ? settings.moderateReviewsBeforePublishing : true;
+    const initialStatus = isModerate ? "pending" : "published";
+
     return Review.create({
       business: data.businessId,
       author: user.id,
@@ -25,7 +30,7 @@ export const reviewService = {
       rating: data.rating,
       title: data.title || "",
       body: data.body.trim(),
-      status: "pending",
+      status: initialStatus,
     });
   },
 

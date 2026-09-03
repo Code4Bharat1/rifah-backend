@@ -36,5 +36,12 @@ router.get(
   paymentController.listAllPayments
 );
 
+router.post(
+  "/:id/refund",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  paymentController.processRefund
+);
+
 export { router as paymentRoutes };
 export default router;

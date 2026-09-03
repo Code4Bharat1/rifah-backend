@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { enquiryController } from "./enquiry.controller.js";
-import { authMiddleware } from "../../middleware/auth.middleware.js";
+import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
 import {
@@ -11,10 +11,10 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
-// Buyer routes
+// Public / Buyer routes (guest posting allowed conditionally)
 router.post(
   "/",
-  authMiddleware,
+  optionalAuthMiddleware,
   validateRequest(validateCreateEnquiry),
   enquiryController.createEnquiry
 );

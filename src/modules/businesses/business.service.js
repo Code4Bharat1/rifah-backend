@@ -129,6 +129,12 @@ export const businessService = {
       throw new ConflictError("You already have an existing business profile");
     }
 
+    const { Settings } = await import("../settings/settings.model.js");
+    const settings = await Settings.findOne({ isSingleton: "global" });
+    const isManualVerification = settings ? settings.manualVerificationRequired : true;
+    const initialStatus = isManualVerification ? "Pending Verification" : "Live";
+    const initialVerification = isManualVerification ? "Pending" : "Verified";
+
     let slug = generateSlug(data.name);
     const slugConflict = await Business.findOne({ slug });
     if (slugConflict) {
@@ -139,6 +145,8 @@ export const businessService = {
       ...data,
       slug,
       owner: ownerId,
+      status: initialStatus,
+      verificationStatus: initialVerification,
     });
   },
 

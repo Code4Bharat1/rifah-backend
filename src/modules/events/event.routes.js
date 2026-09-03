@@ -61,5 +61,13 @@ router.post(
   eventController.uploadCover
 );
 
+router.delete(
+  "/:id",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.deleteEvent
+);
+
 export { router as eventRoutes };
 export default router;

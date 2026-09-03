@@ -41,4 +41,10 @@ export const eventController = {
     const updated = await eventService.updateEvent(id, { coverImage: coverUrl });
     return ApiResponse.success(res, { coverImage: coverUrl, event: updated }, "Event cover uploaded successfully");
   }),
+
+  deleteEvent: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    await eventService.deleteEvent(id);
+    return ApiResponse.success(res, null, "Event deleted successfully");
+  }),
 };

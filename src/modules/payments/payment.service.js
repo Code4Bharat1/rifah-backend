@@ -269,4 +269,15 @@ export const paymentService = {
     }
     return payment;
   },
+
+  updatePaymentStatus: async (id, status, adminUserId) => {
+    const payment = await Payment.findById(id);
+    if (!payment) {
+      throw new NotFoundError("Payment not found");
+    }
+    payment.status = status;
+    // Audit logic can be added here if needed
+    await payment.save();
+    return payment;
+  },
 };

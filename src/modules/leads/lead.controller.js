@@ -40,4 +40,26 @@ export const leadController = {
     const updated = await leadService.updateLeadStatus(id, req.body);
     return ApiResponse.success(res, updated, "Lead status updated successfully");
   }),
+
+  exportCsv: asyncHandler(async (req, res) => {
+    const { Lead } = await import("./lead.model.js");
+    const leads = await Lead.find().populate("business", "name city chapter").populate("enquiry", "category requirement source status");
+    
+    const headers = ["Business Name", "Chapter", "City", "Enquiry Category", "Enquiry Source", "Lead Status", "Date"];
+    const rows = leads.map(lead => [
+      `"${lead.business?.name || ''}"`,
+      `"${lead.business?.chapter || ''}"`,
+      `"${lead.business?.city || ''}"`,
+      `"${lead.enquiry?.category || ''}"`,
+      `"${lead.enquiry?.source || ''}"`,
+      `"${lead.status || ''}"`,
+      `"${new Date(lead.createdAt).toLocaleDateString()}"`
+    ]);
+
+    const csvData = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="leads_export.csv"');
+    return res.status(200).send(csvData);
+  }),
 };

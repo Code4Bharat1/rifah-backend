@@ -24,5 +24,12 @@ router.get(
   reportController.getAdminOverview
 );
 
+router.get(
+  "/admin/export/csv",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  reportController.exportAdminCsv
+);
+
 export { router as reportRoutes };
 export default router;

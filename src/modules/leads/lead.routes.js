@@ -43,5 +43,12 @@ router.post(
   leadController.routeLead
 );
 
+router.get(
+  "/export/csv",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  leadController.exportCsv
+);
+
 export { router as leadRoutes };
 export default router;

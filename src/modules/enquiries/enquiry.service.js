@@ -28,9 +28,9 @@ export const enquiryService = {
     const enquiry = await Enquiry.create({
       ...data,
       referenceId,
-      requester: user.id,
-      requesterName: user.name || "Buyer Account",
-      requesterRole: user.role === "customer" ? "Customer / Buyer" : "Member Buyer",
+      requester: user ? user.id : null,
+      requesterName: user ? (user.name || "Buyer Account") : (data.name || "Guest Buyer"),
+      requesterRole: user ? (user.role === "customer" ? "Customer / Buyer" : "Member Buyer") : "Guest User",
       timeline: initialTimeline,
     });
 
@@ -76,6 +76,32 @@ export const enquiryService = {
           }
         }
       } catch (err) {}
+    } else {
+      // Auto-routing if enabled
+      try {
+        const { Settings } = await import("../settings/settings.model.js");
+        const settings = await Settings.findOne({ isSingleton: "global" });
+        if (settings && settings.autoRouteLeadsByCategory) {
+          const matchingBusinesses = await Business.find({
+            $or: [
+              { category: new RegExp(`^${data.category}$`, "i") },
+              { industry: new RegExp(`^${data.category}$`, "i") }
+            ],
+            status: { $in: ["Live", "Active"] } // Only route to active businesses
+          });
+
+          if (matchingBusinesses.length > 0) {
+            const businessIds = matchingBusinesses.map(b => b._id.toString());
+            const { leadService } = await import("../leads/lead.service.js");
+            // Perform routing in background without waiting
+            leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
+               console.error("Auto-routing background task failed:", err);
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check auto-routing:", err);
+      }
     }
 
     return enquiry;
