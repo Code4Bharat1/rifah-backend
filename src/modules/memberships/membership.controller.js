@@ -5,9 +5,25 @@ import { ApiResponse } from "../../shared/utils/response.js";
 import { NotFoundError } from "../../shared/errors/errors.js";
 
 export const membershipController = {
-  getPlans: (req, res) => {
-    return ApiResponse.success(res, membershipService.getPlans(), "Membership plans retrieved");
-  },
+  getPlans: asyncHandler(async (req, res) => {
+    const plans = await membershipService.getPlans();
+    return ApiResponse.success(res, plans, "Membership plans retrieved");
+  }),
+
+  createPlan: asyncHandler(async (req, res) => {
+    const plan = await membershipService.createPlan(req.body);
+    return ApiResponse.created(res, plan, "Membership plan created");
+  }),
+
+  updatePlan: asyncHandler(async (req, res) => {
+    const plan = await membershipService.updatePlan(req.params.planId, req.body);
+    return ApiResponse.success(res, plan, "Membership plan updated");
+  }),
+
+  deletePlan: asyncHandler(async (req, res) => {
+    await membershipService.deletePlan(req.params.planId);
+    return ApiResponse.success(res, null, "Membership plan deleted");
+  }),
 
   getMyMembership: asyncHandler(async (req, res) => {
     const business = await businessService.getBusinessByOwnerId(req.user.id);

@@ -3,6 +3,7 @@ import { Enquiry } from "../enquiries/enquiry.model.js";
 import { Business } from "../businesses/business.model.js";
 import { User } from "../users/user.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { notificationService } from "../notifications/notification.service.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
 
@@ -57,13 +58,43 @@ export const leadService = {
                 buyerName: enquiry.requesterName,
               });
             }
+
+            // Notify Business Owner
+            if (biz.owner) {
+              await notificationService.createNotification({
+                recipientId: biz.owner,
+                type: "Lead",
+                title: "New Lead Assigned",
+                body: `You have received a new lead matching your business: "${enquiry.title}".`,
+                link: "/biz/leads",
+                entityId: lead._id
+              });
+            }
           }
-        } catch (err) {}
+        } catch (err) {
+          console.error("Error sending lead notification/email:", err);
+        }
       }
     }
 
     enquiry.status = "Routed";
     await enquiry.save();
+
+    // Notify the Customer (Buyer) who created the enquiry
+    if (enquiry.requester && createdLeads.length > 0) {
+      try {
+        await notificationService.createNotification({
+          recipientId: enquiry.requester,
+          type: "System",
+          title: "Enquiry Routed to Suppliers",
+          body: `Your enquiry "${enquiry.title}" has been reviewed and routed to verified suppliers.`,
+          link: "/me/enquiries",
+          entityId: enquiry._id
+        });
+      } catch (err) {
+        console.error("Error notifying customer about routed enquiry:", err);
+      }
+    }
 
     return createdLeads;
   },
@@ -140,10 +171,25 @@ export const leadService = {
     lead.lastActivityAt = new Date();
     await lead.save();
 
-    await Enquiry.findByIdAndUpdate(lead.enquiry, {
+    const updatedEnquiry = await Enquiry.findByIdAndUpdate(lead.enquiry, {
       $inc: { responsesCount: 1 },
       status: "Responded",
     });
+
+    if (updatedEnquiry && updatedEnquiry.requester) {
+      try {
+        await notificationService.createNotification({
+          recipientId: updatedEnquiry.requester,
+          type: "Quotation",
+          title: "New Quotation Received",
+          body: `${lead.business?.name || 'A business'} has submitted a quotation for your requirement "${updatedEnquiry.title}".`,
+          entityId: lead._id,
+          link: "/me/enquiries"
+        });
+      } catch (err) {
+        console.error("Failed to create quotation notification:", err);
+      }
+    }
 
     return lead;
   },
@@ -160,5 +206,28 @@ export const leadService = {
       throw new NotFoundError("Lead not found");
     }
     return lead;
+  },
+
+  /**
+   * Get all leads (quotations) for a specific enquiry (Customer / Buyer)
+   */
+  getLeadsForEnquiry: async (enquiryId, userId) => {
+    const enquiry = await Enquiry.findById(enquiryId);
+    if (!enquiry) {
+      throw new NotFoundError("Enquiry not found");
+    }
+    
+    // Verify requester is the one asking
+    if (String(enquiry.requester) !== String(userId)) {
+      throw new ForbiddenError("You can only view quotations for your own enquiries");
+    }
+
+    // Return leads that have responded with a quotation
+    const leads = await Lead.find({ 
+      enquiry: enquiryId,
+      status: { $in: ["Responded", "Won", "Lost", "Closed"] }
+    }).populate("business", "name slug phone email owner logo");
+
+    return leads;
   },
 };

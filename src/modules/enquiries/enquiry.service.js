@@ -203,11 +203,39 @@ export const enquiryService = {
       throw new NotFoundError("Enquiry not found");
     }
 
+    const oldStatus = enquiry.status;
     enquiry.status = status;
     if (timelineUpdate) {
       enquiry.timeline.push(timelineUpdate);
     }
     await enquiry.save();
+
+    // Notify customer on status change
+    if (oldStatus !== status && enquiry.requester) {
+      try {
+        let title, body;
+        if (status === "Routed") {
+          title = "Enquiry Approved";
+          body = `Your requirement "${enquiry.title}" has been approved and routed to matching businesses.`;
+        } else if (status === "Closed" || status === "Rejected") {
+          title = `Enquiry ${status}`;
+          body = `Your requirement "${enquiry.title}" has been ${status.toLowerCase()}.`;
+        }
+
+        if (title && body) {
+          await notificationService.createNotification({
+            recipientId: enquiry.requester,
+            type: "Enquiry",
+            title,
+            body,
+            entityId: enquiry._id,
+            link: "/me/enquiries"
+          });
+        }
+      } catch (err) {
+        console.error("Failed to notify customer on enquiry status change:", err);
+      }
+    }
 
     return enquiry;
   },

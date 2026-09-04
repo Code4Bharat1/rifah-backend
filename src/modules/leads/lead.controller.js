@@ -41,6 +41,12 @@ export const leadController = {
     return ApiResponse.success(res, updated, "Lead status updated successfully");
   }),
 
+  getLeadsForEnquiry: asyncHandler(async (req, res) => {
+    const { enquiryId } = req.params;
+    const leads = await leadService.getLeadsForEnquiry(enquiryId, req.user.id);
+    return ApiResponse.success(res, leads, "Quotations retrieved successfully");
+  }),
+
   exportCsv: asyncHandler(async (req, res) => {
     const { Lead } = await import("./lead.model.js");
     const leads = await Lead.find().populate("business", "name city chapter").populate("enquiry", "category requirement source status");

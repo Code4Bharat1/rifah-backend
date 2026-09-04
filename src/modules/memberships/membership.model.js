@@ -12,13 +12,11 @@ const membershipSchema = new mongoose.Schema(
     },
     planId: {
       type: String,
-      enum: ["free", "basic", "premium", "enterprise"],
       default: "free",
       index: true,
     },
     planName: {
       type: String,
-      enum: ENUMS.MEMBERSHIP_TIERS,
       default: "Free",
     },
     price: {

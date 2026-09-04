@@ -3,6 +3,7 @@ import { User } from "../users/user.model.js";
 import { NotFoundError } from "../../shared/errors/errors.js";
 
 import { emitToUser } from "../../infrastructure/socket/socket.js";
+import { notificationService } from "../notifications/notification.service.js";
 
 export const messageService = {
   /**
@@ -46,6 +47,20 @@ export const messageService = {
     emitToUser(recipientId, "receive_message", populated);
     emitToUser(recipientId, "update_conversations", populated);
     emitToUser(senderId, "update_conversations", populated);
+
+    // Persistent in-app notification for recipient
+    try {
+      await notificationService.createNotification({
+        recipientId: recipientId,
+        type: "Message",
+        title: "New Message",
+        body: `You received a new message from ${populated.sender?.name || 'someone'}`,
+        entityId: message._id,
+        link: `/me/messages?userId=${senderId}`
+      });
+    } catch (err) {
+      console.error("Failed to create message notification:", err);
+    }
 
     return populated;
   },
