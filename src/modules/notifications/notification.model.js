@@ -39,6 +39,10 @@ const notificationSchema = new mongoose.Schema(
     readAt: {
       type: Date,
     },
+    broadcastId: {
+      type: String,
+      index: true,
+    },
   },
   {
     timestamps: true,

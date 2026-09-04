@@ -206,6 +206,7 @@ export const enquiryService = {
       Enquiry.find(filter)
         .populate("requester", "name email phone")
         .populate("targetBusiness", "name slug chapter")
+        .populate("assignedTo", "name email role")
         .sort(sort)
         .skip(skip)
         .limit(limit),
@@ -219,16 +220,19 @@ export const enquiryService = {
   },
 
   /**
-   * Update enquiry status & timeline
+   * Update enquiry status, assignment & timeline
    */
-  updateEnquiryStatus: async (id, { status, timelineUpdate }) => {
+  updateEnquiryStatus: async (id, { status, assignedTo, resolutionNote, timelineUpdate }) => {
     const enquiry = await Enquiry.findById(id);
     if (!enquiry) {
       throw new NotFoundError("Enquiry not found");
     }
 
     const oldStatus = enquiry.status;
-    enquiry.status = status;
+    if (status) enquiry.status = status;
+    if (assignedTo !== undefined) enquiry.assignedTo = assignedTo;
+    if (resolutionNote !== undefined) enquiry.resolutionNote = resolutionNote;
+    
     if (timelineUpdate) {
       enquiry.timeline.push(timelineUpdate);
     }

@@ -26,9 +26,17 @@ export const notificationService = {
   /**
    * Broadcast a notification to all active users or members of a chapter
    */
-  broadcastNotification: async ({ type, title, body, chapter, link }) => {
+  broadcastNotification: async ({ type, title, body, chapter, link, targetRole }) => {
     const query = { status: "Active" };
-    if (chapter) query.chapter = chapter;
+    if (chapter && chapter !== "all") query.chapter = chapter;
+    
+    if (targetRole && targetRole !== "all") {
+      if (targetRole === "business_owner") query.role = "Business Owner";
+      else if (targetRole === "customer") query.role = "Consumer";
+      else query.role = targetRole;
+    }
+
+    const broadcastId = `BC-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     const users = await User.find(query).select("_id");
     const notifications = users.map((u) => ({
@@ -37,13 +45,23 @@ export const notificationService = {
       title,
       body,
       link: link || "",
+      broadcastId,
     }));
 
     if (notifications.length > 0) {
       await Notification.insertMany(notifications);
     }
 
-    return { sentCount: notifications.length };
+    return { sentCount: notifications.length, broadcastId };
+  },
+
+  /**
+   * Delete a broadcast by its broadcastId across all users
+   */
+  deleteBroadcast: async (broadcastId) => {
+    if (!broadcastId) throw new Error("broadcastId is required");
+    const result = await Notification.deleteMany({ broadcastId });
+    return { deletedCount: result.deletedCount };
   },
 
   /**

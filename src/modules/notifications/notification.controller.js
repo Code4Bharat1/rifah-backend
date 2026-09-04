@@ -30,4 +30,10 @@ export const notificationController = {
     const result = await notificationService.broadcastNotification(req.body);
     return ApiResponse.success(res, result, `Broadcast sent to ${result.sentCount} recipients`);
   }),
+
+  deleteBroadcast: asyncHandler(async (req, res) => {
+    const { broadcastId } = req.params;
+    const result = await notificationService.deleteBroadcast(broadcastId);
+    return ApiResponse.success(res, result, `Successfully recalled broadcast from ${result.deletedCount} users`);
+  }),
 };

@@ -21,5 +21,12 @@ router.post(
   notificationController.broadcast
 );
 
+router.delete(
+  "/broadcast/:broadcastId",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  notificationController.deleteBroadcast
+);
+
 export { router as notificationRoutes };
 export default router;

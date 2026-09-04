@@ -89,6 +89,13 @@ const enquirySchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    resolutionNote: {
+      type: String,
+    },
     timeline: [timelineEventSchema],
   },
   {
