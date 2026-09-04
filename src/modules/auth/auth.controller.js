@@ -68,4 +68,16 @@ export const authController = {
     const result = await authService.completeOnboarding(req.user.id, req.body);
     return ApiResponse.success(res, result, "Profile setup and onboarding completed successfully");
   }),
+
+  sendRegisterOtp: asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const result = await authService.sendRegistrationOtp(email);
+    return ApiResponse.success(res, result, result.message || "Verification code sent to your email");
+  }),
+
+  verifyRegisterOtp: asyncHandler(async (req, res) => {
+    const { email, otp } = req.body;
+    const result = await authService.verifyRegistrationOtp({ email, otp });
+    return ApiResponse.success(res, result, result.message || "Email verified successfully");
+  }),
 };

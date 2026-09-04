@@ -13,9 +13,11 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
-// Public directory routes
+// Public directory & verification routes
 router.get("/", optionalAuthMiddleware, businessController.searchDirectory);
 router.get("/detail/:identifier", optionalAuthMiddleware, businessController.getBusinessByIdOrSlug);
+router.post("/gst/verify", businessController.verifyGst);
+router.post("/gst/details", businessController.getGstDetails);
 
 // Authenticated Business Owner routes
 router.get("/me", authMiddleware, businessController.getMyBusiness);

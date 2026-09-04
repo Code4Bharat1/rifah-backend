@@ -80,5 +80,17 @@ router.post(
   authController.completeOnboarding
 );
 
+router.post(
+  "/register-otp/send",
+  authRateLimitMiddleware,
+  authController.sendRegisterOtp
+);
+
+router.post(
+  "/register-otp/verify",
+  authRateLimitMiddleware,
+  authController.verifyRegisterOtp
+);
+
 export { router as authRoutes };
 export default router;

@@ -56,6 +56,10 @@ export const env = {
     CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
   },
 
+  GST: {
+    API_KEY: process.env.GST_API_KEY || "",
+  },
+
   isDevelopment: () => (process.env.NODE_ENV || "development") === "development",
   isProduction: () => process.env.NODE_ENV === "production",
   isTest: () => process.env.NODE_ENV === "test",

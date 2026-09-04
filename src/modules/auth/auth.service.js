@@ -1,5 +1,7 @@
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
+import { OtpVerification } from "./otp.model.js";
+import crypto from "crypto";
 import { hashPassword, comparePassword } from "../../infrastructure/auth/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../infrastructure/auth/jwt.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -59,24 +61,183 @@ export const authService = {
   },
 
   /**
-   * Register a business owner account
+   * Send Registration OTP
    */
-  registerBusinessOwner: async ({ name, email, password, phone, chapter, businessName }) => {
-    const existing = await User.findOne({ email: email.toLowerCase() });
+  sendRegistrationOtp: async (email) => {
+    if (!email || !email.includes("@")) {
+      throw new BadRequestError("A valid email address is required");
+    }
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Check if user already exists
+    const existing = await User.findOne({ email: cleanEmail });
     if (existing) {
-      throw new ConflictError("An account with this email address already exists");
+      throw new ConflictError("An account with this email address already exists. Please log in.");
     }
 
-    const passwordHash = await hashPassword(password);
-    const user = await User.create({
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      passwordHash,
-      phone: phone || "",
-      chapter: chapter || "Mumbai Chapter",
-      role: ROLES.BUSINESS_OWNER,
-      isProfileComplete: true,
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    // Upsert OtpVerification record
+    await OtpVerification.findOneAndUpdate(
+      { email: cleanEmail, purpose: "register_business" },
+      {
+        otp,
+        verified: false,
+        verifiedToken: null,
+        expiresAt,
+      },
+      { upsert: true, new: true }
+    );
+
+    // Send email
+    try {
+      await emailService.sendRegisterOtpEmail({ email: cleanEmail, otp });
+    } catch (err) {
+      console.error("Failed to send registration OTP email:", err);
+    }
+
+    return {
+      message: "Verification code sent to your email.",
+      email: cleanEmail,
+      otp, // included for seamless local dev / testing if mail credentials are simulated
+    };
+  },
+
+  /**
+   * Verify Registration OTP
+   */
+  verifyRegistrationOtp: async ({ email, otp }) => {
+    if (!email || !otp) {
+      throw new BadRequestError("Email and 6-digit verification code are required");
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanOtp = String(otp).trim();
+
+    const record = await OtpVerification.findOne({
+      email: cleanEmail,
+      purpose: "register_business",
+      otp: cleanOtp,
+      expiresAt: { $gt: new Date() },
     });
+
+    if (!record) {
+      throw new BadRequestError("Invalid or expired verification code. Please try again.");
+    }
+
+    // Generate verifiedToken
+    const verifiedToken = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+    record.verified = true;
+    record.verifiedToken = verifiedToken;
+    await record.save();
+
+    return {
+      valid: true,
+      message: "Email verified successfully.",
+      verifiedToken,
+    };
+  },
+
+  /**
+   * Register a business owner account
+   */
+  registerBusinessOwner: async ({
+    name,
+    email,
+    password,
+    phone,
+    chapter,
+    businessName,
+    industry,
+    businessType,
+    city,
+    state,
+    address,
+    membership,
+    about,
+    taxId,
+    verifiedToken,
+  }) => {
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanTaxId = taxId ? taxId.trim().toUpperCase() : "";
+
+    // If verifiedToken was passed, ensure it is verified
+    if (verifiedToken) {
+      const record = await OtpVerification.findOne({
+        email: cleanEmail,
+        verifiedToken,
+        verified: true,
+      });
+      if (!record) {
+        throw new BadRequestError("Email verification is required or has expired. Please verify your email again.");
+      }
+    }
+
+    // Check if user exists
+    let user = await User.findOne({ email: cleanEmail });
+    if (user) {
+      const existingBiz = await Business.findOne({ owner: user._id });
+      if (existingBiz) {
+        throw new ConflictError("An account and business with this email address already exists");
+      }
+      // User created in previous attempt that failed during business provisioning
+      const passwordHash = await hashPassword(password);
+      user.name = name.trim();
+      user.passwordHash = passwordHash;
+      user.phone = phone || "";
+      user.chapter = chapter || "Mumbai Chapter";
+      user.taxId = cleanTaxId;
+      await user.save();
+    } else {
+      const passwordHash = await hashPassword(password);
+      user = await User.create({
+        name: name.trim(),
+        email: cleanEmail,
+        passwordHash,
+        phone: phone || "",
+        chapter: chapter || "Mumbai Chapter",
+        taxId: cleanTaxId,
+        role: ROLES.BUSINESS_OWNER,
+        isProfileComplete: true,
+      });
+    }
+
+    // Provision Business Profile
+    let slug = generateSlug(businessName || name);
+    const slugConflict = await Business.findOne({ slug });
+    if (slugConflict) {
+      slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    // Normalize membership tier (e.g. 'premium' -> 'Premium')
+    const cleanMembership = membership
+      ? membership.charAt(0).toUpperCase() + membership.slice(1).toLowerCase()
+      : "Free";
+
+    const business = await Business.create({
+      name: (businessName || name).trim(),
+      slug,
+      owner: user._id,
+      industry: industry || "General",
+      businessType: businessType || "Proprietorship",
+      city: city || "Mumbai",
+      state: state || "Maharashtra",
+      address: address || "",
+      chapter: chapter || "Mumbai Chapter",
+      membership: cleanMembership,
+      about: about || "",
+      taxId: cleanTaxId,
+      phone: phone || "",
+      email: cleanEmail,
+      status: "Active",
+      verification: "unverified",
+    });
+
+    // Cleanup OTP record once registration and business are successfully created
+    if (verifiedToken) {
+      await OtpVerification.deleteMany({ email: cleanEmail });
+    }
 
     try {
       await emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role });
@@ -91,7 +252,7 @@ export const authService = {
     const accessToken = signAccessToken(tokenPayload);
     const refreshToken = signRefreshToken(tokenPayload);
 
-    return { user, accessToken, refreshToken, pendingBusinessName: businessName };
+    return { user, accessToken, refreshToken, business, pendingBusinessName: businessName };
   },
 
   /**

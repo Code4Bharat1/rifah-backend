@@ -1,4 +1,5 @@
 import { businessService } from "./business.service.js";
+import { gstService } from "./gst.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
@@ -79,5 +80,17 @@ export const businessController = {
     const { id } = req.params;
     const updated = await businessService.updateStatus(id, req.body);
     return ApiResponse.success(res, updated, "Business status updated successfully");
+  }),
+
+  verifyGst: asyncHandler(async (req, res) => {
+    const { gstin } = req.body;
+    const result = await gstService.verifyGst(gstin);
+    return ApiResponse.success(res, result, "GSTIN verified successfully");
+  }),
+
+  getGstDetails: asyncHandler(async (req, res) => {
+    const { gstin } = req.body;
+    const result = await gstService.fetchDetails(gstin);
+    return ApiResponse.success(res, result, "Company details retrieved from GSTIN");
   }),
 };

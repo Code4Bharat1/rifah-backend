@@ -432,4 +432,38 @@ export const emailService = {
     const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
     return emailService.sendEmail({ to: email, subject, html, attachments });
   },
+
+  /**
+   * Sends Business Registration Email OTP Verification Code
+   */
+  sendRegisterOtpEmail: async ({ email, otp }) => {
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+    const subject = `🔐 Your RIFAH Business Registration Verification Code: ${otp}`;
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+        <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
+        <div style="padding: 32px;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`}
+          <span style="background-color: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">EMAIL VERIFICATION</span>
+          <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">Verify Your Business Account Email</h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear Member,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Thank you for registering your enterprise on RIFAH Connect. Please use the following 6-digit verification code to verify your account email (<strong>${email}</strong>):</p>
+          
+          <div style="background-color: #f8fafc; border: 1px dashed #0284c7; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
+            <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">YOUR REGISTRATION CODE</p>
+            <div style="font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0284c7; font-family: monospace;">${otp}</div>
+            <p style="margin: 8px 0 0 0; font-size: 11px; color: #94a3b8;">This code will expire in 15 minutes.</p>
+          </div>
+
+          <p style="color: #64748b; font-size: 13px; line-height: 1.5;">If you did not initiate this business registration, please disregard this email.</p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Security Operations</p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
 };

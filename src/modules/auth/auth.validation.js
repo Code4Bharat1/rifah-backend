@@ -16,6 +16,9 @@ export const validateRegister = (data = {}) => {
 
 export const validateRegisterBusiness = (data = {}) => {
   const errors = [];
+  if (!data.taxId || typeof data.taxId !== "string" || data.taxId.trim().length !== 15) {
+    errors.push({ field: "taxId", message: "A valid 15-character GST Number (GSTIN) is required" });
+  }
   if (!data.name || typeof data.name !== "string" || data.name.trim().length < 2) {
     errors.push({ field: "name", message: "Owner name is required" });
   }

@@ -67,14 +67,17 @@ const businessSchema = new mongoose.Schema(
     },
     membership: {
       type: String,
-      enum: ENUMS.MEMBERSHIP_TIERS,
+      enum: ["Free", "Basic", "Premium", "Enterprise", "free", "basic", "premium", "enterprise"],
       default: "Free",
       index: true,
     },
     verification: {
       type: String,
-      enum: Object.values(STATUSES.VERIFICATION),
-      default: STATUSES.VERIFICATION.UNVERIFIED,
+      enum: [
+        "unverified", "pending", "under_review", "correction_requested", "verified", "rejected",
+        "Unverified", "Pending", "Under Review", "Correction Requested", "Verified", "Rejected"
+      ],
+      default: "unverified",
       index: true,
     },
     rating: {
@@ -157,7 +160,10 @@ const businessSchema = new mongoose.Schema(
     ],
     status: {
       type: String,
-      enum: ["Active", "Suspended", "Draft"],
+      enum: [
+        "Active", "Suspended", "Draft", "Pending Verification", "Live", "Pending",
+        "active", "suspended", "draft", "pending", "pending_verification"
+      ],
       default: "Active",
       index: true,
     },
