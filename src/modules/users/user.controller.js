@@ -30,8 +30,14 @@ export const userController = {
 
   updateUserStatus: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updated = await userService.updateUserStatus(id, req.body);
+    const updated = await userService.updateUserStatus(id, req.body, req.user);
     return ApiResponse.success(res, updated, "User status updated successfully");
+  }),
+
+  inviteUser: asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const result = await userService.inviteUser(email, req.user);
+    return ApiResponse.success(res, result, "Invitation sent successfully", 201);
   }),
 
   deactivateMe: asyncHandler(async (req, res) => {

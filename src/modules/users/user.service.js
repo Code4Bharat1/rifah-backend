@@ -1,5 +1,5 @@
 import { User } from "./user.model.js";
-import { NotFoundError, BadRequestError, UnauthorizedError } from "../../shared/errors/errors.js";
+import { NotFoundError, BadRequestError, UnauthorizedError, ForbiddenError } from "../../shared/errors/errors.js";
 import { comparePassword } from "../../infrastructure/auth/password.js";
 import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
@@ -110,18 +110,56 @@ export const userService = {
   /**
    * Update user status or role (admin)
    */
-  updateUserStatus: async (userId, { status, role }) => {
-    const updates = {};
-    if (status) updates.status = status;
-    if (role) updates.role = role;
-
-    const user = await User.findByIdAndUpdate(userId, updates, { new: true });
-    if (!user) {
+  updateUserStatus: async (userId, { status, role }, requester) => {
+    const userToUpdate = await User.findById(userId);
+    if (!userToUpdate) {
       throw new NotFoundError("User not found");
     }
-    return user;
+
+    // Role-based constraints for Chapter Admin
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
+      if (userToUpdate.chapter !== requester.chapter) {
+        throw new ForbiddenError("Cannot modify users outside your chapter");
+      }
+      if (userToUpdate.role === ROLES.SUPER_ADMIN || userToUpdate.role === ROLES.SECRETARIAT) {
+        throw new ForbiddenError("Cannot modify global admins");
+      }
+      if (role && [ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN].includes(role)) {
+        throw new ForbiddenError("Cannot assign privileged roles");
+      }
+    }
+
+    if (status) userToUpdate.status = status;
+    if (role) userToUpdate.role = role;
+
+    await userToUpdate.save();
+    return userToUpdate;
   },
 
+  /**
+   * Invite a new member to the platform
+   */
+  inviteUser: async (email, requester) => {
+    // Only Chapter Admins and above can invite
+    if (![ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN].includes(requester.role)) {
+      throw new ForbiddenError("Insufficient permissions to invite members");
+    }
+    
+    // Default to the requester's chapter for Chapter Admins
+    const chapterName = requester.role === ROLES.CHAPTER_ADMIN ? requester.chapter : "Mumbai Chapter";
+    
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      throw new BadRequestError("User already exists with this email");
+    }
+
+    // Send the invite email
+    const { emailService } = await import("../../infrastructure/email/email.service.js");
+    await emailService.sendMemberInvite(email, chapterName, requester.name);
+    
+    return { email, chapter: chapterName };
+  },
   /**
    * Deactivate own user account
    */

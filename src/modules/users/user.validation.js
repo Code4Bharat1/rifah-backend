@@ -37,3 +37,11 @@ export const validateUpdateStatus = (data = {}) => {
 
   return { valid: errors.length === 0, errors };
 };
+
+export const validateInvite = (data = {}) => {
+  const errors = [];
+  if (!data.email || !isValidEmail(data.email)) {
+    errors.push({ field: "email", message: "A valid email is required" });
+  }
+  return { valid: errors.length === 0, errors };
+};
