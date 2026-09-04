@@ -4,3 +4,51 @@
 [2026-09-04T09:55:45.319Z] Starting live GST lookup for: 03DOXPM4071K1ZE with key length: 28
 [2026-09-04T09:55:45.323Z] Attempt 1: POST JSON to https://appyflow.in/api/verifyGST with gstNo: 03DOXPM4071K1ZE
 [2026-09-04T09:55:46.029Z] Attempt 1 response (Status 200): {"taxpayerInfo":{"stjCd":"PB223","lgnm":"DISHANT MAHAJAN","stj":"Ludhiana 3 - Ward No.54","dty":"Regular","adadr":[],"cxdt":"","gstin":"03DOXPM4071K1ZE","nba":["Office / Sale Office"],"rgdt":"17/12/2019","ctb":"Proprietorship","pradr":{"addr":{"bnm":"","loc":"Ganesh Nagar","st":"Street no 1","bno":"3018 Shop no 5","stcd":"Punjab","dst":"Ludhiana","city":"","flno":"","lt":"","pncd":"141008","lg":""},"ntr":"Office / Sale Office"},"tradeNam":"AppyFlow Technologies","sts":"Active","ctjCd":"ZD0304","ctj":"RANGE-IV","panNo":"DOXPM4071K"},"compliance":{"filingFrequency":null},"filing":[],"error":false,"message":"Kindly use paid credits for GST verification in production. Free credits are meant only for testing in sandbox. Link to buy credits: https://dashboard.gstapi.appyflow.in/#/app/buy-credits"}
+
+[2026-09-04T10:51:38.361Z] Lookup: 27AABCB2115P1ZP, Status: 200, Body: {"taxpayerInfo":{"stjCd":"PB223","lgnm":"DISHANT MAHAJAN","stj":"Ludhiana 3 - Ward No.54","dty":"Regular","adadr":[],"cxdt":"","gstin":"03DOXPM4071K1ZE","nba":["Office / Sale Office"],"rgdt":"17/12/2019","ctb":"Proprietorship","pradr":{"addr":{"bnm":"","loc":"Ganesh Nagar","st":"Street no 1","bno":"3018 Shop no 5","stcd":"Punjab","dst":"Ludhiana","city":"","flno":"","lt":"","pncd":"141008","lg":""},"ntr":"Office / Sale Office"},"tradeNam":"AppyFlow Technologies","sts":"Active","ctjCd":"ZD0304","ctj":"RANGE-IV","panNo":"AABCB2115P"},"compliance":{"filingFrequency":null},"filing":[],"error":false,"message":"Kindly use paid credits for GST verification in production. Free credits are meant only for testing in sandbox. Link to buy credits: https://dashboard.gstapi.appyflow.in/#/app/buy-credits"}
+
+[2026-09-04T11:07:01.614Z] Authenticating with Sandbox.co.in (key: key_li...)
+
+[2026-09-04T11:07:02.163Z] Sandbox authentication successful! Token cached.
+
+[2026-09-04T11:07:02.165Z] Querying Sandbox GST endpoint for: 27AABCB2115P1ZP
+
+[2026-09-04T11:07:02.307Z] Sandbox GST response for 27AABCB2115P1ZP (Status 404): {"code":404,"message":"Not Found","timestamp":"1788520019000","transaction_id":"095da825-70d3-4c9d-a6e7-fcf5570a8d83"}
+
+[2026-09-04T11:07:02.309Z] Sandbox lookup failed: Not Found
+
+[2026-09-04T11:09:22.920Z] Authenticating with Sandbox.co.in (key: key_li...)
+
+[2026-09-04T11:09:23.301Z] Sandbox authentication successful! Token cached.
+
+[2026-09-04T11:09:23.302Z] Querying Sandbox GST endpoint for: 07AABCB2115P1ZR
+
+[2026-09-04T11:09:23.810Z] Sandbox POST https://api.sandbox.co.in/gst/compliance/public/gstin/search -> Status 200: {"code":200,"timestamp":1788520160139,"data":{"data":{"stjCd":"DL007","lgnm":"BUSINESS STANDARD PRIVATE LIMITED","stj":"Ward 7","dty":"Regular","adadr":[],"cxdt":"","gstin":"07AABCB2115P1ZR","nba":["Recipient of Goods or Services","Others","Service Provision"],"lstupdt":"19/01/2023","rgdt":"01/07/20
+
+[2026-09-04T11:10:10.588Z] Querying Sandbox GST endpoint for: 23AABCB2115P1ZX
+
+[2026-09-04T11:10:11.136Z] Sandbox POST https://api.sandbox.co.in/gst/compliance/public/gstin/search -> Status 200: {"code":200,"timestamp":1788520207434,"data":{"data":{"stjCd":"MP013","lgnm":"BUSINESS STANDARD PRIVATE LIMITED","stj":"Bhopal -6","dty":"Regular","adadr":[],"cxdt":"","gstin":"23AABCB2115P1ZX","nba":["Service Provision","Recipient of Goods or Services","Others"],"lstupdt":"29/08/2023","rgdt":"01/07
+
+[2026-09-04T11:10:25.206Z] Querying Sandbox GST endpoint for: 23AABCB2115P1ZX
+
+[2026-09-04T11:10:25.667Z] Sandbox POST https://api.sandbox.co.in/gst/compliance/public/gstin/search -> Status 200: {"code":200,"timestamp":1788520222062,"data":{"data":{"stjCd":"MP013","lgnm":"BUSINESS STANDARD PRIVATE LIMITED","stj":"Bhopal -6","dty":"Regular","adadr":[],"cxdt":"","gstin":"23AABCB2115P1ZX","nba":["Service Provision","Recipient of Goods or Services","Others"],"lstupdt":"29/08/2023","rgdt":"01/07
+
+[2026-09-04T11:12:52.212Z] Querying Sandbox GST endpoint for: 03DOXPM4071K1ZE
+
+[2026-09-04T11:12:52.928Z] Sandbox POST https://api.sandbox.co.in/gst/compliance/public/gstin/search -> Status 200: {"code":200,"timestamp":1788520369252,"data":{"data":{"stjCd":"PB253","lgnm":"DISHANT MAHAJAN","stj":"Ludhiana 4 - Ward No.62","dty":"Regular","adadr":[],"cxdt":"","gstin":"03DOXPM4071K1ZE","nba":["Office / Sale Office"],"lstupdt":"27/01/2022","rgdt":"17/12/2019","ctb":"Proprietorship","pradr":{"add
+
+[2026-09-04T11:13:39.391Z] Querying Sandbox GST endpoint for: 21AABCB2115P1Z1
+
+[2026-09-04T11:13:40.032Z] Sandbox POST https://api.sandbox.co.in/gst/compliance/public/gstin/search -> Status 200: {"code":200,"timestamp":1788520416351,"data":{"data":{"stjCd":"OD007","lgnm":"BUSINESS STANDARD PRIVATE LIMITED","stj":"Bhubaneswar I Circle","dty":"Regular","adadr":[],"cxdt":"","nba":["Service Provision","Recipient of Goods or Services","Others"],"gstin":"21AABCB2115P1Z1","lstupdt":"19/01/2023","r
+
+[2026-09-04T11:16:13.089Z] Querying Sandbox GST endpoint for: 09AABCB2115P1ZN
+
+[2026-09-04T11:16:13.764Z] Sandbox POST https://api.sandbox.co.in/gst/compliance/public/gstin/search -> Status 200: {"code":200,"timestamp":1788520570059,"data":{"data":{"stjCd":"UP1713","stj":"Lucknow Sector- 2","lgnm":"BUSINESS STANDARD PRIVATE LIMITED","dty":"Regular","adadr":[],"cxdt":"","nba":["Service Provision","Others","Recipient of Goods or Services"],"gstin":"09AABCB2115P1ZN","lstupdt":"24/07/2025","rgd
+
+[2026-09-04T11:36:23.857Z] Authenticating with Sandbox.co.in (key: key_li...)
+
+[2026-09-04T11:36:24.292Z] Sandbox authentication successful! Token cached.
+
+[2026-09-04T11:36:24.292Z] Querying Sandbox GST endpoint for: 04AABCB2115P1ZX
+
+[2026-09-04T11:36:24.791Z] Sandbox POST https://api.sandbox.co.in/gst/compliance/public/gstin/search -> Status 200: {"code":200,"timestamp":1788521781160,"data":{"data":{"stjCd":"CH009","stj":"Ward 9","lgnm":"BUSINESS STANDARD PRIVATE LIMITED","dty":"Regular","adadr":[],"cxdt":"","nba":["Service Provision","Recipient of Goods or Services","Others"],"gstin":"04AABCB2115P1ZX","lstupdt":"27/04/2026","rgdt":"01/07/20

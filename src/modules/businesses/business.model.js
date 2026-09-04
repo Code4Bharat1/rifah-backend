@@ -158,6 +158,16 @@ const businessSchema = new mongoose.Schema(
         type: String,
       },
     ],
+    rating: {
+      type: Number,
+      default: 5.0,
+      min: 0,
+      max: 5,
+    },
+    reviewsCount: {
+      type: Number,
+      default: 0,
+    },
     status: {
       type: String,
       enum: [

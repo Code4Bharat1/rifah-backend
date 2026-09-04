@@ -60,6 +60,11 @@ export const env = {
     API_KEY: process.env.GST_API_KEY || "",
   },
 
+  SANDBOX: {
+    API_KEY: process.env.SANDBOX_API_KEY || "",
+    API_SECRET: process.env.SANDBOX_API_SECRET || "",
+  },
+
   isDevelopment: () => (process.env.NODE_ENV || "development") === "development",
   isProduction: () => process.env.NODE_ENV === "production",
   isTest: () => process.env.NODE_ENV === "test",
