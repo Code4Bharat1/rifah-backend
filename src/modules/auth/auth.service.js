@@ -52,6 +52,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -247,6 +248,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -280,6 +282,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
       forcePasswordChange: user.forcePasswordChange,
     };
 
@@ -307,6 +310,7 @@ export const authService = {
         id: user._id,
         email: user.email,
         role: user.role,
+        chapter: user.chapter,
       };
 
       const newAccessToken = signAccessToken(tokenPayload);
@@ -350,6 +354,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
       forcePasswordChange: false,
     };
 
@@ -524,6 +529,7 @@ export const authService = {
         id: existingUser._id,
         email: existingUser.email,
         role: existingUser.role,
+        chapter: existingUser.chapter,
       };
 
       const accessToken = signAccessToken(tokenPayload);
@@ -559,6 +565,7 @@ export const authService = {
       id: newUser._id,
       email: newUser.email,
       role: newUser.role,
+      chapter: newUser.chapter,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -687,6 +694,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
     };
 
     const accessToken = signAccessToken(tokenPayload);
