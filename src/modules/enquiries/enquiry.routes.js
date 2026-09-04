@@ -36,6 +36,13 @@ router.get(
   enquiryController.listAllEnquiries
 );
 
+router.get(
+  "/admin/export/csv",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  enquiryController.exportCsv
+);
+
 router.patch(
   "/:id/status",
   authMiddleware,

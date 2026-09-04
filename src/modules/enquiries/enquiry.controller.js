@@ -39,4 +39,11 @@ export const enquiryController = {
     const updated = await enquiryService.updateEnquiryStatus(id, req.body);
     return ApiResponse.success(res, updated, "Enquiry status updated successfully");
   }),
+
+  exportCsv: asyncHandler(async (req, res) => {
+    const csvData = await enquiryService.exportCsv(req.query, req.user);
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=leads_export.csv");
+    return res.status(200).send(csvData);
+  }),
 };

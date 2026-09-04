@@ -35,6 +35,15 @@ const eventSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    description: {
+      type: String,
+      default: "",
+    },
+    targetAudience: {
+      type: [String],
+      enum: ["Consumers", "Businesses", "Chapter Admins"],
+      default: [],
+    },
     date: {
       type: String,
       required: [true, "Event date is required"],
@@ -83,7 +92,7 @@ const eventSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: Object.values(STATUSES.EVENT),
-      default: STATUSES.EVENT.UPCOMING,
+      default: STATUSES.EVENT.DRAFT,
       index: true,
     },
     agenda: [agendaItemSchema],
