@@ -13,6 +13,9 @@ router.patch("/:id/read", authMiddleware, validateObjectIdParam("id"), notificat
 router.patch("/read-all", authMiddleware, notificationController.markAllAsRead);
 router.patch("/mark-read", authMiddleware, notificationController.markAllAsRead);
 
+router.delete("/clear-all", authMiddleware, notificationController.clearAllNotifications);
+router.delete("/:id", authMiddleware, validateObjectIdParam("id"), notificationController.deleteNotification);
+
 // Admin broadcast notification
 router.post(
   "/broadcast",

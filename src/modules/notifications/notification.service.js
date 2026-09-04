@@ -251,4 +251,23 @@ export const notificationService = {
     );
     return true;
   },
+
+  /**
+   * Delete a single notification for the current user
+   */
+  deleteNotification: async (notificationId, userId) => {
+    const result = await Notification.findOneAndDelete({ _id: notificationId, recipient: userId });
+    if (!result) {
+      throw new NotFoundError("Notification not found");
+    }
+    return result;
+  },
+
+  /**
+   * Clear all notifications for the current user
+   */
+  clearAllNotifications: async (userId) => {
+    const result = await Notification.deleteMany({ recipient: userId });
+    return { deletedCount: result.deletedCount };
+  },
 };
