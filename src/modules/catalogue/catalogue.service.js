@@ -1,5 +1,6 @@
 import { Catalogue } from "./catalogue.model.js";
 import { Business } from "../businesses/business.model.js";
+import { Settings } from "../settings/settings.model.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
@@ -60,6 +61,7 @@ export const catalogueService = {
 
   /**
    * Create catalogue item (Business Owner)
+   * Enforces maxCatalogueItems and maxImagesPerItem from global Settings.
    */
   createItem: async (data, user) => {
     const business = await Business.findById(data.businessId || user.businessId);
@@ -69,6 +71,20 @@ export const catalogueService = {
 
     if (String(business.owner) !== String(user.id)) {
       throw new ForbiddenError("You do not own this business");
+    }
+
+    // --- Enforce global settings limits ---
+    const globalSettings = await Settings.findOne({ isSingleton: "global" });
+    const maxItems = globalSettings?.maxCatalogueItems ?? 50;
+    const maxImages = globalSettings?.maxImagesPerItem ?? 5;
+
+    const currentCount = await Catalogue.countDocuments({ business: business._id });
+    if (currentCount >= maxItems) {
+      throw new ForbiddenError(`Catalogue limit reached. Maximum ${maxItems} items allowed per business.`);
+    }
+
+    if (data.images && Array.isArray(data.images) && data.images.length > maxImages) {
+      throw new ForbiddenError(`Too many images. Maximum ${maxImages} images allowed per item.`);
     }
 
     const slug = generateSlug(data.name);

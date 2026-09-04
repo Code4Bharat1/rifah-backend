@@ -39,6 +39,26 @@ const settingsSchema = new mongoose.Schema(
       type: String,
       default: "2026-27",
     },
+    registrationFee: {
+      type: Number,
+      default: 1000,
+    },
+    defaultMembershipFee: {
+      type: Number,
+      default: 5000,
+    },
+    leadLimitPerMonth: {
+      type: Number,
+      default: 100,
+    },
+    maxCatalogueItems: {
+      type: Number,
+      default: 50,
+    },
+    maxImagesPerItem: {
+      type: Number,
+      default: 5,
+    },
   },
   { timestamps: true }
 );
