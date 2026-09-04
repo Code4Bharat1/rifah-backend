@@ -71,6 +71,29 @@ export const emailService = {
   },
 
   /**
+   * Sends an invitation email to a prospective member
+   */
+  sendMemberInvite: async (email, chapterName, adminName) => {
+    const subject = `Invitation to join RIFAH Chamber: ${chapterName}`;
+    const registrationLink = `http://localhost:3000/register?chapter=${encodeURIComponent(chapterName)}`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #0284c7;">You are invited to RIFAH Chamber of Commerce & Industry</h2>
+        <p>Hello,</p>
+        <p>You have been invited by <strong>${adminName}</strong> to join the <strong>${chapterName}</strong> of the RIFAH Chamber.</p>
+        <p>As a member, you will be able to register your businesses, connect with verified buyers and suppliers, and access exclusive chamber benefits.</p>
+        <div style="margin-top: 24px; text-align: center;">
+          <a href="${registrationLink}" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;">Register Now</a>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+        <p style="color: #94a3b8; font-size: 12px; text-align: center;">RIFAH Chamber of Commerce & Industries</p>
+      </div>
+    `;
+
+    return emailService.sendEmail({ to: email, subject, html });
+  },
+
+  /**
    * Sends a Membership Invoice Receipt Email with attached PDF matching exact website template
    */
   sendMembershipInvoiceEmail: async ({
