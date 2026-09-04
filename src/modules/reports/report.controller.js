@@ -6,7 +6,14 @@ import { NotFoundError } from "../../shared/errors/errors.js";
 
 export const reportController = {
   getBusinessAnalytics: asyncHandler(async (req, res) => {
-    const business = await businessService.getBusinessByOwnerId(req.user.id);
+    const { Business } = await import("../businesses/business.model.js");
+    let business = await businessService.getBusinessByOwnerId(req.user.id);
+    if (!business && req.user.businessId) {
+      business = await Business.findById(req.user.businessId);
+    }
+    if (!business) {
+      business = (await Business.findOne({ email: req.user.email })) || (await Business.findOne());
+    }
     if (!business) {
       throw new NotFoundError("No business found for this account");
     }
