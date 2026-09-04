@@ -4,7 +4,7 @@ import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
-import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
+import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { STATUSES } from "../../shared/constants/statuses.js";
 
@@ -83,7 +83,7 @@ export const eventService = {
   /**
    * Get single event detail
    */
-  getEventBySlugOrId: async (identifier) => {
+  getEventBySlugOrId: async (identifier, user) => {
     const isObjectId = identifier.match(/^[0-9a-fA-F]{24}$/);
     const query = isObjectId ? { _id: identifier } : { slug: identifier };
 
@@ -91,17 +91,28 @@ export const eventService = {
     if (!event) {
       throw new NotFoundError("Event not found");
     }
+    
+    // RBAC: Chapter Admin Scope Enforcement
+    if (user && user.role === ROLES.CHAPTER_ADMIN && event.chapter !== user.chapter) {
+      throw new ForbiddenError("You are not authorized to view events from another chapter.");
+    }
+    
     return event;
   },
 
   /**
    * Create new event (Admin / Secretariat)
    */
-  createEvent: async (data) => {
+  createEvent: async (data, user) => {
     let slug = generateSlug(data.title);
     const existing = await Event.findOne({ slug });
     if (existing) {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    // RBAC: Chapter Admin Scope Enforcement
+    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+      data.chapter = user.chapter;
     }
 
     const event = await Event.create({
@@ -172,10 +183,18 @@ export const eventService = {
   /**
    * Update event details
    */
-  updateEvent: async (id, updateData) => {
+  updateEvent: async (id, updateData, user) => {
     const existing = await Event.findById(id);
     if (!existing) {
       throw new NotFoundError("Event not found");
+    }
+
+    // RBAC: Chapter Admin Scope Enforcement
+    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+      if (existing.chapter !== user.chapter) {
+        throw new ForbiddenError("You are not authorized to modify events from another chapter.");
+      }
+      delete updateData.chapter; // Prevent modifying chapter
     }
 
     if (updateData.title && updateData.title !== existing.title) {
@@ -194,7 +213,17 @@ export const eventService = {
   /**
    * Delete event
    */
-  deleteEvent: async (id) => {
+  deleteEvent: async (id, user) => {
+    const existing = await Event.findById(id);
+    if (!existing) {
+      throw new NotFoundError("Event not found");
+    }
+
+    // RBAC: Chapter Admin Scope Enforcement
+    if (user && user.role === ROLES.CHAPTER_ADMIN && existing.chapter !== user.chapter) {
+      throw new ForbiddenError("You are not authorized to delete events from another chapter.");
+    }
+
     const deleted = await Event.findByIdAndDelete(id);
     if (!deleted) {
       throw new NotFoundError("Event not found");

@@ -11,12 +11,12 @@ export const eventController = {
 
   getEventBySlugOrId: asyncHandler(async (req, res) => {
     const { identifier } = req.params;
-    const event = await eventService.getEventBySlugOrId(identifier);
+    const event = await eventService.getEventBySlugOrId(identifier, req.user);
     return ApiResponse.success(res, event, "Event details retrieved");
   }),
 
   createEvent: asyncHandler(async (req, res) => {
-    const created = await eventService.createEvent(req.body);
+    const created = await eventService.createEvent(req.body, req.user);
     return ApiResponse.created(res, created, "Event created successfully");
   }),
 
@@ -28,7 +28,7 @@ export const eventController = {
 
   updateEvent: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updated = await eventService.updateEvent(id, req.body);
+    const updated = await eventService.updateEvent(id, req.body, req.user);
     return ApiResponse.success(res, updated, "Event updated successfully");
   }),
 
@@ -38,13 +38,13 @@ export const eventController = {
       return ApiResponse.error(res, "No image uploaded", 400);
     }
     const coverUrl = storageService.getPublicUrl(req.file.filename, "covers");
-    const updated = await eventService.updateEvent(id, { coverImage: coverUrl });
+    const updated = await eventService.updateEvent(id, { coverImage: coverUrl }, req.user);
     return ApiResponse.success(res, { coverImage: coverUrl, event: updated }, "Event cover uploaded successfully");
   }),
 
   deleteEvent: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    await eventService.deleteEvent(id);
+    await eventService.deleteEvent(id, req.user);
     return ApiResponse.success(res, null, "Event deleted successfully");
   }),
 };
