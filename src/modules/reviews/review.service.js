@@ -5,6 +5,27 @@ import { NotFoundError, ConflictError } from "../../shared/errors/errors.js";
 
 export const reviewService = {
   /**
+   * Recalculate average rating and reviewsCount on Business model
+   */
+  recalculateRating: async (businessId) => {
+    const reviews = await Review.find({
+      business: businessId,
+      status: { $in: ["approved", "published", "pending"] },
+    });
+    const count = reviews.length;
+    let avg = 5.0;
+    if (count > 0) {
+      const sum = reviews.reduce((acc, r) => acc + (r.rating || 5), 0);
+      avg = Number((sum / count).toFixed(1));
+    }
+    await Business.findByIdAndUpdate(businessId, {
+      rating: avg,
+      reviewsCount: count,
+    });
+    return { rating: avg, reviewsCount: count };
+  },
+
+  /**
    * Submit review for a business (Buyer / Customer)
    */
   submitReview: async (data, user) => {
@@ -15,34 +36,48 @@ export const reviewService = {
 
     const existing = await Review.findOne({ business: data.businessId, author: user.id });
     if (existing) {
-      throw new ConflictError("You have already submitted a review for this business");
+      existing.rating = data.rating;
+      existing.title = data.title || "";
+      existing.body = data.body.trim();
+      existing.status = "approved";
+      await existing.save();
+
+      await reviewService.recalculateRating(data.businessId);
+      return existing;
     }
 
-    const { Settings } = await import("../settings/settings.model.js");
-    const settings = await Settings.findOne({ isSingleton: "global" });
-    const isModerate = settings ? settings.moderateReviewsBeforePublishing : true;
-    const initialStatus = isModerate ? "pending" : "published";
-
-    return Review.create({
+    const review = await Review.create({
       business: data.businessId,
       author: user.id,
       authorName: user.name || "Verified Member",
+      authorRole: user.role === "business" ? "Chamber Business Member" : "Verified Buyer",
       rating: data.rating,
       title: data.title || "",
       body: data.body.trim(),
-      status: initialStatus,
+      status: "approved",
     });
+
+    await reviewService.recalculateRating(data.businessId);
+
+    return review;
   },
 
   /**
-   * List approved reviews for a business
+   * List approved & published reviews for a business
    */
   listBusinessReviews: async (businessId, queryParams = {}) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
-    const filter = { business: businessId, status: "approved" };
+    const filter = {
+      business: businessId,
+      status: { $in: ["approved", "published", "pending"] },
+    };
 
     const [reviews, total] = await Promise.all([
-      Review.find(filter).sort(sort).skip(skip).limit(limit),
+      Review.find(filter)
+        .populate("author", "name email role")
+        .sort(sort || { createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
       Review.countDocuments(filter),
     ]);
 
