@@ -12,6 +12,9 @@ export const validateCreateEvent = (data = {}) => {
   if (!data.city || typeof data.city !== "string") {
     errors.push({ field: "city", message: "City is required" });
   }
+  if (data.targetAudience !== undefined && !Array.isArray(data.targetAudience)) {
+    errors.push({ field: "targetAudience", message: "Target audience must be an array" });
+  }
   return { valid: errors.length === 0, errors };
 };
 

@@ -168,8 +168,32 @@ export const enquiryService = {
       filter.targetBusiness = { $in: businessIds };
     }
 
-    if (queryParams.status) filter.status = queryParams.status;
+    if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
     if (queryParams.category) filter.category = queryParams.category;
+    
+    // Type Filter (Direct RFQs vs Broadcast RFQs)
+    if (queryParams.type && queryParams.type.toLowerCase() !== "all") {
+      if (queryParams.type === "direct") {
+        filter.targetBusiness = { $exists: true, $ne: null };
+      } else if (queryParams.type === "broadcast") {
+        filter.targetBusiness = { $exists: false };
+      }
+    }
+
+    // Chapter Filter
+    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
+      const chapterBusinesses = await Business.find({ chapter: queryParams.chapter }).select('_id');
+      const businessIds = chapterBusinesses.map(b => b._id);
+      
+      if (filter.targetBusiness && filter.targetBusiness.$in) {
+        const adminBusinessIds = filter.targetBusiness.$in.map(id => id.toString());
+        const validIds = businessIds.filter(id => adminBusinessIds.includes(id.toString()));
+        filter.targetBusiness = { $in: validIds };
+      } else {
+        filter.targetBusiness = { $in: businessIds };
+      }
+    }
+
     if (queryParams.search) {
       filter.$or = [
         { title: { $regex: queryParams.search, $options: "i" } },
@@ -238,5 +262,91 @@ export const enquiryService = {
     }
 
     return enquiry;
+  },
+
+  /**
+   * Export Enquiries to CSV
+   */
+  exportCsv: async (queryParams = {}, requester = null) => {
+    // Reuse the exact same filter logic as listAllEnquiries
+    const filter = {};
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
+      const chapterBusinesses = await Business.find({ chapter: requester.chapter }).select('_id');
+      const businessIds = chapterBusinesses.map(b => b._id);
+      filter.targetBusiness = { $in: businessIds };
+    }
+
+    if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
+    if (queryParams.category) filter.category = queryParams.category;
+    
+    // Type Filter (Direct RFQs vs Broadcast RFQs)
+    if (queryParams.type && queryParams.type.toLowerCase() !== "all") {
+      if (queryParams.type === "direct") {
+        filter.targetBusiness = { $exists: true, $ne: null };
+      } else if (queryParams.type === "broadcast") {
+        filter.targetBusiness = { $exists: false };
+      }
+    }
+
+    // Chapter Filter
+    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
+      const chapterBusinesses = await Business.find({ chapter: queryParams.chapter }).select('_id');
+      const businessIds = chapterBusinesses.map(b => b._id);
+      
+      if (filter.targetBusiness && filter.targetBusiness.$in) {
+        const adminBusinessIds = filter.targetBusiness.$in.map(id => id.toString());
+        const validIds = businessIds.filter(id => adminBusinessIds.includes(id.toString()));
+        filter.targetBusiness = { $in: validIds };
+      } else {
+        filter.targetBusiness = { $in: businessIds };
+      }
+    }
+
+    if (queryParams.search) {
+      filter.$or = [
+        { title: { $regex: queryParams.search, $options: "i" } },
+        { referenceId: { $regex: queryParams.search, $options: "i" } },
+        { requesterName: { $regex: queryParams.search, $options: "i" } },
+      ];
+    }
+
+    const enquiries = await Enquiry.find(filter)
+      .populate("targetBusiness", "name")
+      .sort({ createdAt: -1 });
+
+    // Build CSV string manually
+    const headers = [
+      "Reference ID",
+      "Title",
+      "Category",
+      "Type",
+      "Buyer Name",
+      "Target Location",
+      "Quantity",
+      "Budget",
+      "Status",
+      "Date Created"
+    ];
+
+    const escapeCsv = (str) => {
+      if (str === null || str === undefined) return '""';
+      const safeStr = String(str).replace(/"/g, '""');
+      return `"${safeStr}"`;
+    };
+
+    const rows = enquiries.map(e => [
+      escapeCsv(e.referenceId),
+      escapeCsv(e.title),
+      escapeCsv(e.category),
+      escapeCsv(e.targetBusiness ? "Direct RFQ" : "Broadcast RFQ"),
+      escapeCsv(e.requesterName || e.buyerName || "Registered Buyer"),
+      escapeCsv(e.city || e.location),
+      escapeCsv(e.quantity),
+      escapeCsv(e.budget),
+      escapeCsv(e.status),
+      escapeCsv(e.createdAt.toISOString().split("T")[0])
+    ].join(","));
+
+    return [headers.join(","), ...rows].join("\n");
   },
 };
