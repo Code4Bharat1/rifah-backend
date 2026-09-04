@@ -43,4 +43,37 @@ export const reportController = {
     res.setHeader("Content-Disposition", 'attachment; filename="admin_reports.csv"');
     return res.status(200).send(csvData);
   }),
+
+  exportRevenue: asyncHandler(async (req, res) => {
+    const { startDate, endDate, format } = req.query;
+    const data = await reportService.exportRevenueData(startDate, endDate);
+    if (format === "json") return ApiResponse.success(res, data, "Revenue data retrieved");
+    
+    const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="revenue_report.csv"');
+    return res.status(200).send(csvData);
+  }),
+
+  exportMemberships: asyncHandler(async (req, res) => {
+    const { startDate, endDate, format } = req.query;
+    const data = await reportService.exportMembershipsData(startDate, endDate);
+    if (format === "json") return ApiResponse.success(res, data, "Memberships data retrieved");
+    
+    const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="memberships_report.csv"');
+    return res.status(200).send(csvData);
+  }),
+
+  exportLeads: asyncHandler(async (req, res) => {
+    const { startDate, endDate, format } = req.query;
+    const data = await reportService.exportLeadsData(startDate, endDate);
+    if (format === "json") return ApiResponse.success(res, data, "Leads data retrieved");
+    
+    const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="leads_report.csv"');
+    return res.status(200).send(csvData);
+  }),
 };

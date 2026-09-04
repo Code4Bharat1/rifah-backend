@@ -31,5 +31,26 @@ router.get(
   reportController.exportAdminCsv
 );
 
+router.get(
+  "/admin/export/revenue",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  reportController.exportRevenue
+);
+
+router.get(
+  "/admin/export/memberships",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  reportController.exportMemberships
+);
+
+router.get(
+  "/admin/export/leads",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  reportController.exportLeads
+);
+
 export { router as reportRoutes };
 export default router;
