@@ -11,6 +11,8 @@ export const requireRole = (...allowedRoles) => {
       return next(new UnauthorizedError("Authentication required"));
     }
 
+    console.log("DEBUG requireRole - user:", req.user.email, "role:", req.user.role, "allowedRoles:", allowedRoles);
+
     if (!allowedRoles.includes(req.user.role)) {
       return next(
         new ForbiddenError(`Access denied. Requires one of: ${allowedRoles.join(", ")}`)
