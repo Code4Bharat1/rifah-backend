@@ -16,3 +16,17 @@ export const authRateLimitMiddleware = rateLimit({
     },
   },
 });
+
+export const gstRateLimitMiddleware = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // max 30 GST lookups per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: "TOO_MANY_GST_REQUESTS",
+      message: "Too many GST verification requests. Please try again after 15 minutes.",
+    },
+  },
+});

@@ -106,18 +106,33 @@ export const catalogueService = {
       throw new NotFoundError("Catalogue item not found");
     }
 
-    const isOwner = String(item.business.owner) === String(user.id);
+    const isOwner = String(item.business?.owner) === String(user.id);
     const isAdmin = ["super_admin", "secretariat"].includes(user.role);
 
     if (!isOwner && !isAdmin) {
       throw new ForbiddenError("Unauthorized to update this item");
     }
 
-    if (updateData.name) {
-      updateData.slug = generateSlug(updateData.name);
+    const ALLOWED_ITEM_FIELDS = [
+      "name", "description", "price", "type", "category",
+      "city", "moq", "images", "status"
+    ];
+
+    const sanitizedData = {};
+    for (const key of ALLOWED_ITEM_FIELDS) {
+      if (updateData[key] !== undefined) {
+        sanitizedData[key] = updateData[key];
+      }
     }
 
-    const updated = await Catalogue.findByIdAndUpdate(id, updateData, { new: true });
+    if (sanitizedData.name && sanitizedData.name !== item.name) {
+      sanitizedData.slug = generateSlug(sanitizedData.name);
+    }
+
+    const updated = await Catalogue.findByIdAndUpdate(id, sanitizedData, {
+      new: true,
+      runValidators: true,
+    });
     return updated;
   },
 

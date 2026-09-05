@@ -37,7 +37,7 @@ export const leadController = {
 
   updateLeadStatus: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updated = await leadService.updateLeadStatus(id, req.body);
+    const updated = await leadService.updateLeadStatus(id, req.body, req.user);
     return ApiResponse.success(res, updated, "Lead status updated successfully");
   }),
 
