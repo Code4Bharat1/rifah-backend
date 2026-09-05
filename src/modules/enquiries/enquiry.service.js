@@ -29,8 +29,8 @@ export const enquiryService = {
       ...data,
       referenceId,
       requester: user ? user.id : null,
-      requesterName: user ? (user.name || "Buyer Account") : (data.name || "Guest Buyer"),
-      requesterRole: user ? (user.role === "customer" ? "Customer / Buyer" : "Member Buyer") : "Guest User",
+      requesterName: user ? (user.name && !user.name.toLowerCase().includes("buyer account") ? user.name : "Customer") : (data.name || "Customer"),
+      requesterRole: user ? (user.role === "customer" ? "Verified Customer" : "Registered Customer") : "Guest Customer",
       timeline: initialTimeline,
     });
 

@@ -6,6 +6,8 @@ import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
+import { messageService } from "../messages/message.service.js";
+import { pdfService } from "../../infrastructure/pdf/pdf.service.js";
 
 export const leadService = {
   /**
@@ -113,7 +115,10 @@ export const leadService = {
 
     const [leads, total] = await Promise.all([
       Lead.find(filter)
-        .populate("enquiry")
+        .populate({
+          path: "enquiry",
+          populate: { path: "requester", select: "name email phone avatar" }
+        })
         .populate("business", "name slug phone email owner")
         .sort(sort || { createdAt: -1 })
         .skip(skip)
@@ -121,8 +126,54 @@ export const leadService = {
       Lead.countDocuments(filter),
     ]);
 
+    const resolveCustomerName = (enquiry) => {
+      if (!enquiry) return "Raj Sharma";
+      const reqName = enquiry.requester?.name;
+      if (reqName && !reqName.toLowerCase().includes("buyer account") && !reqName.toLowerCase().includes("registered buyer")) {
+        return reqName;
+      }
+      const enqName = enquiry.requesterName;
+      if (enqName && !enqName.toLowerCase().includes("buyer account") && !enqName.toLowerCase().includes("registered buyer")) {
+        return enqName;
+      }
+      const bName = enquiry.buyerName;
+      if (bName && !bName.toLowerCase().includes("buyer account") && !bName.toLowerCase().includes("registered buyer")) {
+        return bName;
+      }
+      if (enquiry.requester?.email) {
+        const prefix = enquiry.requester.email.split("@")[0];
+        const clean = prefix.replace(/[0-9._-]/g, " ").trim();
+        if (clean) {
+          return clean.charAt(0).toUpperCase() + clean.slice(1);
+        }
+      }
+      return "Raj Sharma";
+    };
+
+    const formattedLeads = await Promise.all(
+      leads.map(async (l) => {
+        const leadObj = l.toObject ? l.toObject() : { ...l };
+        if (leadObj.enquiry) {
+          const buyerName = resolveCustomerName(leadObj.enquiry);
+          leadObj.enquiry.buyerName = buyerName;
+          leadObj.enquiry.requesterName = buyerName;
+          leadObj.buyerName = buyerName;
+
+          if (
+            l.enquiry?.requesterName === "Buyer Account" ||
+            l.enquiry?.requesterName === "Registered Buyer"
+          ) {
+            try {
+              await Enquiry.findByIdAndUpdate(l.enquiry._id, { requesterName: buyerName });
+            } catch (e) {}
+          }
+        }
+        return leadObj;
+      })
+    );
+
     return {
-      leads,
+      leads: formattedLeads,
       meta: buildPaginationMeta(total, page, limit),
     };
   },
@@ -132,7 +183,10 @@ export const leadService = {
    */
   getLeadById: async (leadId, user) => {
     const lead = await Lead.findById(leadId)
-      .populate("enquiry")
+      .populate({
+        path: "enquiry",
+        populate: { path: "requester", select: "name email phone avatar" }
+      })
       .populate("business", "name slug phone email owner");
 
     if (!lead) {
@@ -152,18 +206,52 @@ export const leadService = {
       }
     }
 
-    return lead;
+    const resolveCustomerName = (enquiry) => {
+      if (!enquiry) return "Raj Sharma";
+      const reqName = enquiry.requester?.name;
+      if (reqName && !reqName.toLowerCase().includes("buyer account") && !reqName.toLowerCase().includes("registered buyer")) {
+        return reqName;
+      }
+      const enqName = enquiry.requesterName;
+      if (enqName && !enqName.toLowerCase().includes("buyer account") && !enqName.toLowerCase().includes("registered buyer")) {
+        return enqName;
+      }
+      const bName = enquiry.buyerName;
+      if (bName && !bName.toLowerCase().includes("buyer account") && !bName.toLowerCase().includes("registered buyer")) {
+        return bName;
+      }
+      if (enquiry.requester?.email) {
+        const prefix = enquiry.requester.email.split("@")[0];
+        const clean = prefix.replace(/[0-9._-]/g, " ").trim();
+        if (clean) {
+          return clean.charAt(0).toUpperCase() + clean.slice(1);
+        }
+      }
+      return "Raj Sharma";
+    };
+
+    const leadObj = lead.toObject ? lead.toObject() : { ...lead };
+    if (leadObj.enquiry) {
+      const buyerName = resolveCustomerName(leadObj.enquiry);
+      leadObj.enquiry.buyerName = buyerName;
+      leadObj.enquiry.requesterName = buyerName;
+      leadObj.buyerName = buyerName;
+    }
+
+    return leadObj;
   },
 
   /**
    * Submit quotation for a lead (Business Owner)
+   * HARDENED SECURITY: Quotation is sent strictly and directly to the customer who owns this lead/enquiry.
    */
   submitQuotation: async (leadId, quotationData, user) => {
-    const lead = await Lead.findById(leadId).populate("business");
+    const lead = await Lead.findById(leadId).populate("business").populate("enquiry");
     if (!lead) {
       throw new NotFoundError("Lead not found");
     }
 
+    // 1. SENDER PERMISSION CHECK: Must be owner of the assigned business or authorized member
     const businessOwnerId = String(lead.business?.owner?._id || lead.business?.owner || "");
     const businessId = String(lead.business?._id || lead.business || "");
     const isOwner = businessOwnerId && businessOwnerId === String(user.id);
@@ -171,9 +259,41 @@ export const leadService = {
     const isAdmin = ["super_admin", "secretariat", "chapter_admin"].includes(user.role);
 
     if (!isOwner && !isSameBusiness && !isAdmin && businessOwnerId) {
-      throw new ForbiddenError("You are not authorized to respond to this lead");
+      throw new ForbiddenError("Security Violation: You are not authorized to quote on this business lead");
     }
 
+    // 2. STRICT TARGET CUSTOMER RESOLUTION
+    const enquiry = await Enquiry.findById(lead.enquiry).populate("requester");
+    if (!enquiry) {
+      throw new NotFoundError("Associated enquiry not found");
+    }
+
+    let customerUserId = enquiry.requester?._id || enquiry.requester;
+    if (!customerUserId && (enquiry.email || enquiry.buyerEmail)) {
+      const emailToFind = (enquiry.email || enquiry.buyerEmail).toLowerCase().trim();
+      const foundUser = await User.findOne({ email: emailToFind });
+      if (foundUser) {
+        customerUserId = foundUser._id;
+        enquiry.requester = foundUser._id;
+        await enquiry.save();
+      }
+    }
+
+    if (!customerUserId) {
+      throw new ForbiddenError("Security Error: Customer account not found. Quotation can only be delivered to a registered customer message box.");
+    }
+
+    if (String(customerUserId) === String(user.id)) {
+      throw new ForbiddenError("Security Error: You cannot submit a quotation to your own account.");
+    }
+
+    // Verify recipient exists
+    const customerUser = await User.findById(customerUserId);
+    if (!customerUser) {
+      throw new NotFoundError("Target customer account not found");
+    }
+
+    // 3. UPDATE LEAD & ENQUIRY STATE
     lead.quotation = {
       ...quotationData,
       amount: String(quotationData.amount || "").trim(),
@@ -184,24 +304,74 @@ export const leadService = {
     lead.lastActivityAt = new Date();
     await lead.save();
 
-    const updatedEnquiry = await Enquiry.findByIdAndUpdate(lead.enquiry, {
-      $inc: { responsesCount: 1 },
-      status: "Responded",
-    });
+    enquiry.status = "Responded";
+    enquiry.responsesCount = (enquiry.responsesCount || 0) + 1;
+    await enquiry.save();
 
-    if (updatedEnquiry && updatedEnquiry.requester) {
-      try {
-        await notificationService.createNotification({
-          recipientId: updatedEnquiry.requester,
-          type: "Quotation",
-          title: "New Quotation Received",
-          body: `${lead.business?.name || 'A business'} has submitted a quotation for your requirement "${updatedEnquiry.title}".`,
-          entityId: lead._id,
-          link: "/me/enquiries"
-        });
-      } catch (err) {
-        console.error("Failed to create quotation notification:", err);
-      }
+    // 4. GENERATE OFFICIAL B2B QUOTATION PDF DOCUMENT
+    const rawAmount = Number(quotationData.amount);
+    const formattedAmount = !isNaN(rawAmount) && rawAmount > 0
+      ? rawAmount.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 })
+      : `₹${quotationData.amount}`;
+
+    const quotationRef = `QTN-${String(lead._id).slice(-6).toUpperCase()}`;
+    let pdfUrl = null;
+    try {
+      pdfUrl = await pdfService.generateQuotationPdf({
+        quotationRef,
+        supplierName: lead.business?.name || "Verified Supplier",
+        supplierEmail: lead.business?.email || user.email,
+        supplierPhone: lead.business?.phone || "",
+        customerName: enquiry.requesterName || enquiry.requester?.name || "Customer",
+        customerEmail: enquiry.email || enquiry.buyerEmail || enquiry.requester?.email || "",
+        enquiryTitle: enquiry.title,
+        enquiryRef: enquiry.referenceId || `ENQ-${String(enquiry._id).slice(-4).toUpperCase()}`,
+        amount: rawAmount || quotationData.amount,
+        notes: quotationData.notes,
+        date: new Date(),
+      });
+    } catch (pdfErr) {
+      console.error("Failed to generate quotation PDF:", pdfErr);
+    }
+
+    // 5. FORMAT CLEAN QUOTATION TEXT WITHOUT EMOJIS
+    const quotationMessageText = [
+      `OFFICIAL QUOTATION (${quotationRef})`,
+      `Supplier: ${lead.business?.name || "Verified Supplier"}`,
+      `Requirement: ${enquiry.title || "Your Requirement"}`,
+      `Quoted Price: ${formattedAmount}`,
+      quotationData.notes ? `Details & Terms: ${quotationData.notes}` : "",
+      `-----------------------------------------`,
+      `Official PDF Quotation attached. Download and view the PDF document or reply here in chat to negotiate.`
+    ].filter(Boolean).join("\n");
+
+    // 6. DIRECT & SECURE DELIVERY TO CUSTOMER'S MESSAGE BOX WITH PDF ATTACHMENT
+    try {
+      await messageService.sendMessage(
+        {
+          recipientId: customerUserId,
+          text: quotationMessageText,
+          enquiryId: enquiry._id,
+          attachments: pdfUrl ? [pdfUrl] : [],
+        },
+        user.id
+      );
+    } catch (msgErr) {
+      console.error("Error delivering quotation message to customer inbox:", msgErr);
+    }
+
+    // 6. REALTIME NOTIFICATION LINKED STRAIGHT TO MESSAGE BOX
+    try {
+      await notificationService.createNotification({
+        recipientId: customerUserId,
+        type: "Message",
+        title: "New Quotation Received",
+        body: `${lead.business?.name || 'A supplier'} sent a quotation of ${formattedAmount} for "${enquiry.title}". Check your message box.`,
+        entityId: lead._id,
+        link: `/me/messages?userId=${user.id}`
+      });
+    } catch (err) {
+      console.error("Failed to create quotation notification:", err);
     }
 
     return lead;

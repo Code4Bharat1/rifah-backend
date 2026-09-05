@@ -11,7 +11,7 @@ export const messageService = {
    */
   getConversationId: (user1Id, user2Id, enquiryId = "") => {
     const sorted = [String(user1Id), String(user2Id)].sort();
-    return enquiryId ? `conv_${sorted[0]}_${sorted[1]}_${enquiryId}` : `conv_${sorted[0]}_${sorted[1]}`;
+    return `conv_${sorted[0]}_${sorted[1]}`;
   },
 
   /**
@@ -28,7 +28,7 @@ export const messageService = {
       throw new Error("Message text or file attachment is required");
     }
 
-    const conversationId = messageService.getConversationId(senderId, recipientId, enquiryId);
+    const conversationId = messageService.getConversationId(senderId, recipientId);
 
     const message = await Message.create({
       conversationId,
@@ -41,7 +41,8 @@ export const messageService = {
 
     const populated = await Message.findById(message._id)
       .populate("sender", "name email avatar role")
-      .populate("recipient", "name email avatar role");
+      .populate("recipient", "name email avatar role")
+      .populate("enquiry", "referenceId title");
 
     // Real-time socket emission to recipient and sender
     emitToUser(recipientId, "receive_message", populated);
@@ -50,13 +51,14 @@ export const messageService = {
 
     // Persistent in-app notification for recipient
     try {
+      const isBiz = recipient.role === "business" || Boolean(await import("../businesses/business.model.js").then(m => m.Business.findOne({ owner: recipientId })));
       await notificationService.createNotification({
         recipientId: recipientId,
         type: "Message",
         title: "New Message",
-        body: `You received a new message from ${populated.sender?.name || 'someone'}`,
+        body: `You received a new message from ${populated.sender?.name || 'a member'}`,
         entityId: message._id,
-        link: `/me/messages?userId=${senderId}`
+        link: isBiz ? `/biz/messages?userId=${senderId}` : `/me/messages?userId=${senderId}`
       });
     } catch (err) {
       console.error("Failed to create message notification:", err);
@@ -67,18 +69,29 @@ export const messageService = {
 
   /**
    * List messages in a conversation
+   * HIGH SECURITY: Strictly restricts retrieved messages to the two participants.
    */
   getConversationMessages: async (otherUserId, currentUserId, enquiryId = "") => {
-    const conversationId = messageService.getConversationId(currentUserId, otherUserId, enquiryId);
+    const sorted = [String(currentUserId), String(otherUserId)].sort();
+    const baseConvId = `conv_${sorted[0]}_${sorted[1]}`;
 
-    const messages = await Message.find({ conversationId })
+    // Security check: only messages where currentUserId is sender or recipient with otherUserId
+    const messages = await Message.find({
+      $or: [
+        { conversationId: baseConvId },
+        { conversationId: new RegExp(`^${baseConvId}`) },
+        { sender: currentUserId, recipient: otherUserId },
+        { sender: otherUserId, recipient: currentUserId },
+      ],
+    })
       .populate("sender", "name avatar role")
       .populate("recipient", "name avatar role")
+      .populate("enquiry", "referenceId title")
       .sort({ createdAt: 1 });
 
     // Mark received messages as read
     await Message.updateMany(
-      { conversationId, recipient: currentUserId, isRead: false },
+      { recipient: currentUserId, sender: otherUserId, isRead: false },
       { isRead: true, readAt: new Date() }
     );
 
@@ -100,17 +113,34 @@ export const messageService = {
     const conversationMap = new Map();
 
     for (const msg of messages) {
-      if (!conversationMap.has(msg.conversationId)) {
-        const otherUser =
-          String(msg.sender._id) === String(currentUserId) ? msg.recipient : msg.sender;
-        conversationMap.set(msg.conversationId, {
+      const senderId = String(msg.sender?._id || msg.sender || "");
+      const recipientId = String(msg.recipient?._id || msg.recipient || "");
+      const isSentByMe = senderId === String(currentUserId);
+      const otherUser = isSentByMe ? msg.recipient : msg.sender;
+      if (!otherUser) continue;
+
+      const otherUserId = String(otherUser._id || otherUser);
+      const pairKey = [String(currentUserId), otherUserId].sort().join("_");
+
+      if (!conversationMap.has(pairKey)) {
+        conversationMap.set(pairKey, {
           conversationId: msg.conversationId,
           lastMessage: { body: msg.text, text: msg.text },
           lastMessageAt: msg.createdAt,
-          isRead: msg.isRead || String(msg.sender._id) === String(currentUserId),
+          isRead: msg.isRead || isSentByMe,
+          unreadCount: 0,
           otherUser,
           enquiry: msg.enquiry,
         });
+      }
+
+      // If message was received by current user and is unread, increment unreadCount
+      if (recipientId === String(currentUserId) && !msg.isRead) {
+        const conv = conversationMap.get(pairKey);
+        if (conv) {
+          conv.unreadCount = (conv.unreadCount || 0) + 1;
+          conv.isRead = false;
+        }
       }
     }
 
