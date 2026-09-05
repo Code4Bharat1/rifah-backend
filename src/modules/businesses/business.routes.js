@@ -4,6 +4,7 @@ import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.mi
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
 import { upload } from "../../middleware/upload.middleware.js";
+import { gstRateLimitMiddleware } from "../../middleware/rate-limit.middleware.js";
 import {
   validateCreateBusiness,
   validateUpdateBusiness,
@@ -16,8 +17,8 @@ const router = Router();
 // Public directory & verification routes
 router.get("/", optionalAuthMiddleware, businessController.searchDirectory);
 router.get("/detail/:identifier", optionalAuthMiddleware, businessController.getBusinessByIdOrSlug);
-router.post("/gst/verify", businessController.verifyGst);
-router.post("/gst/details", businessController.getGstDetails);
+router.post("/gst/verify", gstRateLimitMiddleware, businessController.verifyGst);
+router.post("/gst/details", gstRateLimitMiddleware, businessController.getGstDetails);
 
 // Authenticated Business Owner routes
 router.get("/me", authMiddleware, businessController.getMyBusiness);

@@ -52,6 +52,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -154,6 +155,8 @@ export const authService = {
     city,
     state,
     address,
+    pincode,
+    founded,
     membership,
     about,
     taxId,
@@ -224,6 +227,8 @@ export const authService = {
       city: city || "Mumbai",
       state: state || "Maharashtra",
       address: address || "",
+      pincode: pincode || "",
+      founded: founded || "",
       chapter: chapter || "Mumbai Chapter",
       membership: cleanMembership,
       about: about || "",
@@ -247,6 +252,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -280,6 +286,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
       forcePasswordChange: user.forcePasswordChange,
     };
 
@@ -307,6 +314,7 @@ export const authService = {
         id: user._id,
         email: user.email,
         role: user.role,
+        chapter: user.chapter,
       };
 
       const newAccessToken = signAccessToken(tokenPayload);
@@ -350,6 +358,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
       forcePasswordChange: false,
     };
 
@@ -524,6 +533,7 @@ export const authService = {
         id: existingUser._id,
         email: existingUser.email,
         role: existingUser.role,
+        chapter: existingUser.chapter,
       };
 
       const accessToken = signAccessToken(tokenPayload);
@@ -559,6 +569,7 @@ export const authService = {
       id: newUser._id,
       email: newUser.email,
       role: newUser.role,
+      chapter: newUser.chapter,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -687,6 +698,7 @@ export const authService = {
       id: user._id,
       email: user.email,
       role: user.role,
+      chapter: user.chapter,
     };
 
     const accessToken = signAccessToken(tokenPayload);

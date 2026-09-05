@@ -56,8 +56,17 @@ export const env = {
     CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
   },
 
+  GSTINAPI: {
+    API_KEY: process.env.GSTIN_API_KEY || process.env.GSTINAPI_KEY || "",
+  },
+
   GST: {
     API_KEY: process.env.GST_API_KEY || "",
+  },
+
+  SANDBOX: {
+    API_KEY: process.env.SANDBOX_API_KEY || "",
+    API_SECRET: process.env.SANDBOX_API_SECRET || "",
   },
 
   isDevelopment: () => (process.env.NODE_ENV || "development") === "development",

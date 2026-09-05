@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { eventController } from "./event.controller.js";
-import { authMiddleware } from "../../middleware/auth.middleware.js";
+import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
 import { upload } from "../../middleware/upload.middleware.js";
@@ -14,9 +14,9 @@ import { ROLES } from "../../shared/constants/roles.js";
 const router = Router();
 
 // Public routes
-router.get("/", eventController.listEvents);
-router.get("/detail/:identifier", eventController.getEventBySlugOrId);
-router.get("/:identifier", eventController.getEventBySlugOrId);
+router.get("/", optionalAuthMiddleware, eventController.listEvents);
+router.get("/detail/:identifier", optionalAuthMiddleware, eventController.getEventBySlugOrId);
+router.get("/:identifier", optionalAuthMiddleware, eventController.getEventBySlugOrId);
 
 // User event RSVP
 router.post(

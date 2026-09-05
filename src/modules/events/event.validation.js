@@ -9,7 +9,7 @@ export const validateCreateEvent = (data = {}) => {
   if (!data.venue || typeof data.venue !== "string") {
     errors.push({ field: "venue", message: "Venue details are required" });
   }
-  if (!data.city || typeof data.city !== "string") {
+  if (data.mode !== "Online" && (!data.city || typeof data.city !== "string" || !data.city.trim())) {
     errors.push({ field: "city", message: "City is required" });
   }
   if (data.targetAudience !== undefined && !Array.isArray(data.targetAudience)) {

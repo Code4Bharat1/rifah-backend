@@ -110,17 +110,39 @@ export const enquiryService = {
   /**
    * Get single enquiry by ID or Reference ID
    */
-  getEnquiryById: async (identifier) => {
+  getEnquiryById: async (identifier, user) => {
     const isObjectId = identifier.match(/^[0-9a-fA-F]{24}$/);
     const query = isObjectId ? { _id: identifier } : { referenceId: identifier };
 
     const enquiry = await Enquiry.findOne(query)
       .populate("requester", "name email phone")
-      .populate("targetBusiness", "name slug chapter city phone");
+      .populate("targetBusiness", "name slug chapter city phone owner");
 
     if (!enquiry) {
       throw new NotFoundError("Enquiry not found");
     }
+
+    if (user) {
+      const isRequester = String(enquiry.requester?._id || enquiry.requester || "") === String(user.id);
+      const isTargetOwner = String(enquiry.targetBusiness?.owner || "") === String(user.id);
+      const isAdmin = ["super_admin", "secretariat", "chapter_admin"].includes(user.role);
+
+      let hasRoutedLead = false;
+      if (!isRequester && !isTargetOwner && !isAdmin) {
+        const { Lead } = await import("../leads/lead.model.js");
+        const { Business } = await import("../businesses/business.model.js");
+        const userBusiness = await Business.findOne({ owner: user.id });
+        if (userBusiness) {
+          const leadExists = await Lead.exists({ enquiry: enquiry._id, business: userBusiness._id });
+          if (leadExists) hasRoutedLead = true;
+        }
+      }
+
+      if (!isRequester && !isTargetOwner && !isAdmin && !hasRoutedLead) {
+        throw new ForbiddenError("You are not authorized to view this enquiry");
+      }
+    }
+
     return enquiry;
   },
 

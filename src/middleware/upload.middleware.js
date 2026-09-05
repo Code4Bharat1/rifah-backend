@@ -35,10 +35,10 @@ const storage = multer.diskStorage({
   },
 });
 
-// File filter (images, videos, audio, PDFs, documents, archives)
+// File filter (strictly safe images, videos, audio, PDFs, and office documents)
 const fileFilter = (req, file, cb) => {
-  // Allow all standard image, video, audio, document, and archive mime types
-  const isImage = file.mimetype.startsWith("image/");
+  const allowedImageMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  const isImage = allowedImageMimes.includes(file.mimetype);
   const isVideo = file.mimetype.startsWith("video/");
   const isAudio = file.mimetype.startsWith("audio/");
 
@@ -54,16 +54,23 @@ const fileFilter = (req, file, cb) => {
     "text/csv",
     "application/zip",
     "application/x-zip-compressed",
-    "application/x-rar-compressed",
-    "application/octet-stream",
   ];
+
+  const ext = path.extname(file.originalname).toLowerCase();
+  const dangerousExtensions = [".html", ".htm", ".svg", ".php", ".js", ".jsx", ".ts", ".tsx", ".exe", ".sh", ".bat", ".cmd", ".vbs", ".msi"];
+  if (dangerousExtensions.includes(ext)) {
+    return cb(
+      new BadRequestError(`File extension '${ext}' is not permitted for upload due to security restrictions.`),
+      false
+    );
+  }
 
   if (isImage || isVideo || isAudio || allowedDocMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
     cb(
       new BadRequestError(
-        `Unsupported file type: ${file.mimetype}. Allowed: Images, Videos, Audio, PDF, Word, Excel, PowerPoint, Text, and Zip files.`
+        `Unsupported or insecure file type: ${file.mimetype}. Allowed: JPEG, PNG, WEBP, GIF, standard videos, audio, PDF, and office documents.`
       ),
       false
     );
@@ -74,6 +81,6 @@ export const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50 MB limit for media/documents
+    fileSize: 15 * 1024 * 1024, // 15 MB limit for media/documents
   },
 });

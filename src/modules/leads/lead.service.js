@@ -139,6 +139,19 @@ export const leadService = {
       throw new NotFoundError("Lead not found");
     }
 
+    if (user) {
+      const businessOwnerId = String(lead.business?.owner?._id || lead.business?.owner || "");
+      const enquiryRequesterId = String(lead.enquiry?.requester?._id || lead.enquiry?.requester || "");
+      const isOwner = businessOwnerId && businessOwnerId === String(user.id);
+      const isRequester = enquiryRequesterId && enquiryRequesterId === String(user.id);
+      const isSameBusiness = user.businessId && String(user.businessId) === String(lead.business?._id || lead.business || "");
+      const isAdmin = ["super_admin", "secretariat", "chapter_admin"].includes(user.role);
+
+      if (!isOwner && !isRequester && !isSameBusiness && !isAdmin && (businessOwnerId || enquiryRequesterId)) {
+        throw new ForbiddenError("You are not authorized to view this lead");
+      }
+    }
+
     return lead;
   },
 
@@ -197,14 +210,29 @@ export const leadService = {
   /**
    * Update lead CRM pipeline stage
    */
-  updateLeadStatus: async (leadId, { status, notes }) => {
-    const updates = { status, lastActivityAt: new Date() };
-    if (notes !== undefined) updates.notes = notes;
-
-    const lead = await Lead.findByIdAndUpdate(leadId, updates, { new: true }).populate("enquiry");
+  updateLeadStatus: async (leadId, { status, notes }, user) => {
+    const lead = await Lead.findById(leadId).populate("business").populate("enquiry");
     if (!lead) {
       throw new NotFoundError("Lead not found");
     }
+
+    if (user) {
+      const businessOwnerId = String(lead.business?.owner?._id || lead.business?.owner || "");
+      const businessId = String(lead.business?._id || lead.business || "");
+      const isOwner = businessOwnerId && businessOwnerId === String(user.id);
+      const isSameBusiness = user.businessId && String(user.businessId) === businessId;
+      const isAdmin = ["super_admin", "secretariat", "chapter_admin"].includes(user.role);
+
+      if (!isOwner && !isSameBusiness && !isAdmin && businessOwnerId) {
+        throw new ForbiddenError("You are not authorized to update this lead's status");
+      }
+    }
+
+    lead.status = status;
+    lead.lastActivityAt = new Date();
+    if (notes !== undefined) lead.notes = notes;
+    await lead.save();
+
     return lead;
   },
 

@@ -166,11 +166,28 @@ export const businessService = {
       throw new ForbiddenError("You are not authorized to update this business profile");
     }
 
-    if (updateData.name && updateData.name !== business.name) {
-      updateData.slug = generateSlug(updateData.name);
+    let sanitizedData = { ...updateData };
+    if (!isAdmin) {
+      const ALLOWED_OWNER_FIELDS = [
+        "name", "tagline", "about", "industry", "categories", "businessType",
+        "city", "state", "address", "pincode", "chapter", "employees",
+        "founded", "website", "taxId", "phone", "email", "hours",
+        "accent", "logo", "coverImage", "gallery", "productsSummary",
+        "servicesSummary", "certifications"
+      ];
+      sanitizedData = {};
+      for (const key of ALLOWED_OWNER_FIELDS) {
+        if (updateData[key] !== undefined) {
+          sanitizedData[key] = updateData[key];
+        }
+      }
     }
 
-    const updated = await Business.findByIdAndUpdate(id, updateData, {
+    if (sanitizedData.name && sanitizedData.name !== business.name) {
+      sanitizedData.slug = generateSlug(sanitizedData.name);
+    }
+
+    const updated = await Business.findByIdAndUpdate(id, sanitizedData, {
       new: true,
       runValidators: true,
     });

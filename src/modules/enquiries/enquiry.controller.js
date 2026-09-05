@@ -25,7 +25,7 @@ export const enquiryController = {
 
   getEnquiryById: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const enquiry = await enquiryService.getEnquiryById(id);
+    const enquiry = await enquiryService.getEnquiryById(id, req.user);
     return ApiResponse.success(res, enquiry, "Enquiry details retrieved");
   }),
 

@@ -58,7 +58,7 @@ const eventSchema = new mongoose.Schema(
     },
     city: {
       type: String,
-      required: [true, "City is required"],
+      default: "All Cities",
       trim: true,
       index: true,
     },
