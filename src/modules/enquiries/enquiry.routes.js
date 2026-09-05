@@ -20,6 +20,7 @@ router.post(
 );
 
 router.get("/me", authMiddleware, enquiryController.getMyEnquiries);
+router.get("/business/me", authMiddleware, enquiryController.getMyBusinessEnquiries);
 router.get("/:id", authMiddleware, enquiryController.getEnquiryById);
 
 // Admin chamber-wide enquiry monitoring

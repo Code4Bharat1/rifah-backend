@@ -177,6 +177,45 @@ export const enquiryService = {
   },
 
   /**
+   * List direct enquiries sent to current business
+   */
+  listBusinessEnquiries: async (userId, queryParams = {}) => {
+    const { page, limit, skip, sort } = parsePagination(queryParams);
+    const userBusiness = await Business.findOne({ owner: userId });
+    if (!userBusiness) {
+      return { enquiries: [], meta: buildPaginationMeta(0, page, limit) };
+    }
+
+    const filter = { targetBusiness: userBusiness._id };
+
+    if (queryParams.status && queryParams.status !== "undefined" && queryParams.status !== "null" && queryParams.status.toLowerCase() !== "all") {
+      filter.status = new RegExp(`^${queryParams.status}$`, "i");
+    }
+
+    if (queryParams.search) {
+      filter.$or = [
+        { title: { $regex: queryParams.search, $options: "i" } },
+        { referenceId: { $regex: queryParams.search, $options: "i" } },
+        { requesterName: { $regex: queryParams.search, $options: "i" } },
+      ];
+    }
+
+    const [enquiries, total] = await Promise.all([
+      Enquiry.find(filter)
+        .populate("requester", "name email phone avatar")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit),
+      Enquiry.countDocuments(filter),
+    ]);
+
+    return {
+      enquiries,
+      meta: buildPaginationMeta(total, page, limit),
+    };
+  },
+
+  /**
    * List all enquiries chamber-wide (Admin)
    */
   listAllEnquiries: async (queryParams = {}, requester = null) => {

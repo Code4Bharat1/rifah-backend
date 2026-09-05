@@ -23,6 +23,11 @@ export const enquiryController = {
     return ApiResponse.success(res, enquiries, "My enquiries retrieved", 200, meta);
   }),
 
+  getMyBusinessEnquiries: asyncHandler(async (req, res) => {
+    const { enquiries, meta } = await enquiryService.listBusinessEnquiries(req.user.id, req.query);
+    return ApiResponse.success(res, enquiries, "Direct business enquiries retrieved", 200, meta);
+  }),
+
   getEnquiryById: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const enquiry = await enquiryService.getEnquiryById(id, req.user);
