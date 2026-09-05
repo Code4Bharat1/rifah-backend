@@ -59,6 +59,11 @@ const businessSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    pincode: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     chapter: {
       type: String,
       required: true,

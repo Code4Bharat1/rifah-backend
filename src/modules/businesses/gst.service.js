@@ -54,6 +54,48 @@ function logDebug(message) {
   } catch (e) {}
 }
 
+function extractFoundedYear(dateStr) {
+  if (!dateStr) return "";
+  const match = String(dateStr).match(/\b(19\d\d|20\d\d)\b/);
+  if (match) return match[1];
+  if (String(dateStr).includes("-")) return String(dateStr).split("-")[0];
+  if (String(dateStr).includes("/")) return String(dateStr).split("/").pop();
+  return "";
+}
+
+function cleanCityName(cityName, stateCode = "") {
+  if (cityName && typeof cityName === "string") {
+    return cityName
+      .trim()
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ");
+  }
+  if (stateCode === "27") return "Mumbai";
+  if (stateCode === "07") return "Delhi";
+  if (stateCode === "23") return "Bhopal";
+  if (stateCode === "21") return "Bhubaneswar";
+  if (stateCode === "24") return "Ahmedabad";
+  if (stateCode === "29") return "Bangalore";
+  return "";
+}
+
+function extractPincode(pincodeCandidate, addressStr = "", rawObj = null) {
+  if (pincodeCandidate) {
+    const pin = String(pincodeCandidate).trim().replace(/\D/g, "");
+    if (pin.length === 6) return pin;
+  }
+  if (addressStr) {
+    const match = String(addressStr).match(/\b([1-9][0-9]{5})\b/);
+    if (match) return match[1];
+  }
+  if (rawObj) {
+    const rawMatch = JSON.stringify(rawObj).match(/"(?:pincode|pncd|postal_code)":\s*"?([1-9][0-9]{5})"?/i);
+    if (rawMatch) return rawMatch[1];
+  }
+  return "";
+}
+
 let cachedSandboxToken = null;
 let sandboxTokenExpiry = 0;
 
@@ -213,13 +255,17 @@ async function fetchFromSandbox(cleanGst, apiKey, apiSecret) {
     CONSTITUTION_CODES[constitutionChar] ||
     "";
 
-  const foundedYear = record.date_of_registration
-    ? record.date_of_registration.split(/[-/]/).pop()
-    : record.rgdt
-    ? record.rgdt.split(/[-/]/).pop()
-    : "";
+  const foundedYear = extractFoundedYear(record.date_of_registration || record.rgdt);
+  const cleanCity = cleanCityName(city, stateCode);
+  const cleanPin = extractPincode(pincode, fullAddress, data);
 
   const status = record.status || record.sts || "Active";
+  const contactPerson =
+    record.authorized_signatory ||
+    record.contact_person ||
+    (Array.isArray(record.promoters) && record.promoters[0]?.name) ||
+    (Array.isArray(record.mbr) && record.mbr[0]?.name) ||
+    (constitutionChar === "P" && legalName !== tradeName ? legalName : "");
 
   return {
     gstin: cleanGst,
@@ -231,13 +277,188 @@ async function fetchFromSandbox(cleanGst, apiKey, apiSecret) {
     businessType,
     founded: foundedYear,
     address: fullAddress,
-    city: city || (stateCode === "27" ? "Mumbai" : stateCode === "07" ? "Delhi" : ""),
+    city: cleanCity,
     state: stateName,
-    pincode,
+    pincode: cleanPin,
     status,
+    contactPerson: contactPerson || "",
+    phone: record.mobile || record.phone || pradr.mob || "",
+    email: record.email || pradr.email || "",
     taxpayerType: record.taxpayer_type || record.dty || "Regular",
     chapter: stateName ? `${stateName} Chapter` : "",
     source: "sandbox_live_api",
+  };
+}
+
+/**
+ * Primary: Call GSTIN Portal (gstinapi.in)
+ * GET https://www.gstinapi.in/v1/gstin/{gstin}
+ * Header: x-api-key: YOUR_KEY_HERE
+ */
+async function fetchFromGstinApi(cleanGst, apiKey) {
+  if (!apiKey) return null;
+
+  logDebug(`[GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/${cleanGst} with key ${apiKey.substring(0, 8)}...`);
+
+  const response = await fetch(`https://www.gstinapi.in/v1/gstin/${cleanGst}`, {
+    method: "GET",
+    headers: {
+      "x-api-key": apiKey,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    },
+  });
+
+  const rawData = await response.json().catch(() => null);
+  logDebug(`[GSTIN Portal] Response (Status ${response.status}): ${JSON.stringify(rawData)?.substring(0, 500)}`);
+
+  if (!response.ok || !rawData) {
+    throw new Error(rawData?.message || rawData?.error || `GSTIN Portal returned status ${response.status}`);
+  }
+
+  // Handle nested wrappers ({ data: ... }, { result: ... }, { taxpayerInfo: ... }) or flat payload
+  const record = rawData.data || rawData.result || rawData.taxpayerInfo || rawData.taxpayer || rawData;
+
+  const resolvedName =
+    record.trade_name ||
+    record.tradeName ||
+    record.tradeNam ||
+    record.business_name ||
+    record.businessName ||
+    record.legal_name ||
+    record.legalName ||
+    record.lgnm ||
+    "";
+
+  const legalName = record.legal_name || record.legalName || record.lgnm || resolvedName;
+  const tradeName = record.trade_name || record.tradeName || record.tradeNam || resolvedName;
+
+  // Address & Location parsing
+  const addrDetails = record.address_details || {};
+  const pradr = record.principal_place_of_business || record.principal_address || record.pradr || {};
+
+  let fullAddress = typeof record.address === "string" ? record.address : "";
+  let cityCandidate = record.city || addrDetails.city || addrDetails.district || addrDetails.dst || "";
+  let stateCandidate = addrDetails.state || addrDetails.stcd || "";
+  let pincodeCandidate = addrDetails.pincode || addrDetails.pncd || record.pincode || "";
+
+  if (typeof pradr === "string") {
+    if (!fullAddress) fullAddress = pradr;
+  } else if (pradr && pradr.addr) {
+    const addr = pradr.addr;
+    if (!fullAddress) {
+      fullAddress = [addr.bno, addr.bnm, addr.st, addr.loc, addr.flno].filter(Boolean).join(", ");
+    }
+    cityCandidate = cityCandidate || addr.dst || addr.city || "";
+    stateCandidate = stateCandidate || addr.stcd || addr.state || "";
+    pincodeCandidate = pincodeCandidate || addr.pncd || addr.pincode || "";
+  } else if (pradr && typeof pradr === "object") {
+    if (!fullAddress) {
+      fullAddress = [
+        pradr.building_number || pradr.bno,
+        pradr.building_name || pradr.bnm,
+        pradr.street || pradr.st,
+        pradr.locality || pradr.loc,
+      ]
+        .filter(Boolean)
+        .join(", ");
+    }
+    cityCandidate = cityCandidate || pradr.city || pradr.dst || pradr.district || "";
+    stateCandidate = stateCandidate || pradr.state || pradr.stcd || "";
+    pincodeCandidate = pincodeCandidate || pradr.pincode || pradr.pncd || "";
+  }
+
+  const stateCode = cleanGst.substring(0, 2);
+  const stateName = stateCandidate || GST_STATE_CODES[stateCode] || "";
+  const city = cleanCityName(cityCandidate, stateCode);
+  const pincode = extractPincode(pincodeCandidate, fullAddress, rawData);
+
+  const constitutionChar = cleanGst.charAt(5);
+  const rawConstitution =
+    record.constitution_of_business ||
+    record.constitution ||
+    record.ctb ||
+    CONSTITUTION_CODES[constitutionChar] ||
+    "";
+
+  let businessType = "Private Limited";
+  const constLower = String(rawConstitution).toLowerCase();
+  if (constLower.includes("proprietor")) businessType = "Proprietorship";
+  else if (constLower.includes("llp") || constLower.includes("limited liability partnership")) businessType = "LLP";
+  else if (constLower.includes("partner")) businessType = "Partnership";
+  else if (constLower.includes("public")) businessType = "Public Limited";
+  else if (constLower.includes("private") || constLower.includes("pvt")) businessType = "Private Limited";
+  else if (CONSTITUTION_CODES[constitutionChar]) {
+    const codeVal = CONSTITUTION_CODES[constitutionChar];
+    if (codeVal.includes("Proprietorship")) businessType = "Proprietorship";
+    else if (codeVal.includes("Partnership")) businessType = "Partnership";
+    else businessType = "Private Limited";
+  }
+
+  const regDate = record.registration_date || record.date_of_registration || record.rgdt || "";
+  const foundedYear = extractFoundedYear(regDate);
+
+  // Contact details & Promoter extraction
+  const contactPerson =
+    record.contact_person ||
+    record.contactPerson ||
+    record.contact?.name ||
+    record.authorized_signatory ||
+    record.authorizedSignatory ||
+    record.proprietor_name ||
+    (Array.isArray(record.promoters) && record.promoters[0]?.name) ||
+    (Array.isArray(record.mbr) && record.mbr[0]?.name) ||
+    (constitutionChar === "P" && legalName ? legalName : "");
+
+  let phone =
+    record.mobile ||
+    record.phone ||
+    record.contact_number ||
+    record.contact_mobile ||
+    record.contact?.mobile ||
+    record.contact?.phone ||
+    addrDetails.mobile ||
+    addrDetails.phone ||
+    (Array.isArray(record.promoters) && (record.promoters[0]?.mobile || record.promoters[0]?.phone)) ||
+    (Array.isArray(record.mbr) && (record.mbr[0]?.mobile || record.mbr[0]?.phone)) ||
+    pradr.mob ||
+    pradr.mobile ||
+    "";
+
+  if (!phone) {
+    const rawMatch = JSON.stringify(rawData).match(/"(?:mobile|phone|contact|mob)":\s*"?([6-9][0-9]{9})"?/i);
+    if (rawMatch) phone = rawMatch[1];
+  }
+
+  const email =
+    record.email ||
+    record.contact?.email ||
+    record.contact_email ||
+    pradr.email ||
+    "";
+
+  const status = record.status || record.sts || record.taxpayer_status || "Active";
+
+  return {
+    gstin: cleanGst,
+    isValid: String(status).toLowerCase().includes("act"),
+    valid: true,
+    businessName: tradeName || legalName || resolvedName,
+    tradeName,
+    legalName,
+    businessType,
+    founded: foundedYear,
+    address: fullAddress || "",
+    city: city || "",
+    state: stateName,
+    pincode: pincode || "",
+    status,
+    contactPerson: contactPerson || "",
+    phone: phone || "",
+    email: email || "",
+    taxpayerType: record.taxpayer_type || record.dty || "Regular",
+    chapter: stateName ? `${stateName} Chapter` : "",
+    source: "gstinapi_live_api",
   };
 }
 
@@ -276,7 +497,14 @@ async function fetchFromAppyflow(cleanGst, apiKey) {
   const constitutionChar = cleanGst.charAt(5);
   const businessType = info.ctb || CONSTITUTION_CODES[constitutionChar] || "";
   const resolvedName = info.tradeNam || info.lgnm || "";
-  const foundedYear = info.rgdt ? info.rgdt.split("/").pop() : "";
+  const foundedYear = extractFoundedYear(info.rgdt);
+  const cleanCity = cleanCityName(pradr.dst || pradr.city, stateCode);
+  const cleanPin = extractPincode(pradr.pncd, fullAddress, data);
+
+  const contactPerson =
+    info.auth_signatory ||
+    (Array.isArray(info.mbr) && info.mbr[0]?.name) ||
+    (constitutionChar === "P" && info.lgnm !== info.tradeNam ? info.lgnm : "");
 
   return {
     gstin: cleanGst,
@@ -288,10 +516,13 @@ async function fetchFromAppyflow(cleanGst, apiKey) {
     businessType,
     founded: foundedYear,
     address: fullAddress,
-    city: pradr.dst || pradr.city || "",
+    city: cleanCity,
     state: stateName,
-    pincode: pradr.pncd || "",
+    pincode: cleanPin,
     status: info.sts || "Active",
+    contactPerson: contactPerson || "",
+    phone: info.mob || pradr.mob || "",
+    email: info.email || pradr.email || "",
     taxpayerType: info.dty || "Regular",
     chapter: stateName ? `${stateName} Chapter` : "",
     source: "appyflow_live_api",
@@ -322,10 +553,35 @@ export const gstService = {
       };
     }
 
+    // 1. Primary: Live GSTIN Portal API (gstinapi.in)
+    const gstinApiKey =
+      process.env.GSTIN_API_KEY ||
+      process.env.GSTINAPI_KEY ||
+      env.GSTINAPI?.API_KEY ||
+      "gak_a52df8c209d848c18c8b50ac2d26efac";
+
+    if (gstinApiKey) {
+      try {
+        const gstinData = await fetchFromGstinApi(cleanGst, gstinApiKey);
+        if (gstinData) {
+          return gstinData;
+        }
+      } catch (err) {
+        logDebug(`GSTIN Portal lookup failed: ${err.message}`);
+        if (err.message?.toLowerCase().includes("not found") || err.message?.toLowerCase().includes("invalid")) {
+          return {
+            isValid: false,
+            valid: false,
+            message: err.message,
+          };
+        }
+      }
+    }
+
+    // 2. Secondary: Sandbox.co.in API
     const sandboxKey = env.SANDBOX?.API_KEY || process.env.SANDBOX_API_KEY || "";
     const sandboxSecret = env.SANDBOX?.API_SECRET || process.env.SANDBOX_API_SECRET || "";
 
-    // 1. Primary: Live Sandbox.co.in API (if keys configured)
     if (sandboxKey && sandboxSecret) {
       try {
         const sandboxData = await fetchFromSandbox(cleanGst, sandboxKey, sandboxSecret);
@@ -334,7 +590,6 @@ export const gstService = {
         }
       } catch (err) {
         logDebug(`Sandbox lookup failed: ${err.message}`);
-        // If Sandbox gave a specific not found error, return it
         if (err.message?.includes("not found") || err.message?.includes("Invalid")) {
           return {
             isValid: false,
@@ -345,7 +600,7 @@ export const gstService = {
       }
     }
 
-    // 2. Secondary: Appyflow API
+    // 3. Tertiary: Appyflow API
     const appyflowKey = env.GST?.API_KEY || process.env.GST_API_KEY || "";
     if (appyflowKey) {
       try {
@@ -358,7 +613,7 @@ export const gstService = {
       }
     }
 
-    // 3. Fallback: Format analysis
+    // 4. Fallback: Format analysis
     const stateCode = cleanGst.substring(0, 2);
     const stateName = GST_STATE_CODES[stateCode] || "";
     const constitutionChar = cleanGst.charAt(5);
@@ -374,6 +629,9 @@ export const gstService = {
       businessType: constitutionType,
       state: stateName,
       city: stateCode === "27" ? "Mumbai" : stateCode === "07" ? "Delhi" : "",
+      contactPerson: "",
+      phone: "",
+      email: "",
       status: "Active",
       taxpayerType: "Regular",
       chapter: stateName ? `${stateName} Chapter` : "",

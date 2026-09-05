@@ -52,3 +52,50 @@
 [2026-09-04T11:36:24.292Z] Querying Sandbox GST endpoint for: 04AABCB2115P1ZX
 
 [2026-09-04T11:36:24.791Z] Sandbox POST https://api.sandbox.co.in/gst/compliance/public/gstin/search -> Status 200: {"code":200,"timestamp":1788521781160,"data":{"data":{"stjCd":"CH009","stj":"Ward 9","lgnm":"BUSINESS STANDARD PRIVATE LIMITED","dty":"Regular","adadr":[],"cxdt":"","nba":["Service Provision","Recipient of Goods or Services","Others"],"gstin":"04AABCB2115P1ZX","lstupdt":"27/04/2026","rgdt":"01/07/20
+
+[2026-09-05T04:18:46.441Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AKNPJ5754H1ZR with key gak_a52d...
+
+[2026-09-05T04:18:47.034Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AKNPJ5754H1ZR","data":{"gstin":"27AKNPJ5754H1ZR","legal_name":"IRFAN MOHAMMED BHAI JAGDA","trade_name":"DELTA ENTERPRISE","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2022-08-05","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"PLOT - 148/150, 2ND FLOOR, MOHD UMARCHAND BUILDING, NAGDEVI STREET, Mumbai Mandvi","city":"Mumbai Mandvi","address_details":{"building_number":"PLOT - 148/150","buil
+
+[2026-09-05T04:21:19.490Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/23AABCB2115P1ZX with key gak_a52d...
+
+[2026-09-05T04:21:19.706Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"23AABCB2115P1ZX","data":{"gstin":"23AABCB2115P1ZX","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"23","state_jurisdiction":null,"address":"Shop No.1, Patel Market, Near Sangam Talkies, Bhopal","city":"Bhopal","address_details":{"building_number":"Shop No.1","building_name":"Pate
+
+[2026-09-05T04:22:43.486Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/21AABCB2115P1Z1 with key gak_a52d...
+
+[2026-09-05T04:22:43.891Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"21AABCB2115P1Z1","data":{"gstin":"21AABCB2115P1Z1","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"21","state_jurisdiction":null,"address":"D-3, 1, Puri Canal Road, Bhubaneswar","city":"Bhubaneswar","address_details":{"building_number":"D-3","building_name":"1","floor":null,"stre
+
+[2026-09-05T04:27:54.701Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AAAAA0000A1Z5 with key gak_a52d...
+
+[2026-09-05T04:27:55.071Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-05T04:27:55.072Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-05T04:30:30.045Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/07AABCB2115P1ZR with key gak_a52d...
+
+[2026-09-05T04:30:30.661Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"07AABCB2115P1ZR","data":{"gstin":"07AABCB2115P1ZR","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"07","state_jurisdiction":null,"address":"Nehru House 4, Bahadurshah Zafar Marg, delhi","city":"delhi","address_details":{"building_number":"Nehru House 4","building_name":null,"floo
+
+[2026-09-05T04:50:17.283Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/29AABCB2115P2ZK with key gak_a52d...
+
+[2026-09-05T04:50:19.719Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/29AABCB2115P2ZK with key gak_a52d...
+
+[2026-09-05T04:50:20.035Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"29AABCB2115P2ZK","data":{"gstin":"29AABCB2115P2ZK","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED.","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"29","state_jurisdiction":null,"address":"L-10, 10 th Floor, Raheja Towers, West Wing, No.26/27 MG Road, BENGALURU","city":"BENGALURU","address_details":{"building_number":"L-10,","
+
+[2026-09-05T04:51:40.246Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/33AABCB2115P1ZW with key gak_a52d...
+
+[2026-09-05T04:51:40.401Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"33AABCB2115P1ZW","data":{"gstin":"33AABCB2115P1ZW","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"33","state_jurisdiction":null,"address":"Level 6, 10/11, Dr. Radhakrishnan Salai, Mylapore, CHENNAI","city":"Mylapore , CHENNAI","address_details":{"building_number":"Level 6","buil
+
+[2026-09-05T04:58:22.037Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/32AABCB2115P1ZY with key gak_a52d...
+
+[2026-09-05T04:58:22.372Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"32AABCB2115P1ZY","data":{"gstin":"32AABCB2115P1ZY","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"32","state_jurisdiction":null,"address":"3627, M/S S.T. REDDIAR PRINTERS, Veekshanam Road, Kochi","city":"Kochi","address_details":{"building_number":"3627","building_name":"M/S S.T
+
+[2026-09-05T05:00:10.327Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/07AABCB2115P1ZR with key gak_a52d...
+
+[2026-09-05T05:00:10.902Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"07AABCB2115P1ZR","data":{"gstin":"07AABCB2115P1ZR","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"07","state_jurisdiction":null,"address":"Nehru House 4, Bahadurshah Zafar Marg, delhi","city":"delhi","address_details":{"building_number":"Nehru House 4","building_name":null,"floo
+
+[2026-09-05T05:03:18.443Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/22AABCB2115P1ZZ with key gak_a52d...
+
+[2026-09-05T05:03:18.636Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"22AABCB2115P1ZZ","data":{"gstin":"22AABCB2115P1ZZ","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Cancelled","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":"2022-05-01","state_code":"22","state_jurisdiction":null,"address":"C-62, Radhaswami Nagar, Bhatagaon","city":"Bhatagaon","address_details":{"building_number":"C-62","building_name":null,"floor":nu
+
+[Asset Copy] SUCCESS: c:\Users\HP\OneDrive\Desktop\RIFAH\rifah-frontend\public\images\login-building.jpg
+[Asset Copy 2] SUCCESS: c:\Users\HP\OneDrive\Desktop\RIFAH\rifah-frontend\public\images\login-building.jpg

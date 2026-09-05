@@ -149,9 +149,14 @@ export const eventService = {
       throw new BadRequestError("Event capacity has been reached");
     }
 
-    event.registeredUsers.push(userId);
-    event.registeredCount += 1;
-    await event.save();
+    const updatedEvent = await Event.findByIdAndUpdate(
+      eventId,
+      {
+        $addToSet: { registeredUsers: userId },
+        $inc: { registeredCount: 1 },
+      },
+      { new: true }
+    );
 
     try {
       const user = await User.findById(userId);
@@ -159,9 +164,9 @@ export const eventService = {
         await emailService.sendEventRegistrationEmail({
           email: user.email,
           userName: user.name,
-          eventTitle: event.title,
-          eventDate: event.date || "Upcoming Chamber Event",
-          location: event.location || "Chamber Main Hall",
+          eventTitle: updatedEvent.title,
+          eventDate: updatedEvent.date || "Upcoming Chamber Event",
+          location: updatedEvent.venue || updatedEvent.location || "Chamber Main Hall",
           ticketType: "Member Pass",
         });
       }
@@ -171,13 +176,13 @@ export const eventService = {
         recipientId: userId,
         type: "Event",
         title: "Event Registration Confirmed",
-        body: `Your registration for "${event.title}" is confirmed!`,
-        entityId: event._id,
+        body: `Your registration for "${updatedEvent.title}" is confirmed!`,
+        entityId: updatedEvent._id,
         link: "/events"
       });
     } catch (err) {}
 
-    return event;
+    return updatedEvent;
   },
 
   /**
