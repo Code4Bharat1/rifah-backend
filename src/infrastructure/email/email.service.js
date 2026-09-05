@@ -70,6 +70,39 @@ export const emailService = {
     return emailService.sendEmail({ to: email, subject, html });
   },
 
+  sendChapterAdminRemovalEmail: async (email, name, chapterName) => {
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+    const subject = `Update regarding your Administrative Role for ${chapterName}`;
+
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+        <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
+        <div style="padding: 32px;">
+          ${
+            hasLogo
+              ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />`
+              : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`
+          }
+          <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">Role Update Notification</h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${name}</strong>,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">This email is to inform you that your administrative privileges for the <strong>${chapterName}</strong> chapter have been successfully transitioned to a new administrator.</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Your account remains active as a regular member on the RIFAH Connect platform. You can continue to access member benefits, manage your businesses, and explore the directory.</p>
+          
+          <div style="margin-top: 24px; padding: 16px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <p style="color: #64748b; font-size: 13px; margin: 0;">If you believe this change was made in error or if you have any questions, please contact the RIFAH Central Secretariat.</p>
+          </div>
+          
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Secretariat</p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
+
   /**
    * Sends an invitation email to a prospective member
    */

@@ -1,10 +1,11 @@
 import { Chapter } from "./chapter.model.js";
 import { User } from "../users/user.model.js";
+import { Business } from "../businesses/business.model.js";
+import { ROLES } from "../../shared/constants/roles.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { NotFoundError, ConflictError } from "../../shared/errors/errors.js";
-import { ROLES } from "../../shared/constants/roles.js";
 import crypto from "crypto";
 
 export const chapterService = {
@@ -26,6 +27,25 @@ export const chapterService = {
       throw new NotFoundError("Chapter not found");
     }
     return chapter;
+  },
+
+  getChapterDetails: async (id) => {
+    const chapter = await Chapter.findById(id);
+    if (!chapter) {
+      throw new NotFoundError("Chapter not found");
+    }
+
+    const [businessesCount, customersCount, admin] = await Promise.all([
+      Business.countDocuments({ chapter: chapter.name }),
+      User.countDocuments({ chapter: chapter.name, role: ROLES.CUSTOMER }),
+      User.findOne({ chapter: chapter.name, role: ROLES.CHAPTER_ADMIN }).select("-passwordHash"),
+    ]);
+
+    return {
+      chapter,
+      stats: { businessesCount, customersCount },
+      admin,
+    };
   },
 
   getChapterBySlug: async (slug) => {
@@ -86,9 +106,21 @@ export const chapterService = {
       throw new NotFoundError("Chapter not found");
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
+    const existingUserWithEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingUserWithEmail) {
       throw new ConflictError("User with this email already exists");
+    }
+
+    // Check if an admin already exists for this chapter
+    const oldAdmin = await User.findOne({ chapter: chapter.name, role: ROLES.CHAPTER_ADMIN });
+    if (oldAdmin) {
+      // Downgrade old admin to customer
+      oldAdmin.role = ROLES.CUSTOMER;
+      await oldAdmin.save();
+      // Send removal notice
+      if (oldAdmin.email) {
+        await emailService.sendChapterAdminRemovalEmail(oldAdmin.email, oldAdmin.name, chapter.name);
+      }
     }
 
     // Generate random password

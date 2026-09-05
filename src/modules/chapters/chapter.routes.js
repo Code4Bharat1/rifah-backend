@@ -16,6 +16,15 @@ const router = Router();
 // Public routes
 router.get("/", optionalAuthMiddleware, chapterController.listChapters);
 router.get("/slug/:slug", optionalAuthMiddleware, chapterController.getChapterBySlug);
+// Admin / Detail routes
+router.get(
+  "/:id/details",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  validateObjectIdParam("id"),
+  chapterController.getChapterDetails
+);
+
 router.get("/:id", validateObjectIdParam("id"), chapterController.getChapterById);
 
 // Admin routes
