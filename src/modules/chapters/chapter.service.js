@@ -107,13 +107,9 @@ export const chapterService = {
     }
 
     const existingUserWithEmail = await User.findOne({ email: email.toLowerCase() });
-    if (existingUserWithEmail) {
-      throw new ConflictError("User with this email already exists");
-    }
-
     // Check if an admin already exists for this chapter
     const oldAdmin = await User.findOne({ chapter: chapter.name, role: ROLES.CHAPTER_ADMIN });
-    if (oldAdmin) {
+    if (oldAdmin && oldAdmin.email !== email) {
       // Downgrade old admin to customer
       oldAdmin.role = ROLES.CUSTOMER;
       await oldAdmin.save();
@@ -121,6 +117,22 @@ export const chapterService = {
       if (oldAdmin.email) {
         await emailService.sendChapterAdminRemovalEmail(oldAdmin.email, oldAdmin.name, chapter.name);
       }
+    }
+
+    if (existingUserWithEmail) {
+      if (existingUserWithEmail.role === ROLES.SUPER_ADMIN || existingUserWithEmail.role === ROLES.SECRETARIAT) {
+        throw new ConflictError("Cannot assign a Super Admin or Secretariat as a Chapter Admin");
+      }
+
+      // Upgrade existing user to chapter admin
+      existingUserWithEmail.role = ROLES.CHAPTER_ADMIN;
+      existingUserWithEmail.chapter = chapter.name;
+      existingUserWithEmail.name = name; // Update name just in case
+      await existingUserWithEmail.save();
+
+      // Send upgrade email
+      await emailService.sendChapterAdminUpgradeEmail(email, chapter.name, name);
+      return existingUserWithEmail;
     }
 
     // Generate random password
@@ -138,6 +150,7 @@ export const chapterService = {
 
     // Send email with credentials
     await emailService.sendChapterAdminInvite(email, password, chapter.name, name);
+
 
     return admin;
   },

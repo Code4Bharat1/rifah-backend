@@ -46,6 +46,30 @@ export const emailService = {
   },
 
   /**
+   * Sends an email when an existing user is upgraded to Chapter Admin
+   */
+  sendChapterAdminUpgradeEmail: async (email, chapterName, adminName) => {
+    const subject = `Welcome to RIFAH: ${chapterName} Admin Access`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #0284c7;">Role Upgraded to Chapter Admin</h2>
+        <p>Dear ${adminName},</p>
+        <p>Your RIFAH account has been upgraded. You have been appointed as the <strong>Chapter Admin</strong> for <strong>${chapterName}</strong>.</p>
+        <p>You can now log in to the RIFAH Secretariat portal to manage businesses, leads, and verifications for your region.</p>
+        <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0;"><strong>Portal:</strong> <a href="http://localhost:3000/login">http://localhost:3000/login</a></p>
+          <p style="margin: 0 0 10px 0;"><strong>Email:</strong> ${email}</p>
+          <p style="margin: 0 0 0 0;"><strong>Password:</strong> <em>Use your existing password</em></p>
+        </div>
+        <p>Thank you for taking on this leadership role.</p>
+        <br>
+        <p>Best regards,<br>RIFAH Secretariat</p>
+      </div>
+    `;
+    return emailService.sendEmail(email, subject, undefined, html);
+  },
+
+  /**
    * Sends an invitation email to a new Chapter Admin
    */
   sendChapterAdminInvite: async (email, password, chapterName, adminName) => {
