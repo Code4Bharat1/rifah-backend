@@ -154,4 +154,22 @@ export const chapterService = {
 
     return admin;
   },
+
+  updateChapterStatus: async (id, status) => {
+    if (!["Active", "Inactive"].includes(status)) {
+      throw new BadRequestError("Invalid status value");
+    }
+
+    const chapter = await Chapter.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, runValidators: true }
+    );
+
+    if (!chapter) {
+      throw new NotFoundError("Chapter not found");
+    }
+
+    return chapter;
+  },
 };

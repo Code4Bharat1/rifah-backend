@@ -1,5 +1,6 @@
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
+import { Chapter } from "../chapters/chapter.model.js";
 import { OtpVerification } from "./otp.model.js";
 import crypto from "crypto";
 import { hashPassword, comparePassword } from "../../infrastructure/auth/password.js";
@@ -277,6 +278,14 @@ export const authService = {
     const isMatch = await comparePassword(password, user.passwordHash);
     if (!isMatch) {
       throw new UnauthorizedError("Invalid email or password", ERROR_CODES.INVALID_CREDENTIALS);
+    }
+
+    // Check chapter status if user is associated with a chapter and is not Super Admin / Secretariat
+    if (user.chapter && user.role !== ROLES.SUPER_ADMIN && user.role !== ROLES.SECRETARIAT) {
+      const chapter = await Chapter.findOne({ name: user.chapter });
+      if (chapter && chapter.status === "Inactive") {
+        throw new UnauthorizedError("Your chapter is currently inactive. Please contact the RIFAH Secretariat.");
+      }
     }
 
     user.lastLoginAt = new Date();

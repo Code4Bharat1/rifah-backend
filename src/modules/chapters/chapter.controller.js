@@ -54,4 +54,11 @@ export const chapterController = {
     const admin = await chapterService.assignAdmin(id, req.body);
     return ApiResponse.created(res, admin, "Chapter Admin created and invitation sent");
   }),
+
+  updateChapterStatus: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    const updated = await chapterService.updateChapterStatus(id, status);
+    return ApiResponse.success(res, updated, "Chapter status updated successfully");
+  }),
 };

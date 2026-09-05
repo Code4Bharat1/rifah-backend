@@ -45,6 +45,14 @@ router.patch(
   chapterController.updateChapter
 );
 
+router.patch(
+  "/:id/status",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  validateObjectIdParam("id"),
+  chapterController.updateChapterStatus
+);
+
 router.post(
   "/:id/units",
   authMiddleware,
