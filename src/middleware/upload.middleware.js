@@ -57,6 +57,19 @@ const fileFilter = (req, file, cb) => {
   ];
 
   const ext = path.extname(file.originalname).toLowerCase();
+  const cleanName = path.basename(file.originalname).replace(/[\x00-\x1f\x80-\x9f]/g, "").toLowerCase();
+  
+  // Guard against dangerous extensions and double extension tricks (e.g. payload.php.png)
+  const dangerousPatterns = [/\.php/i, /\.html?/i, /\.svg/i, /\.exe/i, /\.js/i, /\.jsx/i, /\.ts/i, /\.tsx/i, /\.sh/i, /\.bat/i, /\.cmd/i, /\.vbs/i, /\.msi/i];
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(cleanName)) {
+      return cb(
+        new BadRequestError("Suspicious file name or prohibited extension detected."),
+        false
+      );
+    }
+  }
+
   const dangerousExtensions = [".html", ".htm", ".svg", ".php", ".js", ".jsx", ".ts", ".tsx", ".exe", ".sh", ".bat", ".cmd", ".vbs", ".msi"];
   if (dangerousExtensions.includes(ext)) {
     return cb(

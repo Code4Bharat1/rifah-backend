@@ -99,3 +99,6 @@
 
 [Asset Copy] SUCCESS: c:\Users\HP\OneDrive\Desktop\RIFAH\rifah-frontend\public\images\login-building.jpg
 [Asset Copy 2] SUCCESS: c:\Users\HP\OneDrive\Desktop\RIFAH\rifah-frontend\public\images\login-building.jpg
+[2026-09-05T11:34:48.636Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/10AABCB2115P1Z4 with key gak_a52d...
+
+[2026-09-05T11:34:49.364Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"10AABCB2115P1Z4","data":{"gstin":"10AABCB2115P1Z4","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Cancelled","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":"2022-05-01","state_code":"10","state_jurisdiction":null,"address":"Eastern News Agency, New Market, Patna","city":"Patna","address_details":{"building_number":"Eastern News Agency","building_name"

@@ -3,6 +3,7 @@ import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError, ConflictError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
+import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 
 export const businessService = {
   /**
@@ -58,7 +59,7 @@ export const businessService = {
       queryParams.industry.toLowerCase() !== "all" &&
       queryParams.industry !== "All industries"
     ) {
-      filter.industry = new RegExp(`^${queryParams.industry.trim()}$`, "i");
+      filter.industry = new RegExp(`^${escapeRegex(queryParams.industry.trim())}$`, "i");
     }
 
     if (
@@ -68,7 +69,7 @@ export const businessService = {
       queryParams.city.toLowerCase() !== "all" &&
       queryParams.city !== "All cities"
     ) {
-      filter.city = new RegExp(`^${queryParams.city.trim()}$`, "i");
+      filter.city = new RegExp(`^${escapeRegex(queryParams.city.trim())}$`, "i");
     }
 
     if (
@@ -77,7 +78,7 @@ export const businessService = {
       queryParams.membership !== "null" &&
       queryParams.membership.toLowerCase() !== "all"
     ) {
-      filter.membership = new RegExp(`^${queryParams.membership.trim()}$`, "i");
+      filter.membership = new RegExp(`^${escapeRegex(queryParams.membership.trim())}$`, "i");
     }
 
     if (queryParams.verified === "true") {
@@ -85,13 +86,29 @@ export const businessService = {
     }
 
     if (queryParams.featured === "true") {
-      filter.featured = true;
+      filter.$or = [
+        { featured: true },
+        { membership: { $in: ["Enterprise", "Premium"] } },
+      ];
     }
 
-    const [businesses, total] = await Promise.all([
+    let [businesses, total] = await Promise.all([
       Business.find(filter).sort(sort).skip(skip).limit(limit),
       Business.countDocuments(filter),
     ]);
+
+    // Fallback: If featured query returns fewer than limit, supplement with other active businesses
+    if (queryParams.featured === "true" && businesses.length < limit) {
+      const existingIds = businesses.map((b) => b._id);
+      const remainingLimit = limit - businesses.length;
+      const suppFilter = { ...filter };
+      delete suppFilter.$or;
+      delete suppFilter.featured;
+      suppFilter._id = { $nin: existingIds };
+      const extraBiz = await Business.find(suppFilter).sort(sort).limit(remainingLimit);
+      businesses = [...businesses, ...extraBiz];
+      total = businesses.length;
+    }
 
     return {
       businesses,
@@ -135,18 +152,37 @@ export const businessService = {
     const initialStatus = isManualVerification ? "Pending Verification" : "Live";
     const initialVerification = isManualVerification ? "Pending" : "Verified";
 
-    let slug = generateSlug(data.name);
+    const ALLOWED_CREATE_FIELDS = [
+      "name", "tagline", "about", "industry", "categories", "businessType",
+      "city", "state", "address", "pincode", "chapter", "employees",
+      "founded", "website", "taxId", "phone", "email", "hours",
+      "accent", "logo", "coverImage", "gallery", "productsSummary",
+      "servicesSummary", "certifications"
+    ];
+
+    const sanitizedData = {};
+    for (const key of ALLOWED_CREATE_FIELDS) {
+      if (data[key] !== undefined) {
+        sanitizedData[key] = data[key];
+      }
+    }
+
+    let slug = generateSlug(sanitizedData.name || data.name);
     const slugConflict = await Business.findOne({ slug });
     if (slugConflict) {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
     return Business.create({
-      ...data,
+      ...sanitizedData,
       slug,
       owner: ownerId,
       status: initialStatus,
       verificationStatus: initialVerification,
+      verification: "unverified",
+      membership: "Free",
+      featured: false,
+      rating: 0,
     });
   },
 

@@ -5,7 +5,8 @@ import { User } from "../users/user.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
-import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
+import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
+import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 import { messageService } from "../messages/message.service.js";
 import { pdfService } from "../../infrastructure/pdf/pdf.service.js";
 
@@ -109,7 +110,7 @@ export const leadService = {
     const filter = { business: businessId };
 
     if (queryParams.status && queryParams.status !== "All" && queryParams.status !== "undefined") {
-      filter.status = new RegExp(`^${queryParams.status}$`, "i");
+      filter.status = new RegExp(`^${escapeRegex(String(queryParams.status).trim())}$`, "i");
     }
 
 
@@ -294,10 +295,16 @@ export const leadService = {
     }
 
     // 3. UPDATE LEAD & ENQUIRY STATE
+    const validAmount = Number(quotationData.amount);
+    if (isNaN(validAmount) || validAmount <= 0) {
+      throw new BadRequestError("Quotation amount must be a valid positive number.");
+    }
+
     lead.quotation = {
-      ...quotationData,
-      amount: String(quotationData.amount || "").trim(),
-      notes: quotationData.notes || quotationData.terms || "",
+      amount: String(validAmount),
+      notes: typeof (quotationData.notes || quotationData.terms) === "string" 
+        ? (quotationData.notes || quotationData.terms).slice(0, 2000).trim() 
+        : "",
       submittedAt: new Date(),
     };
     lead.status = "Responded";

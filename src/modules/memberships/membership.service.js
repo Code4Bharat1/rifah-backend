@@ -6,14 +6,30 @@ import { addDays } from "../../shared/utils/date.js";
 
 export const membershipService = {
   getPlans: async () => {
-    const plansArray = await Plan.find().lean();
+    let plansArray = [];
+    try {
+      plansArray = await Plan.find().lean();
+    } catch (e) {
+      console.error("Error fetching plans from DB:", e);
+    }
     const plansMap = {};
     for (const plan of plansArray) {
-      plansMap[plan.planId] = {
-        name: plan.name,
-        price: plan.price,
-        summary: plan.summary,
-        features: plan.features
+      const key = plan.planId || plan._id?.toString();
+      if (key) {
+        plansMap[key] = {
+          name: plan.name,
+          price: plan.price,
+          summary: plan.summary,
+          features: plan.features,
+        };
+      }
+    }
+    if (Object.keys(plansMap).length === 0) {
+      return {
+        free: { name: "Free", price: 0, summary: "Get started on RIFAH Connect", features: ["Directory listing", "Basic search", "5 leads / mo"] },
+        basic: { name: "Basic", price: 4999, summary: "For growing businesses", features: ["Directory listing", "Verified badge", "15 leads / mo", "Direct buyer messaging"] },
+        premium: { name: "Premium", price: 12999, summary: "For established businesses", features: ["Featured listing", "Verified badge", "Unlimited leads", "Chamber event passes", "RFQ priority"] },
+        enterprise: { name: "Enterprise", price: 29999, summary: "For market leaders", features: ["All Premium features", "Secretariat advisory", "Global chapter access", "Custom expo pavilion"] },
       };
     }
     return plansMap;

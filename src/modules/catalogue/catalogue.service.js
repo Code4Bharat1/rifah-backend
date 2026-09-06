@@ -4,6 +4,7 @@ import { Settings } from "../settings/settings.model.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
+import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 
 export const catalogueService = {
   /**
@@ -13,28 +14,29 @@ export const catalogueService = {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = { status: "Active" };
 
-    if (queryParams.search) {
+    if (queryParams.search && typeof queryParams.search === "string") {
+      const safeSearch = escapeRegex(queryParams.search.trim());
       filter.$or = [
-        { name: { $regex: queryParams.search, $options: "i" } },
-        { description: { $regex: queryParams.search, $options: "i" } },
-        { category: { $regex: queryParams.search, $options: "i" } },
+        { name: { $regex: safeSearch, $options: "i" } },
+        { description: { $regex: safeSearch, $options: "i" } },
+        { category: { $regex: safeSearch, $options: "i" } },
       ];
     }
 
-    if (queryParams.type) {
-      filter.type = queryParams.type;
+    if (queryParams.type && typeof queryParams.type === "string") {
+      filter.type = queryParams.type.trim();
     }
 
-    if (queryParams.category) {
-      filter.category = queryParams.category;
+    if (queryParams.category && typeof queryParams.category === "string") {
+      filter.category = queryParams.category.trim();
     }
 
-    if (queryParams.city) {
-      filter.city = queryParams.city;
+    if (queryParams.city && typeof queryParams.city === "string") {
+      filter.city = queryParams.city.trim();
     }
 
-    if (queryParams.businessId) {
-      filter.business = queryParams.businessId;
+    if (queryParams.businessId && typeof queryParams.businessId === "string") {
+      filter.business = queryParams.businessId.trim();
     }
 
     const [items, total] = await Promise.all([

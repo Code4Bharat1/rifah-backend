@@ -65,14 +65,23 @@ export const eventService = {
       filter.chapter = queryParams.chapter;
     }
 
-    if (queryParams.status) filter.status = queryParams.status;
+    if (queryParams.status) {
+      filter.status = new RegExp(`^${queryParams.status.trim()}$`, "i");
+    }
     if (queryParams.city) filter.city = queryParams.city;
     if (queryParams.mode) filter.mode = queryParams.mode;
 
-    const [events, total] = await Promise.all([
+    let [events, total] = await Promise.all([
       Event.find(filter).sort(sort).skip(skip).limit(limit),
       Event.countDocuments(filter),
     ]);
+
+    // Fallback: If status filter yields 0 events, show available events
+    if (queryParams.status && events.length === 0) {
+      delete filter.status;
+      events = await Event.find(filter).sort(sort).skip(skip).limit(limit);
+      total = await Event.countDocuments(filter);
+    }
 
     return {
       events,
