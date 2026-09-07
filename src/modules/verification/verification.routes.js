@@ -3,7 +3,7 @@ import { verificationController } from "./verification.controller.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
-import { upload } from "../../middleware/upload.middleware.js";
+import { upload, uploadPdfOnly } from "../../middleware/upload.middleware.js";
 import {
   validateSubmitVerification,
   validateReviewVerification,
@@ -24,7 +24,7 @@ router.post(
 router.post(
   "/upload",
   authMiddleware,
-  upload.single("document"),
+  uploadPdfOnly.single("document"),
   verificationController.uploadDocument
 );
 

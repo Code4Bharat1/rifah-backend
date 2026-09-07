@@ -97,3 +97,36 @@ export const upload = multer({
     fileSize: 15 * 1024 * 1024, // 15 MB limit for media/documents
   },
 });
+
+// PDF-only filter specifically for compliance and verification documents
+const pdfFileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const cleanName = path.basename(file.originalname).replace(/[\x00-\x1f\x80-\x9f]/g, "").toLowerCase();
+
+  const dangerousPatterns = [/\.php/i, /\.html?/i, /\.svg/i, /\.exe/i, /\.js/i, /\.jsx/i, /\.ts/i, /\.tsx/i, /\.sh/i, /\.bat/i, /\.cmd/i, /\.vbs/i, /\.msi/i];
+  for (const pattern of dangerousPatterns) {
+    if (pattern.test(cleanName)) {
+      return cb(
+        new BadRequestError("Suspicious file name or prohibited extension detected."),
+        false
+      );
+    }
+  }
+
+  if (file.mimetype === "application/pdf" && ext === ".pdf") {
+    cb(null, true);
+  } else {
+    cb(
+      new BadRequestError("Only official PDF documents (.pdf) are permitted for chamber verification."),
+      false
+    );
+  }
+};
+
+export const uploadPdfOnly = multer({
+  storage,
+  fileFilter: pdfFileFilter,
+  limits: {
+    fileSize: 15 * 1024 * 1024, // 15 MB limit for PDF documents
+  },
+});
