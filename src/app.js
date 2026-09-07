@@ -43,9 +43,28 @@ app.use(morgan(env.isDevelopment() ? "dev" : "combined"));
 // Global rate limiting
 app.use(rateLimitMiddleware);
 
-// Serve uploaded files statically from local server filesystem
+// Serve uploaded files statically from local server filesystem with frame permission for previews
 const uploadsPath = path.resolve(__dirname, `../${env.STORAGE.UPLOAD_DIR}`);
-app.use(`/${env.STORAGE.UPLOAD_DIR}`, express.static(uploadsPath));
+app.use(
+  `/${env.STORAGE.UPLOAD_DIR}`,
+  (req, res, next) => {
+    res.removeHeader("X-Frame-Options");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Content-Security-Policy", "frame-ancestors *");
+    next();
+  },
+  express.static(uploadsPath, {
+    setHeaders: (res, filePath) => {
+      res.removeHeader("X-Frame-Options");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Content-Security-Policy", "frame-ancestors *");
+      if (filePath.endsWith(".pdf")) {
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", "inline");
+      }
+    },
+  })
+);
 
 // Health check endpoint (root level)
 app.use("/health", healthRoutes);
