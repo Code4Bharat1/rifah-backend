@@ -21,4 +21,5 @@ router.route("/:id")
   .patch(announcementController.update)
   .delete(announcementController.delete);
 
+export { router as announcementRoutes };
 export default router;
