@@ -124,14 +124,20 @@ export const chapterService = {
         throw new ConflictError("Cannot assign a Super Admin or Secretariat as a Chapter Admin");
       }
 
-      // Upgrade existing user to chapter admin
+      // Generate a fresh random password even if the user exists
+      const password = crypto.randomBytes(8).toString('hex');
+      const passwordHash = await hashPassword(password);
+
+      // Upgrade existing user to chapter admin and reset their password
       existingUserWithEmail.role = ROLES.CHAPTER_ADMIN;
       existingUserWithEmail.chapter = chapter.name;
       existingUserWithEmail.name = name; // Update name just in case
+      existingUserWithEmail.passwordHash = passwordHash;
+      existingUserWithEmail.forcePasswordChange = true;
       await existingUserWithEmail.save();
 
-      // Send upgrade email
-      await emailService.sendChapterAdminUpgradeEmail(email, chapter.name, name);
+      // Send the same invite email with the new password
+      await emailService.sendChapterAdminInvite(email, password, chapter.name, name);
       return existingUserWithEmail;
     }
 

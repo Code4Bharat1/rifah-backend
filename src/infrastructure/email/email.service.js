@@ -66,7 +66,7 @@ export const emailService = {
         <p>Best regards,<br>RIFAH Secretariat</p>
       </div>
     `;
-    return emailService.sendEmail(email, subject, undefined, html);
+    return emailService.sendEmail({ to: email, subject, html });
   },
 
   /**

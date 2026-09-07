@@ -6,9 +6,11 @@ import { env } from "../../config/env.js";
 import { membershipService } from "../memberships/membership.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
-import { generateReferenceId } from "../../shared/utils/generate-id.js";
+import { generateReferenceId, generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
+import { ROLES } from "../../shared/constants/roles.js";
+import { signAccessToken, signRefreshToken } from "../../infrastructure/auth/jwt.js";
 
 export const paymentService = {
   /**
@@ -80,10 +82,81 @@ export const paymentService = {
       invoiceNumber = generateReferenceId("INV", 4);
     }
 
+    const userDoc = await User.findById(user.id);
+    if (!userDoc) {
+      throw new NotFoundError("User not found");
+    }
+
+    let finalBusinessId = businessId;
+    let businessDoc = null;
+
+    if (finalBusinessId) {
+      businessDoc = await Business.findById(finalBusinessId);
+    }
+
+    if (!businessDoc) {
+      businessDoc = await Business.findOne({ owner: user.id });
+      if (businessDoc) {
+        finalBusinessId = businessDoc._id;
+      }
+    }
+
+    const isMembership = itemType === "Membership" || Boolean(planId);
+
+    // If upgrading or purchasing a membership
+    if (isMembership) {
+      // 1. Upgrade user role in database permanently to business_owner
+      if (userDoc.role === ROLES.CUSTOMER) {
+        userDoc.role = ROLES.BUSINESS_OWNER;
+      }
+      if (payload.city && !userDoc.city) {
+        userDoc.city = payload.city.trim();
+      }
+      await userDoc.save();
+
+      // 2. If user doesn't have an existing Business profile, auto-create one
+      if (!businessDoc) {
+        const rawBizName =
+          (payload.businessName && payload.businessName.trim()) ||
+          userDoc.organization ||
+          `${userDoc.name}'s Enterprise`;
+
+        let slug = generateSlug(rawBizName);
+        const slugConflict = await Business.findOne({ slug });
+        if (slugConflict) {
+          slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+
+        const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
+        const formattedTier =
+          validTiers.find((t) => t.toLowerCase() === (planId || "basic").toLowerCase()) || "Basic";
+
+        businessDoc = await Business.create({
+          name: rawBizName,
+          slug,
+          owner: userDoc._id,
+          taxId: (payload.taxId && payload.taxId.trim()) || "",
+          address: (payload.billingAddress && payload.billingAddress.trim()) || "",
+          city: (payload.city && payload.city.trim()) || userDoc.city || "Mumbai",
+          pincode: (payload.postalCode && payload.postalCode.trim()) || "",
+          phone: userDoc.phone || "",
+          email: payload.billingEmail || userDoc.email || "",
+          chapter: userDoc.chapter || "Mumbai Chapter",
+          industry: "General Commerce",
+          status: "Pending Verification",
+          verificationStatus: "Pending",
+          verification: "unverified",
+          membership: formattedTier,
+          rating: 5,
+        });
+        finalBusinessId = businessDoc._id;
+      }
+    }
+
     const payment = await Payment.create({
       invoiceNumber,
       payer: user.id,
-      business: businessId || null,
+      business: finalBusinessId || null,
       itemType: itemType || "Membership",
       description: description || `Payment for ${planId || "Membership"} tier`,
       amount: Number(amount) || 4999,
@@ -95,8 +168,8 @@ export const paymentService = {
     });
 
     let updatedMembership = null;
-    if (planId && businessId) {
-      updatedMembership = await membershipService.upgradePlan(businessId, planId);
+    if (planId && finalBusinessId) {
+      updatedMembership = await membershipService.upgradePlan(finalBusinessId, planId);
     }
 
     try {
@@ -108,8 +181,6 @@ export const paymentService = {
         link: "/biz/payments",
       });
 
-      const userDoc = await User.findById(user.id);
-      const businessDoc = businessId ? await Business.findById(businessId) : null;
       const targetEmail = payload.billingEmail || userDoc?.email;
       if (targetEmail) {
         await emailService.sendMembershipInvoiceEmail({
@@ -128,10 +199,31 @@ export const paymentService = {
       console.error("Payment notification / email error:", err);
     }
 
+    // Generate refreshed JWT tokens with the updated role
+    const tokenPayload = {
+      id: userDoc._id,
+      email: userDoc.email,
+      role: userDoc.role,
+      chapter: userDoc.chapter,
+      forcePasswordChange: userDoc.forcePasswordChange,
+    };
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshToken = signRefreshToken(tokenPayload);
+
+    await userDoc.populate("savedBusinesses");
+    const userObj = userDoc.toJSON();
+    if (Array.isArray(userObj.savedBusinesses)) {
+      userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
+    }
+
     return {
       verified: true,
       payment,
       membership: updatedMembership,
+      business: businessDoc,
+      user: userObj,
+      accessToken,
+      refreshToken,
     };
   },
 
@@ -144,8 +236,68 @@ export const paymentService = {
       invoiceNumber = generateReferenceId("INV", 4);
     }
 
+    const userDoc = await User.findById(user.id);
+    let finalBusinessId = data.business;
+    let businessDoc = null;
+
+    if (finalBusinessId) {
+      businessDoc = await Business.findById(finalBusinessId);
+    }
+    if (!businessDoc) {
+      businessDoc = await Business.findOne({ owner: user.id });
+      if (businessDoc) finalBusinessId = businessDoc._id;
+    }
+
+    const isMembership = data.itemType === "Membership" || Boolean(data.planId);
+    if (isMembership && userDoc) {
+      if (userDoc.role === ROLES.CUSTOMER) {
+        userDoc.role = ROLES.BUSINESS_OWNER;
+        await userDoc.save();
+      }
+      if (!businessDoc) {
+        const rawBizName =
+          (data.businessName && data.businessName.trim()) ||
+          userDoc.organization ||
+          `${userDoc.name}'s Enterprise`;
+
+        let slug = generateSlug(rawBizName);
+        const slugConflict = await Business.findOne({ slug });
+        if (slugConflict) {
+          slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+
+        const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
+        const formattedTier =
+          validTiers.find((t) => t.toLowerCase() === (data.planId || "basic").toLowerCase()) || "Basic";
+
+        businessDoc = await Business.create({
+          name: rawBizName,
+          slug,
+          owner: userDoc._id,
+          taxId: (data.taxId && data.taxId.trim()) || "",
+          address: (data.billingAddress && data.billingAddress.trim()) || "",
+          city: (data.city && data.city.trim()) || userDoc.city || "Mumbai",
+          phone: userDoc.phone || "",
+          email: data.billingEmail || userDoc.email || "",
+          chapter: userDoc.chapter || "Mumbai Chapter",
+          industry: "General Commerce",
+          status: "Pending Verification",
+          verificationStatus: "Pending",
+          verification: "unverified",
+          membership: formattedTier,
+          rating: 5,
+        });
+        finalBusinessId = businessDoc._id;
+      }
+
+      if (data.planId && finalBusinessId) {
+        await membershipService.upgradePlan(finalBusinessId, data.planId);
+      }
+    }
+
     const payment = await Payment.create({
       ...data,
+      business: finalBusinessId || null,
       invoiceNumber,
       payer: user.id,
       transactionId: `TXN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -162,8 +314,6 @@ export const paymentService = {
         link: "/biz/payments",
       });
 
-      const userDoc = await User.findById(user.id);
-      const businessDoc = data.business ? await Business.findById(data.business) : null;
       const targetEmail = data.billingEmail || userDoc?.email;
       if (targetEmail) {
         await emailService.sendMembershipInvoiceEmail({

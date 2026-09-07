@@ -63,9 +63,10 @@ export const userService = {
     }
 
     await user.save();
+    await user.populate("savedBusinesses");
     return {
       saved: !isAlreadySaved,
-      savedBusinesses: user.savedBusinesses,
+      savedBusinesses: (user.savedBusinesses || []).filter(Boolean),
     };
   },
 
