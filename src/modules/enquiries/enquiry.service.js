@@ -225,7 +225,7 @@ export const enquiryService = {
 
     // RBAC: Chapter Admin Scope Enforcement
     if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      filter.chapter = requester.chapter;
+      filter.chapter = requester.chapter || "UNASSIGNED_CHAPTER_FALLBACK";
     }
 
     if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
@@ -326,7 +326,7 @@ export const enquiryService = {
     // Reuse the exact same filter logic as listAllEnquiries
     const filter = {};
     if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      filter.chapter = requester.chapter;
+      filter.chapter = requester.chapter || "UNASSIGNED_CHAPTER_FALLBACK";
     }
 
     if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
