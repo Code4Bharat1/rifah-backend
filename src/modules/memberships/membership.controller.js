@@ -1,5 +1,9 @@
 import { membershipService } from "./membership.service.js";
 import { businessService } from "../businesses/business.service.js";
+import { User } from "../users/user.model.js";
+import { Business } from "../businesses/business.model.js";
+import { ROLES } from "../../shared/constants/roles.js";
+import { generateSlug } from "../../shared/utils/generate-id.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { NotFoundError } from "../../shared/errors/errors.js";
@@ -36,9 +40,37 @@ export const membershipController = {
 
   upgradePlan: asyncHandler(async (req, res) => {
     const { planId } = req.body;
-    const business = await businessService.getBusinessByOwnerId(req.user.id);
+    let business = await businessService.getBusinessByOwnerId(req.user.id);
     if (!business) {
-      throw new NotFoundError("No business found for this account");
+      const userDoc = await User.findById(req.user.id);
+      if (userDoc) {
+        if (userDoc.role === ROLES.CUSTOMER) {
+          userDoc.role = ROLES.BUSINESS_OWNER;
+          await userDoc.save();
+        }
+        const rawName = userDoc.organization || `${userDoc.name}'s Enterprise`;
+        let slug = generateSlug(rawName);
+        const slugConflict = await Business.findOne({ slug });
+        if (slugConflict) slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        business = await Business.create({
+          name: rawName,
+          slug,
+          owner: userDoc._id,
+          city: userDoc.city || "Mumbai",
+          phone: userDoc.phone || "",
+          email: userDoc.email || "",
+          chapter: userDoc.chapter || "Mumbai Chapter",
+          industry: "General Commerce",
+          status: "Pending Verification",
+          verificationStatus: "Pending",
+          verification: "unverified",
+          membership: "Basic",
+          rating: 5,
+        });
+      } else {
+        throw new NotFoundError("No business found for this account");
+      }
     }
     const membership = await membershipService.upgradePlan(business._id, planId);
     return ApiResponse.success(res, membership, `Upgraded to ${membership.planName} tier successfully`);

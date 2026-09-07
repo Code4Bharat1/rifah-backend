@@ -290,6 +290,7 @@ export const authService = {
 
     user.lastLoginAt = new Date();
     await user.save();
+    await user.populate("savedBusinesses");
 
     const tokenPayload = {
       id: user._id,
@@ -303,6 +304,9 @@ export const authService = {
     const refreshToken = signRefreshToken(tokenPayload);
 
     const userObj = user.toJSON();
+    if (Array.isArray(userObj.savedBusinesses)) {
+      userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
+    }
 
     return { user: userObj, accessToken, refreshToken };
   },
@@ -347,7 +351,11 @@ export const authService = {
     if (!user) {
       throw new NotFoundError("User not found");
     }
-    return user;
+    const userObj = user.toJSON ? user.toJSON() : user;
+    if (Array.isArray(userObj.savedBusinesses)) {
+      userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
+    }
+    return userObj;
   },
 
   /**
@@ -537,6 +545,7 @@ export const authService = {
       if (!existingUser.avatar && googlePayload.picture) existingUser.avatar = googlePayload.picture;
       existingUser.lastLoginAt = new Date();
       await existingUser.save();
+      await existingUser.populate("savedBusinesses");
 
       const tokenPayload = {
         id: existingUser._id,
@@ -548,8 +557,13 @@ export const authService = {
       const accessToken = signAccessToken(tokenPayload);
       const refreshToken = signRefreshToken(tokenPayload);
 
+      const userObj = existingUser.toJSON();
+      if (Array.isArray(userObj.savedBusinesses)) {
+        userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
+      }
+
       return {
-        user: existingUser.toJSON(),
+        user: userObj,
         accessToken,
         refreshToken,
         isNewUser: false,
