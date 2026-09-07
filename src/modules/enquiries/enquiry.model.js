@@ -48,6 +48,11 @@ const enquirySchema = new mongoose.Schema(
       ref: "Business",
       index: true,
     },
+    chapter: {
+      type: String,
+      default: "Mumbai Chapter",
+      index: true,
+    },
     category: {
       type: String,
       required: [true, "Category is required"],

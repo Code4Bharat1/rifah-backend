@@ -32,6 +32,7 @@ export const enquiryService = {
       requesterName: user ? (user.name && !user.name.toLowerCase().includes("buyer account") ? user.name : "Customer") : (data.name || "Customer"),
       requesterRole: user ? (user.role === "customer" ? "Verified Customer" : "Registered Customer") : "Guest Customer",
       timeline: initialTimeline,
+      chapter: user ? (user.chapter || "Mumbai Chapter") : "Mumbai Chapter",
     });
 
     if (data.targetBusiness) {
@@ -224,9 +225,7 @@ export const enquiryService = {
 
     // RBAC: Chapter Admin Scope Enforcement
     if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      const chapterBusinesses = await Business.find({ chapter: requester.chapter }).select('_id');
-      const businessIds = chapterBusinesses.map(b => b._id);
-      filter.targetBusiness = { $in: businessIds };
+      filter.chapter = requester.chapter;
     }
 
     if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
@@ -243,16 +242,7 @@ export const enquiryService = {
 
     // Chapter Filter
     if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
-      const chapterBusinesses = await Business.find({ chapter: queryParams.chapter }).select('_id');
-      const businessIds = chapterBusinesses.map(b => b._id);
-      
-      if (filter.targetBusiness && filter.targetBusiness.$in) {
-        const adminBusinessIds = filter.targetBusiness.$in.map(id => id.toString());
-        const validIds = businessIds.filter(id => adminBusinessIds.includes(id.toString()));
-        filter.targetBusiness = { $in: validIds };
-      } else {
-        filter.targetBusiness = { $in: businessIds };
-      }
+      filter.chapter = queryParams.chapter;
     }
 
     if (queryParams.search) {
@@ -336,9 +326,7 @@ export const enquiryService = {
     // Reuse the exact same filter logic as listAllEnquiries
     const filter = {};
     if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      const chapterBusinesses = await Business.find({ chapter: requester.chapter }).select('_id');
-      const businessIds = chapterBusinesses.map(b => b._id);
-      filter.targetBusiness = { $in: businessIds };
+      filter.chapter = requester.chapter;
     }
 
     if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
@@ -355,16 +343,7 @@ export const enquiryService = {
 
     // Chapter Filter
     if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
-      const chapterBusinesses = await Business.find({ chapter: queryParams.chapter }).select('_id');
-      const businessIds = chapterBusinesses.map(b => b._id);
-      
-      if (filter.targetBusiness && filter.targetBusiness.$in) {
-        const adminBusinessIds = filter.targetBusiness.$in.map(id => id.toString());
-        const validIds = businessIds.filter(id => adminBusinessIds.includes(id.toString()));
-        filter.targetBusiness = { $in: validIds };
-      } else {
-        filter.targetBusiness = { $in: businessIds };
-      }
+      filter.chapter = queryParams.chapter;
     }
 
     if (queryParams.search) {

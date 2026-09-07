@@ -14,10 +14,18 @@ export const leadService = {
   /**
    * Route enquiry to one or multiple businesses (Admin / System)
    */
-  routeEnquiryToBusinesses: async (enquiryId, businessIds) => {
+  routeEnquiryToBusinesses: async (enquiryId, businessIds, user) => {
     const enquiry = await Enquiry.findById(enquiryId);
     if (!enquiry) {
       throw new NotFoundError("Enquiry not found");
+    }
+
+    if (user && user.role === "chapter_admin") {
+      const targetBusinesses = await Business.find({ _id: { $in: businessIds } });
+      const outOfChapter = targetBusinesses.some(b => b.chapter !== user.chapter);
+      if (outOfChapter) {
+        throw new ForbiddenError("Security Violation: You can only route leads to businesses within your chapter.");
+      }
     }
 
     const createdLeads = [];
@@ -204,6 +212,9 @@ export const leadService = {
 
       if (!isOwner && !isRequester && !isSameBusiness && !isAdmin && (businessOwnerId || enquiryRequesterId)) {
         throw new ForbiddenError("You are not authorized to view this lead");
+      }
+      if (user.role === "chapter_admin" && lead.business?.chapter !== user.chapter) {
+        throw new ForbiddenError("You are not authorized to view leads outside your chapter");
       }
     }
 
@@ -402,6 +413,9 @@ export const leadService = {
 
       if (!isOwner && !isSameBusiness && !isAdmin && businessOwnerId) {
         throw new ForbiddenError("You are not authorized to update this lead's status");
+      }
+      if (user.role === "chapter_admin" && lead.business?.chapter !== user.chapter) {
+        throw new ForbiddenError("You are not authorized to update leads outside your chapter");
       }
     }
 

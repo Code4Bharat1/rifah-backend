@@ -7,7 +7,7 @@ import { NotFoundError } from "../../shared/errors/errors.js";
 export const leadController = {
   routeLead: asyncHandler(async (req, res) => {
     const { enquiryId, businessIds } = req.body;
-    const leads = await leadService.routeEnquiryToBusinesses(enquiryId, businessIds);
+    const leads = await leadService.routeEnquiryToBusinesses(enquiryId, businessIds, req.user);
     return ApiResponse.created(res, leads, "Enquiry routed to businesses successfully");
   }),
 
