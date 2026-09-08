@@ -165,6 +165,7 @@ export const paymentService = {
           address: (payload.billingAddress && payload.billingAddress.trim()) || "",
           city: (payload.city && payload.city.trim()) || userDoc.city || "Mumbai",
           pincode: (payload.postalCode && payload.postalCode.trim()) || "",
+          state: (payload.state && payload.state.trim()) || userDoc.state || "Maharashtra",
           phone: userDoc.phone || "",
           email: payload.billingEmail || userDoc.email || "",
           chapter: userDoc.chapter || "Mumbai Chapter",

@@ -58,6 +58,7 @@ export const membershipController = {
           slug,
           owner: userDoc._id,
           city: userDoc.city || "Mumbai",
+          state: userDoc.state || "Maharashtra",
           phone: userDoc.phone || "",
           email: userDoc.email || "",
           chapter: userDoc.chapter || "Mumbai Chapter",
