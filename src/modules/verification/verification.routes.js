@@ -35,18 +35,25 @@ router.get(
   verificationController.getVerificationStatus
 );
 
+// Secure Document Download
+router.get(
+  "/documents/:filename",
+  authMiddleware,
+  verificationController.downloadDocument
+);
+
 // Admin Secretariat Verification Queue
 router.get(
   "/queue",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
   verificationController.listVerifications
 );
 
 router.patch(
   "/:id/review",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateReviewVerification),
   verificationController.reviewVerification

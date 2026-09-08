@@ -2,6 +2,12 @@ import { verificationService } from "./verification.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
+import path from "path";
+import { fileURLToPath } from "url";
+import { env } from "../../config/env.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const verificationController = {
   submitVerification: asyncHandler(async (req, res) => {
@@ -28,7 +34,7 @@ export const verificationController = {
 
   getVerificationStatus: asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const verification = await verificationService.getVerificationByBusinessId(businessId);
+    const verification = await verificationService.getVerificationByBusinessId(businessId, req.user);
     return ApiResponse.success(res, verification, "Verification status retrieved");
   }),
 
@@ -44,8 +50,28 @@ export const verificationController = {
     const reviewed = await verificationService.reviewVerification(
       id,
       { status, remarks },
-      req.user.id
+      req.user
     );
     return ApiResponse.success(res, reviewed, "Verification status updated successfully");
+  }),
+
+  downloadDocument: asyncHandler(async (req, res) => {
+    const { filename } = req.params;
+    const documentPath = await verificationService.getSecureDocumentPath(filename, req.user);
+    
+    const uploadsPath = path.resolve(__dirname, `../../../../${env.STORAGE.UPLOAD_DIR}`);
+    // fileUrl in DB is like "uploads/documents/17000000.pdf", so documentPath is relative.
+    // Wait, verificationService will return the absolute path or validate it.
+    // Let's pass resolving to service or do it here.
+    const absolutePath = path.resolve(uploadsPath, "..", documentPath);
+    
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Content-Security-Policy", "frame-ancestors *");
+    if (filename.endsWith(".pdf")) {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "inline");
+    }
+    
+    return res.sendFile(absolutePath);
   }),
 };

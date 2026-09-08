@@ -44,10 +44,19 @@ export const verificationService = {
   /**
    * Get verification status for a business
    */
-  getVerificationByBusinessId: async (businessId) => {
+  getVerificationByBusinessId: async (businessId, requester = null) => {
     const verification = await Verification.findOne({ business: businessId })
       .populate("business", "name slug chapter")
       .populate("submittedBy", "name email");
+
+    if (!verification) return null;
+
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
+      if (verification.business && verification.business.chapter !== requester.chapter) {
+        throw new ForbiddenError("You are not authorized to view verification details for this chapter");
+      }
+    }
+
     return verification;
   },
 
@@ -94,10 +103,19 @@ export const verificationService = {
   /**
    * Review verification (Secretariat/Admin: approve/reject/request changes)
    */
-  reviewVerification: async (verificationId, { status, remarks }, reviewerId) => {
+  reviewVerification: async (verificationId, { status, remarks }, reviewer) => {
     const verification = await Verification.findById(verificationId);
     if (!verification) {
       throw new NotFoundError("Verification request not found");
+    }
+
+    const business = await Business.findById(verification.business);
+    
+    // RBAC: Chapter Admin Scope Enforcement
+    if (reviewer && reviewer.role === ROLES.CHAPTER_ADMIN) {
+      if (business && business.chapter !== reviewer.chapter) {
+        throw new ForbiddenError("You are not authorized to review verifications for this chapter");
+      }
     }
 
     let finalStatus = status;
@@ -106,7 +124,7 @@ export const verificationService = {
 
     verification.status = finalStatus;
     if (remarks) verification.remarks = remarks;
-    verification.reviewedBy = reviewerId;
+    verification.reviewedBy = reviewer.id || reviewer;
     verification.reviewedAt = new Date();
 
     if (Array.isArray(verification.documents)) {
@@ -124,7 +142,6 @@ export const verificationService = {
     await verification.save();
 
     // Update business profile verification status
-    const business = await Business.findById(verification.business);
     if (business) {
       business.verification = finalStatus;
       await business.save();
@@ -146,5 +163,39 @@ export const verificationService = {
     }
 
     return verification;
+  },
+
+  /**
+   * Securely resolve document path for authorized users
+   */
+  getSecureDocumentPath: async (filename, requester) => {
+    // Escape filename just in case
+    const safeFilename = filename.replace(/[^a-zA-Z0-9.\-_]/g, "");
+    
+    // Find verification that contains this fileUrl
+    const verification = await Verification.findOne({ 
+      "documents.fileUrl": { $regex: safeFilename } 
+    }).populate("business", "chapter");
+
+    if (!verification) {
+      throw new NotFoundError("Document not found");
+    }
+
+    // Role-based Access Control
+    if (requester.role === ROLES.CHAPTER_ADMIN) {
+      if (!verification.business || verification.business.chapter !== requester.chapter) {
+        throw new ForbiddenError("You are not authorized to view documents for this chapter");
+      }
+    } else if (requester.role !== ROLES.SUPER_ADMIN && requester.role !== ROLES.SECRETARIAT) {
+      // If it's a business owner, they should only see their own
+      // (This covers Business Owner panel access if they use this route)
+      if (String(verification.submittedBy) !== String(requester.id)) {
+         throw new ForbiddenError("You are not authorized to view this document");
+      }
+    }
+
+    // Return the actual fileUrl stored in DB (e.g. "uploads/documents/xyz.pdf")
+    const doc = verification.documents.find(d => d.fileUrl.includes(safeFilename));
+    return doc.fileUrl;
   },
 };
