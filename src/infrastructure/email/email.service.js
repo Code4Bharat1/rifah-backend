@@ -323,6 +323,148 @@ export const emailService = {
   },
 
   /**
+   * Sends an immediate Payment Receipt notification to Secretariat Admin with attached PDF for verification
+   */
+  sendAdminPaymentReceiptAlert: async ({
+    adminEmail,
+    name,
+    businessName,
+    planName,
+    amount,
+    currency = "INR",
+    invoiceNumber,
+    paidAt,
+    transactionId,
+    paymentMethod,
+    userPhone,
+    userEmail,
+  }) => {
+    const formattedDate = new Date(paidAt || Date.now()).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    const isUsd = (currency || "").toUpperCase() === "USD";
+    const currSymbol = isUsd ? "$" : "₹";
+    const formattedAmount = `${currSymbol} ${Number(amount || 0).toLocaleString(isUsd ? "en-US" : "en-IN")} ${currency}`;
+    const cleanPlanName = (planName || "Membership").replace(/subscription/i, "").trim().toUpperCase();
+
+    // 1. Generate Vector PDF Buffer matching official receipt format
+    const pdfBuffer = generateInvoicePdfBuffer({
+      invoiceNumber,
+      paidAt,
+      name,
+      businessName,
+      planName: cleanPlanName,
+      amount,
+      currency,
+      transactionId,
+      paymentMethod,
+    });
+
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+
+    const subject = `[ACTION: VERIFY PAYMENT] Receipt #${invoiceNumber} from ${businessName || name} (${formattedAmount})`;
+
+    const html = `
+      <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; background-color: #ffffff; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);">
+        <div style="height: 6px; background: linear-gradient(90deg, #10b981 0%, #0284c7 100%);"></div>
+        <div style="padding: 32px;">
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+            <tr>
+              <td style="vertical-align: top;">
+                ${
+                  hasLogo
+                    ? `<img src="cid:rifahlogo" alt="RIFAH Chamber" style="height: 44px; width: auto; display: block;" />`
+                    : `<h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #0b192c;">RIFAH CONNECT</h1>`
+                }
+                <p style="margin: 4px 0 0 0; font-size: 11px; font-weight: 600; color: #64748b;">Chamber Secretariat Administration</p>
+              </td>
+              <td style="vertical-align: top; text-align: right;">
+                <h2 style="margin: 0; font-size: 18px; font-weight: 800; color: #0f172a; text-transform: uppercase;">PAYMENT RECEIPT</h2>
+                <p style="margin: 4px 0 0 0; font-size: 13px; font-weight: 700; color: #0284c7;"># ${invoiceNumber}</p>
+                <p style="margin: 2px 0 0 0; font-size: 11px; color: #64748b;">${formattedDate}</p>
+              </td>
+            </tr>
+          </table>
+
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+            <p style="margin: 0; font-size: 14px; font-weight: 700; color: #166534;">Payment Verification Required</p>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #15803d;">A new payment of <strong>${formattedAmount}</strong> has been received from <strong>${businessName || name}</strong> for <strong>${cleanPlanName} Membership</strong>. Please review the attached receipt for audit and verification.</p>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+            <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #64748b; width: 35%;">Payer Name</td>
+              <td style="padding: 10px 14px; font-size: 13px; font-weight: 700; color: #0f172a;">${name || "Member"}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #64748b;">Business / Enterprise</td>
+              <td style="padding: 10px 14px; font-size: 13px; font-weight: 700; color: #0f172a;">${businessName || "Member Business"}</td>
+            </tr>
+            <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #64748b;">Contact</td>
+              <td style="padding: 10px 14px; font-size: 13px; color: #0f172a;">${userEmail || "N/A"} ${userPhone ? `• ${userPhone}` : ""}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #64748b;">Plan Tier</td>
+              <td style="padding: 10px 14px; font-size: 13px; font-weight: 700; color: #0284c7;">${cleanPlanName} (1 Year)</td>
+            </tr>
+            <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #64748b;">Amount Paid</td>
+              <td style="padding: 10px 14px; font-size: 15px; font-weight: 800; color: #059669;">${formattedAmount}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #64748b;">Payment Method</td>
+              <td style="padding: 10px 14px; font-size: 13px; color: #0f172a;">${paymentMethod || "Online Gateway"}</td>
+            </tr>
+            <tr style="background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+              <td style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #64748b;">Transaction ID</td>
+              <td style="padding: 10px 14px; font-size: 12px; font-family: monospace; font-weight: 600; color: #475569;">${transactionId || "N/A"}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #64748b;">Payment Date</td>
+              <td style="padding: 10px 14px; font-size: 12px; color: #475569;">${formattedDate}</td>
+            </tr>
+          </table>
+
+          <div style="text-align: center; margin: 28px 0 10px 0;">
+            <a href="http://localhost:3000/admin/payments" style="display: inline-block; background-color: #0b192c; color: #ffffff; padding: 12px 28px; font-size: 13px; font-weight: 700; border-radius: 10px; text-decoration: none;">
+              Open Admin Payments Ledger →
+            </a>
+          </div>
+          <p style="text-align: center; font-size: 11px; color: #94a3b8; margin-top: 15px;">The official computer-generated PDF receipt is attached to this email.</p>
+        </div>
+      </div>
+    `;
+
+    const attachments = [
+      {
+        filename: `Official-Receipt-${invoiceNumber}.pdf`,
+        content: pdfBuffer,
+        contentType: "application/pdf",
+      },
+    ];
+
+    if (hasLogo) {
+      attachments.unshift({
+        filename: "rifah1-logo.png",
+        path: logoPath,
+        cid: "rifahlogo",
+      });
+    }
+
+    return emailService.sendEmail({
+      to: adminEmail,
+      subject,
+      html,
+      attachments,
+    });
+  },
+
+  /**
    * Sends a Welcome Email on user registration
    */
   sendWelcomeEmail: async ({ email, name, role }) => {

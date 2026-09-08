@@ -37,7 +37,7 @@ export const eventController = {
     if (!req.file) {
       return ApiResponse.error(res, "No image uploaded", 400);
     }
-    const coverUrl = storageService.getPublicUrl(req.file.filename, "covers");
+    const coverUrl = await storageService.uploadFile(req.file, "covers");
     const updated = await eventService.updateEvent(id, { coverImage: coverUrl }, req.user);
     return ApiResponse.success(res, { coverImage: coverUrl, event: updated }, "Event cover uploaded successfully");
   }),
