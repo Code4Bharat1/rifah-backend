@@ -21,6 +21,11 @@ export const reportController = {
     return ApiResponse.success(res, stats, "Business analytics retrieved");
   }),
 
+  getPublicStats: asyncHandler(async (req, res) => {
+    const stats = await reportService.getPublicStats();
+    return ApiResponse.success(res, stats, "Public chamber stats retrieved");
+  }),
+
   getAdminOverview: asyncHandler(async (req, res) => {
     const stats = await reportService.getAdminOverview();
     return ApiResponse.success(res, stats, "Chamber KPI metrics retrieved");

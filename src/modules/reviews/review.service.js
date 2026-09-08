@@ -13,9 +13,9 @@ export const reviewService = {
       status: { $in: ["approved", "published", "pending"] },
     });
     const count = reviews.length;
-    let avg = 5.0;
+    let avg = 0;
     if (count > 0) {
-      const sum = reviews.reduce((acc, r) => acc + (r.rating || 5), 0);
+      const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
       avg = Number((sum / count).toFixed(1));
     }
     await Business.findByIdAndUpdate(businessId, {

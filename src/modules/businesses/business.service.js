@@ -127,6 +127,25 @@ export const businessService = {
     if (!business) {
       throw new NotFoundError("Business profile not found");
     }
+
+    // Ensure 100% dynamic rating and reviewsCount from actual MongoDB reviews
+    const { Review } = await import("../reviews/review.model.js");
+    const reviews = await Review.find({
+      business: business._id,
+      status: { $in: ["approved", "published", "pending"] },
+    });
+    const count = reviews.length;
+    let avg = 0;
+    if (count > 0) {
+      const sum = reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0);
+      avg = Number((sum / count).toFixed(1));
+    }
+    if (business.rating !== avg || business.reviewsCount !== count) {
+      business.rating = avg;
+      business.reviewsCount = count;
+      await Business.findByIdAndUpdate(business._id, { rating: avg, reviewsCount: count });
+    }
+
     return business;
   },
 

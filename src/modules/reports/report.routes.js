@@ -6,6 +6,10 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
+// Public Chamber KPIs (No authentication needed for About RIFAH / public views)
+router.get("/public/stats", reportController.getPublicStats);
+router.get("/public/overview", reportController.getPublicStats);
+
 // Business Owner Analytics
 router.get("/business/me", authMiddleware, reportController.getBusinessAnalytics);
 router.get("/business-analytics", authMiddleware, reportController.getBusinessAnalytics);

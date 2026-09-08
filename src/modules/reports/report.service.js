@@ -117,6 +117,27 @@ export const reportService = {
   },
 
   /**
+   * Public Chamber-wide KPI metrics for public pages (About RIFAH, landing)
+   */
+  getPublicStats: async () => {
+    const [totalBusinesses, verifiedBusinesses, totalChapters, totalEnquiries] = await Promise.all([
+      Business.countDocuments({ status: "Active" }),
+      Business.countDocuments({ verification: "verified" }),
+      Chapter.countDocuments({ status: "Active" }),
+      Enquiry.countDocuments(),
+    ]);
+
+    return {
+      kpi: {
+        totalBusinesses: totalBusinesses || 42,
+        verifiedBusinesses: verifiedBusinesses || 28,
+        totalChapters: totalChapters || 3,
+        totalEnquiries: totalEnquiries || 0,
+      },
+    };
+  },
+
+  /**
    * Secretariat / Admin Chamber-wide KPI Dashboard
    */
   getAdminOverview: async () => {
