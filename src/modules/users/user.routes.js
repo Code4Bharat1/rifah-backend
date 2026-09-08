@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { userController } from "./user.controller.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
+import { upload } from "../../middleware/upload.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
 import { validateUpdateProfile, validateUpdateStatus, validateInvite } from "./user.validation.js";
@@ -16,6 +17,12 @@ router.patch(
   authMiddleware,
   validateRequest(validateUpdateProfile),
   userController.updateMe
+);
+router.post(
+  "/me/avatar",
+  authMiddleware,
+  upload.single("avatar"),
+  userController.uploadAvatar
 );
 router.post(
   "/me/saved/:businessId",

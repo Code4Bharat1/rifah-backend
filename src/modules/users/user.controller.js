@@ -1,4 +1,5 @@
 import { userService } from "./user.service.js";
+import { storageService } from "../../infrastructure/storage/storage.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 
@@ -11,6 +12,15 @@ export const userController = {
   updateMe: asyncHandler(async (req, res) => {
     const updatedUser = await userService.updateProfile(req.user.id, req.body);
     return ApiResponse.success(res, updatedUser, "Profile updated successfully");
+  }),
+
+  uploadAvatar: asyncHandler(async (req, res) => {
+    if (!req.file) {
+      return ApiResponse.error(res, "No image file uploaded", 400);
+    }
+    const fileUrl = await storageService.uploadFile(req.file, "avatars");
+    const updatedUser = await userService.updateProfile(req.user.id, { avatar: fileUrl });
+    return ApiResponse.success(res, { avatar: fileUrl, user: updatedUser }, "Profile photo updated successfully");
   }),
 
   toggleSaveBusiness: asyncHandler(async (req, res) => {
