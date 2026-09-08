@@ -312,7 +312,13 @@ export const authService = {
       userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
     }
 
-    return { user: userObj, accessToken, refreshToken };
+    return { 
+      user: userObj, 
+      accessToken, 
+      refreshToken,
+      requiresRoleSelection: !!userObj.previousRole,
+      availableRoles: userObj.previousRole ? [userObj.role, userObj.previousRole] : [userObj.role]
+    };
   },
 
   /**
@@ -345,6 +351,43 @@ export const authService = {
     } catch (err) {
       throw new UnauthorizedError("Invalid or expired refresh token", ERROR_CODES.TOKEN_EXPIRED);
     }
+  },
+
+  /**
+   * Switch active role for users with dual roles
+   */
+  switchRole: async (userId, targetRole) => {
+    const user = await User.findById(userId);
+    if (!user) throw new NotFoundError("User not found");
+
+    if (!user.previousRole) {
+      throw new BadRequestError("You do not have any other roles to switch to");
+    }
+
+    if (user.role === targetRole) {
+      // Already active
+    } else if (user.previousRole === targetRole) {
+      // Swap them
+      const temp = user.role;
+      user.role = user.previousRole;
+      user.previousRole = temp;
+      await user.save();
+    } else {
+      throw new BadRequestError("Invalid target role");
+    }
+
+    const tokenPayload = {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      chapter: user.chapter,
+      forcePasswordChange: user.forcePasswordChange,
+    };
+
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshToken = signRefreshToken(tokenPayload);
+
+    return { user, accessToken, refreshToken };
   },
 
   /**
