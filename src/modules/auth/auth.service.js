@@ -161,6 +161,8 @@ export const authService = {
     membership,
     about,
     taxId,
+    region = "national",
+    currency = "INR",
     verifiedToken,
   }) => {
     const cleanEmail = email.toLowerCase().trim();
@@ -234,6 +236,8 @@ export const authService = {
       membership: cleanMembership,
       about: about || "",
       taxId: cleanTaxId,
+      region: region === "international" ? "international" : "national",
+      currency: currency === "USD" || region === "international" ? "USD" : "INR",
       phone: phone || "",
       email: cleanEmail,
       status: "Active",

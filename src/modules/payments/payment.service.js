@@ -16,15 +16,23 @@ export const paymentService = {
   /**
    * Create Razorpay Order
    */
-  createRazorpayOrder: async ({ amount, planId }, user) => {
+  createRazorpayOrder: async ({ amount, planId, currency = "INR" }, user) => {
     let invoiceNumber = generateReferenceId("INV", 4);
     while (await Payment.findOne({ invoiceNumber })) {
       invoiceNumber = generateReferenceId("INV", 4);
     }
 
-    const numericAmount = Number(amount) || 4999;
-    const amountInPaise = Math.round(numericAmount * 100);
-    const authString = Buffer.from(`${env.RAZORPAY.KEY_ID}:${env.RAZORPAY.KEY_SECRET}`).toString("base64");
+    const selectedCurrency = (currency || "INR").toUpperCase();
+    const isInternational = selectedCurrency === "USD";
+
+    // Route to International Gateway (foreign bank) or Domestic Gateway (Indian bank)
+    const gatewayConfig = isInternational && env.RAZORPAY_INTERNATIONAL?.KEY_ID
+      ? env.RAZORPAY_INTERNATIONAL
+      : env.RAZORPAY;
+
+    const numericAmount = Number(amount) || (isInternational ? 59 : 4999);
+    const amountInSubunits = Math.round(numericAmount * 100);
+    const authString = Buffer.from(`${gatewayConfig.KEY_ID}:${gatewayConfig.KEY_SECRET}`).toString("base64");
 
     const response = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
@@ -33,12 +41,14 @@ export const paymentService = {
         Authorization: `Basic ${authString}`,
       },
       body: JSON.stringify({
-        amount: amountInPaise,
-        currency: "INR",
+        amount: amountInSubunits,
+        currency: selectedCurrency,
         receipt: invoiceNumber,
         notes: {
           payerId: user.id,
           planId: planId || "basic",
+          currency: selectedCurrency,
+          accountType: isInternational ? "international_foreign" : "national_domestic",
         },
       }),
     });
@@ -52,7 +62,7 @@ export const paymentService = {
       orderId: orderData.id,
       amount: orderData.amount,
       currency: orderData.currency,
-      keyId: env.RAZORPAY.KEY_ID,
+      keyId: gatewayConfig.KEY_ID,
       invoiceNumber,
     };
   },
@@ -61,17 +71,33 @@ export const paymentService = {
    * Verify Razorpay Payment Signature and Upgrade Plan
    */
   verifyRazorpayPayment: async (payload, user) => {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planId, businessId, amount, itemType, description } = payload;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planId, businessId, amount, itemType, description, currency } = payload;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       throw new BadRequestError("Missing required Razorpay payment fields");
     }
 
+    const isInternational = (currency || "").toUpperCase() === "USD";
+    const gatewayConfig = isInternational && env.RAZORPAY_INTERNATIONAL?.KEY_SECRET
+      ? env.RAZORPAY_INTERNATIONAL
+      : env.RAZORPAY;
+
     const body = `${razorpay_order_id}|${razorpay_payment_id}`;
-    const expectedSignature = crypto
-      .createHmac("sha256", env.RAZORPAY.KEY_SECRET)
+    let expectedSignature = crypto
+      .createHmac("sha256", gatewayConfig.KEY_SECRET)
       .update(body.toString())
       .digest("hex");
+
+    // Dual-check fallback if international test keys match domestic secret
+    if (expectedSignature !== razorpay_signature && isInternational && env.RAZORPAY?.KEY_SECRET) {
+      const fallbackSig = crypto
+        .createHmac("sha256", env.RAZORPAY.KEY_SECRET)
+        .update(body.toString())
+        .digest("hex");
+      if (fallbackSig === razorpay_signature) {
+        expectedSignature = fallbackSig;
+      }
+    }
 
     if (expectedSignature !== razorpay_signature) {
       throw new BadRequestError("Invalid payment signature");
@@ -159,9 +185,9 @@ export const paymentService = {
       business: finalBusinessId || null,
       itemType: itemType || "Membership",
       description: description || `Payment for ${planId || "Membership"} tier`,
-      amount: Number(amount) || 4999,
-      currency: "INR",
-      method: "UPI",
+      amount: Number(amount) || (payload.currency === "USD" ? 59 : 4999),
+      currency: payload.currency || "INR",
+      method: payload.currency === "USD" ? "International Card" : "UPI",
       status: "Paid",
       transactionId: razorpay_payment_id,
       paidAt: new Date(),
@@ -177,7 +203,7 @@ export const paymentService = {
         recipientId: user.id,
         type: "Payment",
         title: "Payment Verified",
-        body: `Payment of ₹${payment.amount} (Invoice #${payment.invoiceNumber}) was verified successfully.`,
+        body: `Payment of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} ${payment.currency} (Invoice #${payment.invoiceNumber}) was verified successfully.`,
         link: "/biz/payments",
       });
 
@@ -189,11 +215,48 @@ export const paymentService = {
           businessName: businessDoc?.name || payload.businessName || "Member Business",
           planName: (planId || "Membership").toUpperCase(),
           amount: payment.amount,
+          currency: payment.currency,
           invoiceNumber: payment.invoiceNumber,
           paidAt: payment.paidAt,
           transactionId: payment.transactionId || razorpay_payment_id,
-          paymentMethod: "Razorpay Online Payment",
+          paymentMethod: payment.method || "Razorpay Online Payment",
         });
+      }
+
+      // Send official payment receipt to Secretariat Admin for verification
+      try {
+        const superAdmins = await User.find({ role: ROLES.SUPER_ADMIN }).select("_id email name");
+        const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
+        const adminEmails = [...new Set([adminFallbackEmail, ...superAdmins.map((a) => a.email)].filter(Boolean))];
+
+        for (const adminMail of adminEmails) {
+          await emailService.sendAdminPaymentReceiptAlert({
+            adminEmail: adminMail,
+            name: userDoc?.name || "Member",
+            businessName: businessDoc?.name || payload.businessName || "Member Business",
+            planName: (planId || "Membership").toUpperCase(),
+            amount: payment.amount,
+            currency: payment.currency,
+            invoiceNumber: payment.invoiceNumber,
+            paidAt: payment.paidAt,
+            transactionId: payment.transactionId || razorpay_payment_id,
+            paymentMethod: payment.method || "Razorpay Online Payment",
+            userPhone: userDoc?.phone || "",
+            userEmail: targetEmail || "",
+          });
+        }
+
+        for (const admin of superAdmins) {
+          await notificationService.createNotification({
+            recipientId: admin._id,
+            type: "Payment",
+            title: "New Payment Receipt for Verification",
+            body: `Receipt #${payment.invoiceNumber} of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} from ${businessDoc?.name || payload.businessName || "Member"} received for verification.`,
+            link: "/admin/payments",
+          });
+        }
+      } catch (adminErr) {
+        console.error("Admin receipt notification error:", adminErr);
       }
     } catch (err) {
       console.error("Payment notification / email error:", err);
@@ -323,11 +386,48 @@ export const paymentService = {
           businessName: businessDoc?.name || data.businessName || "Member Business",
           planName: (data.itemType || "Membership").toUpperCase(),
           amount: payment.amount,
+          currency: payment.currency,
           invoiceNumber: payment.invoiceNumber,
           paidAt: payment.paidAt,
           transactionId: payment.transactionId,
           paymentMethod: data.method || "Online Transfer",
         });
+      }
+
+      // Send official payment receipt to Secretariat Admin for verification
+      try {
+        const superAdmins = await User.find({ role: ROLES.SUPER_ADMIN }).select("_id email name");
+        const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
+        const adminEmails = [...new Set([adminFallbackEmail, ...superAdmins.map((a) => a.email)].filter(Boolean))];
+
+        for (const adminMail of adminEmails) {
+          await emailService.sendAdminPaymentReceiptAlert({
+            adminEmail: adminMail,
+            name: userDoc?.name || "Member",
+            businessName: businessDoc?.name || data.businessName || "Member Business",
+            planName: (data.itemType || "Membership").toUpperCase(),
+            amount: payment.amount,
+            currency: payment.currency,
+            invoiceNumber: payment.invoiceNumber,
+            paidAt: payment.paidAt,
+            transactionId: payment.transactionId,
+            paymentMethod: data.method || "Online Transfer",
+            userPhone: userDoc?.phone || "",
+            userEmail: targetEmail || "",
+          });
+        }
+
+        for (const admin of superAdmins) {
+          await notificationService.createNotification({
+            recipientId: admin._id,
+            type: "Payment",
+            title: "New Payment Receipt for Verification",
+            body: `Receipt #${payment.invoiceNumber} of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} from ${businessDoc?.name || data.businessName || "Member"} received for verification.`,
+            link: "/admin/payments",
+          });
+        }
+      } catch (adminErr) {
+        console.error("Admin receipt notification error:", adminErr);
       }
     } catch (err) {
       console.error("Payment notification / email error:", err);
@@ -427,8 +527,39 @@ export const paymentService = {
       throw new NotFoundError("Payment not found");
     }
     payment.status = status;
-    // Audit logic can be added here if needed
     await payment.save();
+    return payment;
+  },
+
+  /**
+   * Officially verify and approve a payment transaction by Admin
+   */
+  verifyPaymentByAdmin: async (id, adminUserId) => {
+    const payment = await Payment.findById(id).populate("payer", "name email");
+    if (!payment) {
+      throw new NotFoundError("Payment not found");
+    }
+    payment.status = "Paid";
+    await payment.save();
+
+    if (payment.business) {
+      const businessDoc = await Business.findById(payment.business);
+      if (businessDoc) {
+        businessDoc.status = "Active";
+        await businessDoc.save();
+      }
+    }
+
+    if (payment.payer) {
+      await notificationService.createNotification({
+        recipientId: payment.payer._id || payment.payer,
+        type: "Payment",
+        title: "Payment Officially Verified by Secretariat",
+        body: `Your payment receipt #${payment.invoiceNumber} (${payment.currency === "USD" ? "$" : "₹"}${payment.amount}) has been officially verified and approved.`,
+        link: "/biz/payments",
+      });
+    }
+
     return payment;
   },
 };

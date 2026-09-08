@@ -70,6 +70,17 @@ const businessSchema = new mongoose.Schema(
       default: "Mumbai Chapter",
       index: true,
     },
+    region: {
+      type: String,
+      enum: ["national", "international"],
+      default: "national",
+      index: true,
+    },
+    currency: {
+      type: String,
+      enum: ["INR", "USD"],
+      default: "INR",
+    },
     membership: {
       type: String,
       enum: ["Free", "Basic", "Premium", "Enterprise", "free", "basic", "premium", "enterprise"],

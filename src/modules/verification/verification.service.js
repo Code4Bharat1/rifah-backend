@@ -63,6 +63,11 @@ export const verificationService = {
       const chapterBusinesses = await Business.find({ chapter: requester.chapter }).select('_id');
       const businessIds = chapterBusinesses.map(b => b._id);
       filter.business = { $in: businessIds };
+    } else if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
+      // Super Admin explicit chapter filter
+      const chapterBusinesses = await Business.find({ chapter: queryParams.chapter }).select('_id');
+      const businessIds = chapterBusinesses.map(b => b._id);
+      filter.business = { $in: businessIds };
     }
 
     if (queryParams.status) {
@@ -73,6 +78,7 @@ export const verificationService = {
       Verification.find(filter)
         .populate("business", "name slug city state chapter membership")
         .populate("submittedBy", "name email phone")
+        .populate("reviewedBy", "name chapter role")
         .sort(sort)
         .skip(skip)
         .limit(limit),
@@ -99,7 +105,7 @@ export const verificationService = {
     if (status === "correction") finalStatus = "correction_requested";
 
     verification.status = finalStatus;
-    verification.remarks = remarks || "";
+    if (remarks) verification.remarks = remarks;
     verification.reviewedBy = reviewerId;
     verification.reviewedAt = new Date();
 

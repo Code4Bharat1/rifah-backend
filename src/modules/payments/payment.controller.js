@@ -36,9 +36,13 @@ export const paymentController = {
 
   processRefund: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    // In a real application, this would call Stripe/Razorpay API to process the refund.
-    // For now, we update the status to "Refunded" in the database.
     const payment = await paymentService.updatePaymentStatus(id, "Refunded", req.user.id);
     return ApiResponse.success(res, payment, "Payment marked as refunded successfully");
+  }),
+
+  verifyPaymentByAdmin: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const payment = await paymentService.verifyPaymentByAdmin(id, req.user.id);
+    return ApiResponse.success(res, payment, "Payment verified and approved successfully");
   }),
 };

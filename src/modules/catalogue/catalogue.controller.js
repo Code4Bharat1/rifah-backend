@@ -32,7 +32,7 @@ export const catalogueController = {
     if (!req.files || req.files.length === 0) {
       return ApiResponse.error(res, "No image files uploaded", 400);
     }
-    const newImageUrls = req.files.map((f) => storageService.getPublicUrl(f.filename, "catalogue"));
+    const newImageUrls = await Promise.all(req.files.map((f) => storageService.uploadFile(f, "catalogue")));
     const existingItem = await Catalogue.findById(id);
     const currentImages = Array.isArray(existingItem?.images) ? existingItem.images : [];
     const combinedImages = [...currentImages, ...newImageUrls];

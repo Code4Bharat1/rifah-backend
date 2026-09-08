@@ -51,6 +51,11 @@ export const env = {
     KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || "7F7NmMGfMcDVTHqlO35raX2u",
   },
 
+  RAZORPAY_INTERNATIONAL: {
+    KEY_ID: process.env.RAZORPAY_INTL_KEY_ID || process.env.RAZORPAY_KEY_ID || "rzp_test_TTykh9OVkLKNHl",
+    KEY_SECRET: process.env.RAZORPAY_INTL_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || "7F7NmMGfMcDVTHqlO35raX2u",
+  },
+
   GOOGLE: {
     CLIENT_ID: process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
     CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
@@ -67,6 +72,13 @@ export const env = {
   SANDBOX: {
     API_KEY: process.env.SANDBOX_API_KEY || "",
     API_SECRET: process.env.SANDBOX_API_SECRET || "",
+  },
+
+  CLOUDINARY: {
+    CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || "",
+    API_KEY: process.env.CLOUDINARY_API_KEY || "",
+    API_SECRET: process.env.CLOUDINARY_API_SECRET || "",
+    URL: process.env.CLOUDINARY_URL || "",
   },
 
   isDevelopment: () => (process.env.NODE_ENV || "development") === "development",
