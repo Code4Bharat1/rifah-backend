@@ -13,8 +13,10 @@ import { rateLimitMiddleware } from "./middleware/rate-limit.middleware.js";
 import { mongoSanitizeMiddleware } from "./middleware/sanitize.middleware.js";
 import { errorMiddleware } from "./middleware/error.middleware.js";
 import { notFoundMiddleware } from "./middleware/not-found.middleware.js";
+import fs from "fs";
 import { apiRouter } from "./routes/index.js";
 import { healthRoutes } from "./routes/health.routes.js";
+import { quotationHelper } from "./modules/leads/quotation.helper.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,6 +47,59 @@ app.use(rateLimitMiddleware);
 
 // Serve uploaded files statically from local server filesystem with frame permission for previews
 const uploadsPath = path.resolve(__dirname, `../${env.STORAGE.UPLOAD_DIR}`);
+
+// Dedicated dynamic handler for quotation PDFs (never 404s, auto-regenerates missing quotation files)
+app.get(
+  [`/${env.STORAGE.UPLOAD_DIR}/attachments/:filename`, `/attachments/:filename`],
+  async (req, res, next) => {
+    const filename = req.params.filename || "";
+    const cleanFilename = filename.split("?")[0];
+    const isQuotation = cleanFilename.toLowerCase().startsWith("quotation-");
+
+    if (!isQuotation) {
+      return next();
+    }
+
+    const attachmentsDir = path.join(uploadsPath, "attachments");
+    const localPdfName = cleanFilename.replace(/\.htm$/i, ".pdf");
+    const localPath = path.join(attachmentsDir, localPdfName);
+
+    res.removeHeader("X-Frame-Options");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Content-Security-Policy", "frame-ancestors *");
+
+    // 1. If file already exists locally, send it directly as PDF attachment
+    if (fs.existsSync(localPath)) {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${localPdfName}"`);
+      return res.sendFile(localPath);
+    }
+
+    // 2. If file is missing from local disk, dynamically resolve & generate it
+    try {
+      const pdfBuffer = await quotationHelper.getOrGenerateQuotationPdf(localPdfName);
+      if (pdfBuffer) {
+        try {
+          if (!fs.existsSync(attachmentsDir)) {
+            fs.mkdirSync(attachmentsDir, { recursive: true });
+          }
+          fs.writeFileSync(localPath, pdfBuffer);
+        } catch (writeErr) {
+          // Continue if disk write fails
+        }
+
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${localPdfName}"`);
+        return res.send(pdfBuffer);
+      }
+    } catch (err) {
+      console.error("Dynamic quotation PDF generation error:", err);
+    }
+
+    next();
+  }
+);
+
 app.use(
   `/${env.STORAGE.UPLOAD_DIR}`,
   (req, res, next) => {

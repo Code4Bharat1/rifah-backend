@@ -1,6 +1,7 @@
 import { messageService } from "./message.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
+import { storageService } from "../../infrastructure/storage/storage.service.js";
 
 export const messageController = {
   sendMessage: asyncHandler(async (req, res) => {
@@ -28,7 +29,7 @@ export const messageController = {
     if (!req.file) {
       return ApiResponse.error(res, "No attachment file uploaded", 400);
     }
-    const fileUrl = `/uploads/attachments/${req.file.filename}`;
+    const fileUrl = await storageService.uploadFile(req.file, "attachments");
     return ApiResponse.success(
       res,
       {
@@ -41,3 +42,4 @@ export const messageController = {
     );
   }),
 };
+

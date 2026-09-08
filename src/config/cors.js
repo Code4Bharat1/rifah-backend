@@ -6,7 +6,15 @@ export const corsConfig = {
     if (!origin) return callback(null, true);
 
     const allowedOrigins = env.CORS.ORIGIN.split(",").map((o) => o.trim());
-    if (allowedOrigins.includes(origin) || allowedOrigins.includes("*") || env.isDevelopment()) {
+    if (
+      allowedOrigins.includes(origin) ||
+      allowedOrigins.includes("*") ||
+      env.isDevelopment() ||
+      origin.includes("vercel.app") ||
+      origin.includes("netlify.app") ||
+      origin.includes("onrender.com") ||
+      origin.includes("localhost")
+    ) {
       return callback(null, true);
     }
 

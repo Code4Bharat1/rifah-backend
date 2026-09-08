@@ -1,6 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { storageService } from "../storage/storage.service.js";
+import { cloudinaryService } from "../storage/cloudinary.service.js";
+import { logger } from "../logger/logger.js";
 
 /**
  * Escapes characters for PDF literal strings
@@ -16,9 +18,9 @@ function escapePdfText(str) {
 
 export const pdfService = {
   /**
-   * Generates a clean, professional B2B quotation PDF
+   * Generates raw PDF Buffer for a B2B quotation
    */
-  generateQuotationPdf: async ({
+  generateQuotationBuffer: ({
     quotationRef,
     supplierName,
     supplierEmail,
@@ -31,16 +33,7 @@ export const pdfService = {
     notes,
     date,
   }) => {
-    const baseDir = storageService.getBaseUploadDir();
-    const attachmentsDir = path.join(baseDir, "attachments");
-    if (!fs.existsSync(attachmentsDir)) {
-      fs.mkdirSync(attachmentsDir, { recursive: true });
-    }
-
     const cleanRef = (quotationRef || "QTN").replace(/[^a-zA-Z0-9_-]/g, "");
-    const filename = `quotation-${cleanRef}-${Date.now()}.pdf`;
-    const filePath = path.join(attachmentsDir, filename);
-
     const dateStr = date
       ? new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
       : new Date().toLocaleDateString("en-IN");
@@ -258,9 +251,43 @@ export const pdfService = {
     const xref = `xref\n0 ${objects.length + 1}\n${xrefEntries.join("")}`;
     const trailer = `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF\n`;
 
-    const pdfBuffer = Buffer.from(header + body + xref + trailer, "utf8");
+    return Buffer.from(header + body + xref + trailer, "utf8");
+  },
+
+  /**
+   * Generates a clean, professional B2B quotation PDF
+   */
+  generateQuotationPdf: async (data) => {
+    const baseDir = storageService.getBaseUploadDir();
+    const attachmentsDir = path.join(baseDir, "attachments");
+    if (!fs.existsSync(attachmentsDir)) {
+      fs.mkdirSync(attachmentsDir, { recursive: true });
+    }
+
+    const cleanRef = (data.quotationRef || "QTN").replace(/[^a-zA-Z0-9_-]/g, "");
+    const filename = `quotation-${cleanRef}-${Date.now()}.pdf`;
+    const filePath = path.join(attachmentsDir, filename);
+
+    const pdfBuffer = pdfService.generateQuotationBuffer(data);
     fs.writeFileSync(filePath, pdfBuffer);
+
+    if (cloudinaryService.isConfigured()) {
+      try {
+        const result = await cloudinaryService.upload(filePath, {
+          folder: "rifah/attachments",
+          resource_type: "auto",
+          public_id: filename.replace(/\.[^/.]+$/, ""),
+        });
+        if (result && result.secure_url) {
+          logger.info(`Quotation PDF uploaded to Cloudinary: ${result.secure_url}`);
+          return result.secure_url;
+        }
+      } catch (cloudErr) {
+        logger.error("Cloudinary upload failed for quotation PDF, falling back to local file:", cloudErr);
+      }
+    }
 
     return `/uploads/attachments/${filename}`;
   },
 };
+
