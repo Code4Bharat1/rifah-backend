@@ -25,12 +25,12 @@ export const paymentController = {
 
   getInvoice: asyncHandler(async (req, res) => {
     const { identifier } = req.params;
-    const invoice = await paymentService.getInvoice(identifier);
+    const invoice = await paymentService.getInvoice(identifier, req.user);
     return ApiResponse.success(res, invoice, "Invoice retrieved");
   }),
 
   listAllPayments: asyncHandler(async (req, res) => {
-    const { payments, meta } = await paymentService.listAllPayments(req.query);
+    const { payments, meta } = await paymentService.listAllPayments(req.query, req.user);
     return ApiResponse.success(res, payments, "All transactions retrieved", 200, meta);
   }),
 

@@ -26,13 +26,13 @@ router.get("/invoice/:identifier", authMiddleware, paymentController.getInvoice)
 router.get(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
   paymentController.listAllPayments
 );
 router.get(
   "/admin/all",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
   paymentController.listAllPayments
 );
 

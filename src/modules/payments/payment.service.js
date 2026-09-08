@@ -8,7 +8,7 @@ import { notificationService } from "../notifications/notification.service.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateReferenceId, generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
-import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
+import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { signAccessToken, signRefreshToken } from "../../infrastructure/auth/jwt.js";
 
@@ -482,9 +482,22 @@ export const paymentService = {
   /**
    * List all transactions (Admin Secretariat console)
    */
-  listAllPayments: async (queryParams = {}) => {
+  listAllPayments: async (queryParams = {}, user) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
+
+    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+      const usersInChapter = await User.find({ chapter: user.chapter }).select("_id");
+      const businessesInChapter = await Business.find({ chapter: user.chapter }).select("_id");
+      
+      const userIds = usersInChapter.map(u => u._id);
+      const businessIds = businessesInChapter.map(b => b._id);
+      
+      filter.$or = [
+        { payer: { $in: userIds } },
+        { business: { $in: businessIds } }
+      ];
+    }
 
     if (queryParams.status) filter.status = queryParams.status;
     if (queryParams.itemType) filter.itemType = queryParams.itemType;
@@ -508,16 +521,25 @@ export const paymentService = {
   /**
    * Get invoice details
    */
-  getInvoice: async (identifier) => {
+  getInvoice: async (identifier, user) => {
     const isObjectId = identifier.match(/^[0-9a-fA-F]{24}$/);
     const query = isObjectId ? { _id: identifier } : { invoiceNumber: identifier };
 
     const payment = await Payment.findOne(query)
-      .populate("payer", "name email phone")
+      .populate("payer", "name email phone chapter")
       .populate("business", "name slug chapter city");
 
     if (!payment) {
       throw new NotFoundError("Invoice not found");
+    }
+
+    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+      const payerChapter = payment.payer?.chapter;
+      const businessChapter = payment.business?.chapter;
+      
+      if (payerChapter !== user.chapter && businessChapter !== user.chapter) {
+        throw new ForbiddenError("Access denied: Payment does not belong to your chapter");
+      }
     }
     return payment;
   },
