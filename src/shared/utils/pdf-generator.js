@@ -9,6 +9,7 @@ export function generateInvoicePdfBuffer({
   businessName,
   planName,
   amount,
+  currency = "INR",
   transactionId,
   paymentMethod,
 }) {
@@ -19,7 +20,8 @@ export function generateInvoicePdfBuffer({
   });
 
   const rawAmountNum = Number(amount || 0);
-  const formattedAmount = `Rs. ${rawAmountNum.toLocaleString("en-IN")}`;
+  const isUsd = (currency || "").toUpperCase() === "USD";
+  const formattedAmount = isUsd ? `$ ${rawAmountNum.toLocaleString("en-US")} USD` : `Rs. ${rawAmountNum.toLocaleString("en-IN")}`;
   const cleanPlan = (planName || "Membership Subscription").replace(/subscription/i, "").trim().toUpperCase();
   const title = `${cleanPlan} Membership Subscription`;
 

@@ -9,7 +9,8 @@
     "start": "node src/server.js",
     "test": "node --test tests/**/*.test.js",
     "seed": "node scripts/seed.js",
-    "seed:admin": "node scripts/seed-admin.js"
+    "seed:admin": "node scripts/seed-admin.js",
+    "migrate:cloudinary": "node scripts/migrate-to-cloudinary.js"
   },
   "keywords": [
     "rifah",
@@ -26,6 +27,7 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.11.0",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

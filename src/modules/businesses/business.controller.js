@@ -37,7 +37,7 @@ export const businessController = {
     if (!req.file) {
       return ApiResponse.error(res, "No image file uploaded", 400);
     }
-    const fileUrl = storageService.getPublicUrl(req.file.filename, "logos");
+    const fileUrl = await storageService.uploadFile(req.file, "logos");
     const updated = await businessService.updateBusiness(id, { logo: fileUrl }, req.user);
     return ApiResponse.success(res, { logo: fileUrl, business: updated }, "Logo uploaded successfully");
   }),
@@ -47,7 +47,7 @@ export const businessController = {
     if (!req.file) {
       return ApiResponse.error(res, "No image file uploaded", 400);
     }
-    const fileUrl = storageService.getPublicUrl(req.file.filename, "covers");
+    const fileUrl = await storageService.uploadFile(req.file, "covers");
     const updated = await businessService.updateBusiness(id, { coverImage: fileUrl }, req.user);
     return ApiResponse.success(res, { coverImage: fileUrl, business: updated }, "Cover image uploaded successfully");
   }),
@@ -57,7 +57,7 @@ export const businessController = {
     if (!req.files || req.files.length === 0) {
       return ApiResponse.error(res, "No image files uploaded", 400);
     }
-    const newUrls = req.files.map((f) => storageService.getPublicUrl(f.filename, "gallery"));
+    const newUrls = await Promise.all(req.files.map((f) => storageService.uploadFile(f, "gallery")));
     const business = await businessService.getBusinessBySlugOrId(id);
     const updatedGallery = [...(business.gallery || []), ...newUrls];
     const updated = await businessService.updateBusiness(id, { gallery: updatedGallery }, req.user);
@@ -69,7 +69,7 @@ export const businessController = {
     if (!req.file) {
       return ApiResponse.error(res, "No certificate file uploaded", 400);
     }
-    const fileUrl = storageService.getPublicUrl(req.file.filename, "certificates");
+    const fileUrl = await storageService.uploadFile(req.file, "certificates");
     const business = await businessService.getBusinessBySlugOrId(id);
     const updatedCertificates = [...(business.certifications || []), fileUrl];
     const updated = await businessService.updateBusiness(id, { certifications: updatedCertificates }, req.user);

@@ -43,5 +43,12 @@ router.post(
   paymentController.processRefund
 );
 
+router.post(
+  "/:id/verify-by-admin",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  paymentController.verifyPaymentByAdmin
+);
+
 export { router as paymentRoutes };
 export default router;

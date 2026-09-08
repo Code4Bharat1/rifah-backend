@@ -102,3 +102,21 @@
 [2026-09-05T11:34:48.636Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/10AABCB2115P1Z4 with key gak_a52d...
 
 [2026-09-05T11:34:49.364Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"10AABCB2115P1Z4","data":{"gstin":"10AABCB2115P1Z4","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Cancelled","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":"2022-05-01","state_code":"10","state_jurisdiction":null,"address":"Eastern News Agency, New Market, Patna","city":"Patna","address_details":{"building_number":"Eastern News Agency","building_name"
+
+[2026-09-08T04:11:08.872Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/23AABCB2115P1ZX with key gak_a52d...
+
+[2026-09-08T04:11:09.122Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"23AABCB2115P1ZX","data":{"gstin":"23AABCB2115P1ZX","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"23","state_jurisdiction":null,"address":"Shop No.1, Patel Market, Near Sangam Talkies, Bhopal","city":"Bhopal","address_details":{"building_number":"Shop No.1","building_name":"Pate
+
+[2026-09-08T04:21:17.487Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27ABCDE1234F1Z5 with key gak_a52d...
+
+[2026-09-08T04:21:19.420Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-08T04:21:19.421Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-08T04:24:20.029Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/09AABCB2115P1ZN with key gak_a52d...
+
+[2026-09-08T04:24:20.300Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"09AABCB2115P1ZN","data":{"gstin":"09AABCB2115P1ZN","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"09","state_jurisdiction":null,"address":"Chamber No. A08, 19-C2N, Mehra Business Chambers, Vidhan Sabha Marg, Lucknow","city":"Lucknow","address_details":{"building_number":"Chamber
+
+[2026-09-08T04:28:31.759Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/24AABCB2115P1ZV with key gak_a52d...
+
+[2026-09-08T04:28:32.266Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"24AABCB2115P1ZV","data":{"gstin":"24AABCB2115P1ZV","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PVT LTD","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"24","state_jurisdiction":null,"address":"11th FLOOR, BLOCK -A, KESHAVBAUG, VASTRAPUR, Ahemadabad","city":"Ahemadabad","address_details":{"building_number":"11th FLOOR","building_name":"BLOC

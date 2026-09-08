@@ -18,7 +18,7 @@ export const verificationController = {
     if (!req.file) {
       return ApiResponse.error(res, "No document file uploaded", 400);
     }
-    const fileUrl = storageService.getPublicUrl(req.file.filename, "documents");
+    const fileUrl = await storageService.uploadFile(req.file, "documents");
     return ApiResponse.success(
       res,
       { fileUrl, originalName: req.file.originalname },

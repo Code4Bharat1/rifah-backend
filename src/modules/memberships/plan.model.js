@@ -20,6 +20,10 @@ const planSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
+    priceUsd: {
+      type: Number,
+      default: 0,
+    },
     summary: {
       type: String,
       trim: true,
