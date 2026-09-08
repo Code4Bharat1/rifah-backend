@@ -24,6 +24,12 @@ export const authController = {
     return ApiResponse.success(res, result, "Access token refreshed successfully");
   }),
 
+  switchRole: asyncHandler(async (req, res) => {
+    const { targetRole } = req.body;
+    const result = await authService.switchRole(req.user.id, targetRole);
+    return ApiResponse.success(res, result, "Role switched successfully");
+  }),
+
   getMe: asyncHandler(async (req, res) => {
     const user = await authService.getMe(req.user.id);
     return ApiResponse.success(res, user, "Session profile retrieved");

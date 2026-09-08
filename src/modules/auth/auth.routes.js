@@ -45,6 +45,7 @@ router.post(
 
 router.get("/me", authMiddleware, authController.getMe);
 router.post("/logout", authMiddleware, authController.logout);
+router.post("/switch-role", authMiddleware, authController.switchRole);
 router.patch("/change-password", authMiddleware, authController.changePassword);
 
 router.post(

@@ -110,8 +110,9 @@ export const chapterService = {
     // Check if an admin already exists for this chapter
     const oldAdmin = await User.findOne({ chapter: chapter.name, role: ROLES.CHAPTER_ADMIN });
     if (oldAdmin && oldAdmin.email !== email) {
-      // Downgrade old admin to customer
-      oldAdmin.role = ROLES.CUSTOMER;
+      // Downgrade old admin to their previous role, or customer
+      oldAdmin.role = oldAdmin.previousRole || ROLES.CUSTOMER;
+      oldAdmin.previousRole = "";
       await oldAdmin.save();
       // Send removal notice
       if (oldAdmin.email) {
@@ -124,20 +125,18 @@ export const chapterService = {
         throw new ConflictError("Cannot assign a Super Admin or Secretariat as a Chapter Admin");
       }
 
-      // Generate a fresh random password even if the user exists
-      const password = crypto.randomBytes(8).toString('hex');
-      const passwordHash = await hashPassword(password);
-
-      // Upgrade existing user to chapter admin and reset their password
+      // If user is already Chapter Admin of another chapter, or upgrading
+      if (existingUserWithEmail.role !== ROLES.CHAPTER_ADMIN) {
+        existingUserWithEmail.previousRole = existingUserWithEmail.role;
+      }
+      
       existingUserWithEmail.role = ROLES.CHAPTER_ADMIN;
       existingUserWithEmail.chapter = chapter.name;
       existingUserWithEmail.name = name; // Update name just in case
-      existingUserWithEmail.passwordHash = passwordHash;
-      existingUserWithEmail.forcePasswordChange = true;
       await existingUserWithEmail.save();
 
-      // Send the same invite email with the new password
-      await emailService.sendChapterAdminInvite(email, password, chapter.name, name);
+      // Send the upgrade email without resetting password
+      await emailService.sendChapterAdminUpgradeEmail(email, null, chapter.name, name);
       return existingUserWithEmail;
     }
 

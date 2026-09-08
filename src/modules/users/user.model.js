@@ -55,6 +55,10 @@ const userSchema = new mongoose.Schema(
       default: ROLES.CUSTOMER,
       index: true,
     },
+    previousRole: {
+      type: String,
+      default: "",
+    },
     status: {
       type: String,
       enum: Object.values(STATUSES.USER),

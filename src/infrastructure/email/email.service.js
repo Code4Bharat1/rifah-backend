@@ -94,6 +94,30 @@ export const emailService = {
     return emailService.sendEmail({ to: email, subject, html });
   },
 
+  /**
+   * Sends an upgrade email to an existing user becoming a Chapter Admin
+   */
+  sendChapterAdminUpgradeEmail: async (email, password, chapterName, adminName) => {
+    const subject = `Welcome to RIFAH: ${chapterName} Admin Access`;
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #0284c7;">Welcome to RIFAH Administration</h2>
+        <p>Dear ${adminName},</p>
+        <p>Congratulations! You have been appointed as the <strong>Chapter Admin</strong> for <strong>${chapterName}</strong>.</p>
+        <p>Your login credentials (email and password) remain exactly the same. The next time you log in, you will have the option to log in as Chapter Admin or switch to your existing profile directly from your dashboard.</p>
+        <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <p style="margin: 0 0 10px 0;"><strong>Portal:</strong> <a href="http://localhost:3000/login">http://localhost:3000/login</a></p>
+          <p style="margin: 0 0 10px 0;"><strong>Email:</strong> ${email}</p>
+        </div>
+        <p style="color: #64748b; font-size: 14px;">You can now manage your chapter's members, businesses, events, and announcements.</p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+        <p style="color: #94a3b8; font-size: 12px; text-align: center;">RIFAH Chamber of Commerce & Industries</p>
+      </div>
+    `;
+
+    return emailService.sendEmail({ to: email, subject, html });
+  },
+
   sendChapterAdminRemovalEmail: async (email, name, chapterName) => {
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
