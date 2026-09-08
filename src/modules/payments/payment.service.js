@@ -277,6 +277,7 @@ export const paymentService = {
           taxId: (data.taxId && data.taxId.trim()) || "",
           address: (data.billingAddress && data.billingAddress.trim()) || "",
           city: (data.city && data.city.trim()) || userDoc.city || "Mumbai",
+          state: (data.state && data.state.trim()) || userDoc.state || "Maharashtra",
           phone: userDoc.phone || "",
           email: data.billingEmail || userDoc.email || "",
           chapter: userDoc.chapter || "Mumbai Chapter",
