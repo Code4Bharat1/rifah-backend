@@ -231,17 +231,17 @@ export const reportService = {
     if (startDate && endDate) {
       query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
-    const payments = await Payment.find(query).populate("user", "firstName lastName email phone");
+    const payments = await Payment.find(query).populate("payer", "name email phone");
     const headers = ["Invoice Number", "Amount", "Status", "Method", "Plan", "User Name", "Email", "Phone", "Date"];
     const rows = payments.map(p => [
       p.invoiceNumber || '',
       p.amount,
       p.status,
       p.method || '',
-      p.planName || '',
-      p.user ? p.user.firstName + ' ' + p.user.lastName : 'Unknown',
-      p.user?.email || '',
-      p.user?.phone || '',
+      p.description || '',
+      p.payer ? p.payer.name : 'Unknown',
+      p.payer?.email || '',
+      p.payer?.phone || '',
       p.createdAt.toISOString()
     ]);
     return { headers, rows };
@@ -255,17 +255,16 @@ export const reportService = {
     if (startDate && endDate) {
       query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
-    const users = await User.find(query).populate("membership.plan");
-    const headers = ["First Name", "Last Name", "Email", "Phone", "Role", "Chapter", "Membership Plan", "Expiry Date", "Joined Date"];
+    const users = await User.find(query);
+    const headers = ["Name", "Email", "Phone", "Role", "Chapter", "Organization", "City", "Joined Date"];
     const rows = users.map(u => [
-      u.firstName || '',
-      u.lastName || '',
+      u.name || '',
       u.email || '',
       u.phone || '',
       u.role || '',
       u.chapter || '',
-      u.membership?.plan ? u.membership.plan.name : 'None',
-      u.membership?.expiryDate ? u.membership.expiryDate.toISOString() : '',
+      u.organization || '',
+      u.city || '',
       u.createdAt.toISOString()
     ]);
     return { headers, rows };

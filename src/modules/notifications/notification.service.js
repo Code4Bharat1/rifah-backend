@@ -31,8 +31,8 @@ export const notificationService = {
     if (chapter && chapter !== "all") query.chapter = chapter;
     
     if (targetRole && targetRole !== "all") {
-      if (targetRole === "business_owner") query.role = "Business Owner";
-      else if (targetRole === "customer") query.role = "Consumer";
+      if (targetRole === "business_owner") query.role = "business_owner";
+      else if (targetRole === "customer") query.role = "customer";
       else query.role = targetRole;
     }
 
