@@ -122,6 +122,10 @@ export const eventService = {
     // RBAC: Chapter Admin Scope Enforcement
     if (user && user.role === ROLES.CHAPTER_ADMIN) {
       data.chapter = user.chapter;
+      // Force Pending Approval if they try to publish
+      if (data.status === STATUSES.EVENT.UPCOMING) {
+        data.status = STATUSES.EVENT.PENDING_APPROVAL;
+      }
     }
 
     const event = await Event.create({
@@ -129,7 +133,7 @@ export const eventService = {
       slug,
     });
 
-    if (data.targetAudience && data.targetAudience.length > 0) {
+    if (data.targetAudience && data.targetAudience.length > 0 && event.status === STATUSES.EVENT.UPCOMING) {
       // Async broadcast so it doesn't block the request
       broadcastEventToAudience(event);
     }
@@ -209,6 +213,10 @@ export const eventService = {
         throw new ForbiddenError("You are not authorized to modify events from another chapter.");
       }
       delete updateData.chapter; // Prevent modifying chapter
+      // If chapter admin tries to publish or edit a published event, push it to Pending Approval
+      if (updateData.status === STATUSES.EVENT.UPCOMING) {
+        updateData.status = STATUSES.EVENT.PENDING_APPROVAL;
+      }
     }
 
     if (updateData.title && updateData.title !== existing.title) {
