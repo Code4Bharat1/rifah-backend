@@ -25,17 +25,44 @@ export const enquiryService = {
       { label: "Enquiry closed", at: "Pending", done: false },
     ];
 
+    const targetType = data.targetType || (data.targetBusiness ? "business" : (data.chapter && data.chapter !== "All Chapters" ? "chamber" : "all"));
+
+    let userBusiness = null;
+    if (user) {
+      userBusiness = await Business.findOne({ owner: user.id });
+    }
+
+    let requesterRole = "Guest Customer";
+    let requesterName = data.name || "Customer";
+    if (user) {
+      if (user.role === "business" || userBusiness) {
+        requesterRole = "Business Member";
+        requesterName = userBusiness?.name || user.name || "Business Member";
+      } else if (user.role === "customer") {
+        requesterRole = "Verified Customer";
+        requesterName = (user.name && !user.name.toLowerCase().includes("buyer account")) ? user.name : "Customer";
+      } else {
+        requesterRole = "Registered Customer";
+        requesterName = user.name || "Customer";
+      }
+    }
+
+    const resolvedChapter = targetType === "chamber" && data.chapter
+      ? data.chapter
+      : (targetType === "all" ? (data.chapter || "All Chapters") : (data.chapter || user?.chapter || "Mumbai Chapter"));
+
     const enquiry = await Enquiry.create({
       ...data,
       referenceId,
+      targetType,
       requester: user ? user.id : null,
-      requesterName: user ? (user.name && !user.name.toLowerCase().includes("buyer account") ? user.name : "Customer") : (data.name || "Customer"),
-      requesterRole: user ? (user.role === "customer" ? "Verified Customer" : "Registered Customer") : "Guest Customer",
+      requesterName,
+      requesterRole,
       timeline: initialTimeline,
-      chapter: user ? (user.chapter || "Mumbai Chapter") : "Mumbai Chapter",
+      chapter: resolvedChapter,
     });
 
-    if (data.targetBusiness) {
+    if (targetType === "business" && data.targetBusiness) {
       try {
         const targetBiz = await Business.findById(data.targetBusiness);
         if (targetBiz?.owner) {
@@ -71,37 +98,53 @@ export const enquiryService = {
               category: enquiry.category,
               quantity: enquiry.quantity,
               budget: enquiry.budget,
-              location: enquiry.city,
+              location: enquiry.location || enquiry.city,
               buyerName: enquiry.requesterName,
             });
           }
+
+          const { leadService } = await import("../leads/lead.service.js");
+          leadService.routeEnquiryToBusinesses(enquiry._id.toString(), [data.targetBusiness.toString()]).catch(err => {
+            console.error("Direct lead routing background task failed:", err);
+          });
         }
       } catch (err) {}
-    } else {
-      // Auto-routing if enabled
+    } else if (targetType === "chamber" && data.chapter) {
       try {
-        const { Settings } = await import("../settings/settings.model.js");
-        const settings = await Settings.findOne({ isSingleton: "global" });
-        if (settings && settings.autoRouteLeadsByCategory) {
-          const matchingBusinesses = await Business.find({
-            $or: [
-              { category: new RegExp(`^${data.category}$`, "i") },
-              { industry: new RegExp(`^${data.category}$`, "i") }
-            ],
-            status: { $in: ["Live", "Active"] } // Only route to active businesses
-          });
+        const query = {
+          chapter: data.chapter,
+          status: { $in: ["Live", "Active"] },
+          ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
+        };
+        const matchingBusinesses = await Business.find(query);
 
-          if (matchingBusinesses.length > 0) {
-            const businessIds = matchingBusinesses.map(b => b._id.toString());
-            const { leadService } = await import("../leads/lead.service.js");
-            // Perform routing in background without waiting
-            leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
-               console.error("Auto-routing background task failed:", err);
-            });
-          }
+        if (matchingBusinesses.length > 0) {
+          const businessIds = matchingBusinesses.map(b => b._id.toString());
+          const { leadService } = await import("../leads/lead.service.js");
+          leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
+            console.error("Chapter routing background task failed:", err);
+          });
         }
       } catch (err) {
-        console.error("Failed to check auto-routing:", err);
+        console.error("Failed to route by chapter:", err);
+      }
+    } else if (targetType === "all") {
+      try {
+        const query = {
+          status: { $in: ["Live", "Active"] },
+          ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
+        };
+        const matchingBusinesses = await Business.find(query);
+
+        if (matchingBusinesses.length > 0) {
+          const businessIds = matchingBusinesses.map(b => b._id.toString());
+          const { leadService } = await import("../leads/lead.service.js");
+          leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
+            console.error("Broadcast routing to all businesses background task failed:", err);
+          });
+        }
+      } catch (err) {
+        console.error("Failed to route to all businesses:", err);
       }
     }
 
@@ -178,7 +221,7 @@ export const enquiryService = {
   },
 
   /**
-   * List direct enquiries sent to current business
+   * List direct and chamber/pan-chamber enquiries accessible to current business
    */
   listBusinessEnquiries: async (userId, queryParams = {}) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
@@ -187,31 +230,92 @@ export const enquiryService = {
       return { enquiries: [], meta: buildPaginationMeta(0, page, limit) };
     }
 
-    const filter = { targetBusiness: userBusiness._id };
+    const { Lead } = await import("../leads/lead.model.js");
+
+    // Fetch existing leads for this business
+    const userLeads = await Lead.find({ business: userBusiness._id });
+    const userLeadMap = new Map();
+    userLeads.forEach((l) => {
+      if (l.enquiry) {
+        userLeadMap.set(l.enquiry.toString(), l);
+      }
+    });
+    const routedEnquiryIds = Array.from(userLeadMap.keys());
+
+    // Build filter matching:
+    // 1. Direct enquiries to this business
+    // 2. Routed leads to this business
+    // 3. Pan-chamber broadcasts ("all")
+    // 4. Chamber broadcasts matching this business's chapter
+    // STRICT RULE: Exclude user's own posted enquiries (which are in My Enquiries)
+    const filter = {
+      $and: [
+        { requester: { $ne: userId } },
+        {
+          $or: [
+            { targetBusiness: userBusiness._id },
+            { _id: { $in: routedEnquiryIds } },
+            { targetType: "all" },
+            { targetType: "chamber", chapter: userBusiness.chapter },
+            { targetType: { $exists: false }, targetBusiness: userBusiness._id },
+          ],
+        },
+      ],
+    };
 
     if (queryParams.status && queryParams.status !== "undefined" && queryParams.status !== "null" && queryParams.status.toLowerCase() !== "all") {
-      filter.status = new RegExp(`^${queryParams.status}$`, "i");
+      filter.$and.push({ status: new RegExp(`^${queryParams.status}$`, "i") });
     }
 
     if (queryParams.search) {
-      filter.$or = [
-        { title: { $regex: queryParams.search, $options: "i" } },
-        { referenceId: { $regex: queryParams.search, $options: "i" } },
-        { requesterName: { $regex: queryParams.search, $options: "i" } },
-      ];
+      filter.$and.push({
+        $or: [
+          { title: { $regex: queryParams.search, $options: "i" } },
+          { referenceId: { $regex: queryParams.search, $options: "i" } },
+          { requesterName: { $regex: queryParams.search, $options: "i" } },
+          { category: { $regex: queryParams.search, $options: "i" } },
+        ],
+      });
     }
 
     const [enquiries, total] = await Promise.all([
       Enquiry.find(filter)
         .populate("requester", "name email phone avatar")
-        .sort(sort)
+        .populate("targetBusiness", "name slug chapter")
+        .sort(sort || { createdAt: -1 })
         .skip(skip)
         .limit(limit),
       Enquiry.countDocuments(filter),
     ]);
 
+    // Ensure an associated Lead record exists for each visible enquiry,
+    // so the business owner can immediately Accept or Submit a Quotation!
+    const enrichedEnquiries = await Promise.all(
+      enquiries.map(async (enq) => {
+        const enqObj = enq.toObject ? enq.toObject() : { ...enq };
+        let lead = userLeadMap.get(enq._id.toString());
+        if (!lead) {
+          try {
+            lead = await Lead.create({
+              enquiry: enq._id,
+              business: userBusiness._id,
+              status: "New",
+            });
+            userLeadMap.set(enq._id.toString(), lead);
+          } catch (createErr) {
+            lead = await Lead.findOne({ enquiry: enq._id, business: userBusiness._id });
+          }
+        }
+        const hasValidQuotation = Boolean(lead?.quotation?.amount && Number(lead.quotation.amount) > 0);
+        enqObj.leadId = lead?._id ? lead._id.toString() : null;
+        enqObj.leadStatus = hasValidQuotation ? (lead?.status || "Responded") : (lead?.status === "Responded" ? "New" : (lead?.status || "New"));
+        enqObj.myQuotation = hasValidQuotation ? lead.quotation : null;
+        return enqObj;
+      })
+    );
+
     return {
-      enquiries,
+      enquiries: enrichedEnquiries,
       meta: buildPaginationMeta(total, page, limit),
     };
   },

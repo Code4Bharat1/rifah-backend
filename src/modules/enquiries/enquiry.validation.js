@@ -18,6 +18,15 @@ export const validateCreateEnquiry = (data = {}) => {
   if (!data.description || typeof data.description !== "string" || data.description.trim().length < 10) {
     errors.push({ field: "description", message: "Description must be at least 10 characters" });
   }
+  if (data.targetType && !["all", "chamber", "business"].includes(data.targetType)) {
+    errors.push({ field: "targetType", message: "targetType must be one of: all, chamber, business" });
+  }
+  if (data.targetType === "chamber" && (!data.chapter || typeof data.chapter !== "string" || !data.chapter.trim())) {
+    errors.push({ field: "chapter", message: "Chapter is required when targeting a specific chamber" });
+  }
+  if (data.targetType === "business" && (!data.targetBusiness || !/^[0-9a-fA-F]{24}$/.test(String(data.targetBusiness)))) {
+    errors.push({ field: "targetBusiness", message: "Valid target business ID is required when targeting a specific business" });
+  }
   return { valid: errors.length === 0, errors };
 };
 
