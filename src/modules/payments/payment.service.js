@@ -11,6 +11,7 @@ import { parsePagination, buildPaginationMeta } from "../../shared/utils/paginat
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { signAccessToken, signRefreshToken } from "../../infrastructure/auth/jwt.js";
+import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const paymentService = {
   /**
@@ -142,6 +143,9 @@ export const paymentService = {
       if (payload.city && !userDoc.city) {
         userDoc.city = payload.city.trim();
       }
+      if (payload.state && !userDoc.state) {
+        userDoc.state = payload.state.trim();
+      }
       await userDoc.save();
 
       // 2. If user doesn't have an existing Business profile, auto-create one
@@ -161,19 +165,25 @@ export const paymentService = {
         const formattedTier =
           validTiers.find((t) => t.toLowerCase() === (planId || "basic").toLowerCase()) || "Basic";
 
+        const bizCity = (payload.city && payload.city.trim()) || userDoc.city || "";
+        const bizState = (payload.state && payload.state.trim()) || userDoc.state || "";
+        const bizChapter = userDoc.chapter || "";
+        const bizIndustry = (payload.industry && payload.industry.trim()) || userDoc.sourcingInterest || "";
+
         businessDoc = await Business.create({
           name: rawBizName,
           slug,
           owner: userDoc._id,
           taxId: (payload.taxId && payload.taxId.trim()) || "",
           address: (payload.billingAddress && payload.billingAddress.trim()) || "",
-          city: (payload.city && payload.city.trim()) || userDoc.city || "Mumbai",
+          city: bizCity,
           pincode: (payload.postalCode && payload.postalCode.trim()) || "",
-          state: (payload.state && payload.state.trim()) || userDoc.state || "Maharashtra",
+          state: bizState,
           phone: userDoc.phone || "",
           email: payload.billingEmail || userDoc.email || "",
-          chapter: userDoc.chapter || "Mumbai Chapter",
-          industry: "General Commerce",
+          chapter: bizChapter,
+          industry: bizIndustry,
+          categories: bizIndustry ? [bizIndustry] : [],
           status: "Pending Verification",
           verificationStatus: "Pending",
           verification: "unverified",
@@ -338,18 +348,24 @@ export const paymentService = {
         const formattedTier =
           validTiers.find((t) => t.toLowerCase() === (data.planId || "basic").toLowerCase()) || "Basic";
 
+        const bizCity = (data.city && data.city.trim()) || userDoc.city || "";
+        const bizState = (data.state && data.state.trim()) || userDoc.state || "";
+        const bizChapter = userDoc.chapter || "";
+        const bizIndustry = (data.industry && data.industry.trim()) || userDoc.sourcingInterest || "";
+
         businessDoc = await Business.create({
           name: rawBizName,
           slug,
           owner: userDoc._id,
           taxId: (data.taxId && data.taxId.trim()) || "",
           address: (data.billingAddress && data.billingAddress.trim()) || "",
-          city: (data.city && data.city.trim()) || userDoc.city || "Mumbai",
-          state: (data.state && data.state.trim()) || userDoc.state || "Maharashtra",
+          city: bizCity,
+          state: bizState,
           phone: userDoc.phone || "",
           email: data.billingEmail || userDoc.email || "",
-          chapter: userDoc.chapter || "Mumbai Chapter",
-          industry: "General Commerce",
+          chapter: bizChapter,
+          industry: bizIndustry,
+          categories: bizIndustry ? [bizIndustry] : [],
           status: "Pending Verification",
           verificationStatus: "Pending",
           verification: "unverified",
@@ -490,9 +506,10 @@ export const paymentService = {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
 
-    if (user && user.role === ROLES.CHAPTER_ADMIN) {
-      const usersInChapter = await User.find({ chapter: user.chapter }).select("_id");
-      const businessesInChapter = await Business.find({ chapter: user.chapter }).select("_id");
+    if (user && user.role === ROLES.CHAPTER_ADMIN && user.chapter) {
+      const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
+      const usersInChapter = await User.find({ chapter: chapterRegex }).select("_id");
+      const businessesInChapter = await Business.find({ chapter: chapterRegex }).select("_id");
       
       const userIds = usersInChapter.map(u => u._id);
       const businessIds = businessesInChapter.map(b => b._id);
@@ -537,11 +554,15 @@ export const paymentService = {
       throw new NotFoundError("Invoice not found");
     }
 
-    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+    if (user && user.role === ROLES.CHAPTER_ADMIN && user.chapter) {
+      const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
       const payerChapter = payment.payer?.chapter;
       const businessChapter = payment.business?.chapter;
       
-      if (payerChapter !== user.chapter && businessChapter !== user.chapter) {
+      const isPayerInChapter = payerChapter && chapterRegex.test(payerChapter);
+      const isBusinessInChapter = businessChapter && chapterRegex.test(businessChapter);
+      
+      if (!isPayerInChapter && !isBusinessInChapter) {
         throw new ForbiddenError("Access denied: Payment does not belong to your chapter");
       }
     }

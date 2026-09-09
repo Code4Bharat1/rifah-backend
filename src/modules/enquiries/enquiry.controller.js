@@ -41,7 +41,7 @@ export const enquiryController = {
 
   updateEnquiryStatus: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updated = await enquiryService.updateEnquiryStatus(id, req.body);
+    const updated = await enquiryService.updateEnquiryStatus(id, req.body, req.user);
     return ApiResponse.success(res, updated, "Enquiry status updated successfully");
   }),
 

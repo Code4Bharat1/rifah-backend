@@ -4,6 +4,7 @@ import { comparePassword } from "../../infrastructure/auth/password.js";
 import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { ROLES } from "../../shared/constants/roles.js";
+import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const userService = {
   /**
@@ -78,9 +79,10 @@ export const userService = {
     const filter = {};
 
     // RBAC: Chapter Admin Scope Enforcement
-    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      filter.chapter = requester.chapter;
-    } else if (queryParams.chapter) {
+    const chapterScope = await getChapterFilter(requester, 'direct');
+    Object.assign(filter, chapterScope);
+
+    if (queryParams.chapter && !chapterScope.chapter) {
       filter.chapter = queryParams.chapter;
     }
 
@@ -112,9 +114,10 @@ export const userService = {
    * Update user status or role (admin)
    */
   updateUserStatus: async (userId, { status, role }, requester) => {
-    const userToUpdate = await User.findById(userId);
+    const chapterScope = await getChapterFilter(requester, 'direct');
+    const userToUpdate = await User.findOne({ _id: userId, ...chapterScope });
     if (!userToUpdate) {
-      throw new NotFoundError("User not found");
+      throw new NotFoundError("User not found or access denied");
     }
 
     // Role-based constraints for Chapter Admin

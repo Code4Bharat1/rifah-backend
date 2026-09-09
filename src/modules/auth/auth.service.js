@@ -36,9 +36,9 @@ export const authService = {
       email: email.toLowerCase().trim(),
       passwordHash,
       phone: phone || "",
-      chapter: chapter || "Mumbai Chapter",
+      chapter: chapter || "",
       organization: organization || "",
-      city: city || "Mumbai",
+      city: city || "",
       sourcingInterest: sourcingInterest ? sourcingInterest.trim() : "",
       sourcingInterests: sourcingInterest ? [sourcingInterest.trim()] : [],
       role: ROLES.CUSTOMER,
@@ -192,7 +192,7 @@ export const authService = {
       user.name = name.trim();
       user.passwordHash = passwordHash;
       user.phone = phone || "";
-      user.chapter = chapter || "Mumbai Chapter";
+      user.chapter = chapter || "";
       user.taxId = cleanTaxId;
       await user.save();
     } else {
@@ -202,7 +202,7 @@ export const authService = {
         email: cleanEmail,
         passwordHash,
         phone: phone || "",
-        chapter: chapter || "Mumbai Chapter",
+        chapter: chapter || "",
         taxId: cleanTaxId,
         role: ROLES.BUSINESS_OWNER,
         isProfileComplete: true,
@@ -227,12 +227,12 @@ export const authService = {
       owner: user._id,
       industry: industry || "General",
       businessType: businessType || "Proprietorship",
-      city: city || "Mumbai",
-      state: state || "Maharashtra",
+      city: city || "",
+      state: state || "",
       address: address || "",
       pincode: pincode || "",
       founded: founded || "",
-      chapter: chapter || "Mumbai Chapter",
+      chapter: chapter || "",
       membership: cleanMembership,
       about: about || "",
       taxId: cleanTaxId,

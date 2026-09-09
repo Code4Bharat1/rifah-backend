@@ -5,6 +5,7 @@ import { emailService } from "../../infrastructure/email/email.service.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { ROLES } from "../../shared/constants/roles.js";
+import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const verificationService = {
   /**
@@ -51,8 +52,9 @@ export const verificationService = {
 
     if (!verification) return null;
 
-    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      if (verification.business && verification.business.chapter !== requester.chapter) {
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN && requester.chapter) {
+      const chapterRegex = new RegExp(`^${requester.chapter.trim()}$`, "i");
+      if (verification.business && verification.business.chapter && !chapterRegex.test(verification.business.chapter)) {
         throw new ForbiddenError("You are not authorized to view verification details for this chapter");
       }
     }
@@ -68,13 +70,12 @@ export const verificationService = {
     const filter = {};
 
     // RBAC: Chapter Admin Scope Enforcement
-    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      const chapterBusinesses = await Business.find({ chapter: requester.chapter }).select('_id');
-      const businessIds = chapterBusinesses.map(b => b._id);
-      filter.business = { $in: businessIds };
-    } else if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
-      // Super Admin explicit chapter filter
-      const chapterBusinesses = await Business.find({ chapter: queryParams.chapter }).select('_id');
+    const chapterScope = await getChapterFilter(requester, 'business_ref');
+    Object.assign(filter, chapterScope);
+
+    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all" && !chapterScope.business) {
+      const chapterRegex = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
+      const chapterBusinesses = await Business.find({ chapter: chapterRegex }).select('_id');
       const businessIds = chapterBusinesses.map(b => b._id);
       filter.business = { $in: businessIds };
     }
@@ -112,8 +113,9 @@ export const verificationService = {
     const business = await Business.findById(verification.business);
     
     // RBAC: Chapter Admin Scope Enforcement
-    if (reviewer && reviewer.role === ROLES.CHAPTER_ADMIN) {
-      if (business && business.chapter !== reviewer.chapter) {
+    if (reviewer && reviewer.role === ROLES.CHAPTER_ADMIN && reviewer.chapter) {
+      const chapterRegex = new RegExp(`^${reviewer.chapter.trim()}$`, "i");
+      if (business && business.chapter && !chapterRegex.test(business.chapter)) {
         throw new ForbiddenError("You are not authorized to review verifications for this chapter");
       }
     }
@@ -182,8 +184,9 @@ export const verificationService = {
     }
 
     // Role-based Access Control
-    if (requester.role === ROLES.CHAPTER_ADMIN) {
-      if (!verification.business || verification.business.chapter !== requester.chapter) {
+    if (requester.role === ROLES.CHAPTER_ADMIN && requester.chapter) {
+      const chapterRegex = new RegExp(`^${requester.chapter.trim()}$`, "i");
+      if (!verification.business || !verification.business.chapter || !chapterRegex.test(verification.business.chapter)) {
         throw new ForbiddenError("You are not authorized to view documents for this chapter");
       }
     } else if (requester.role !== ROLES.SUPER_ADMIN && requester.role !== ROLES.SECRETARIAT) {
