@@ -46,6 +46,10 @@ export const reviewService = {
       return existing;
     }
 
+    const { Settings } = await import("../settings/settings.model.js");
+    const settings = await Settings.findOne({ isSingleton: "global" });
+    const isModerate = settings ? settings.moderateReviewsBeforePublishing : true;
+
     const review = await Review.create({
       business: data.businessId,
       author: user.id,
@@ -54,7 +58,7 @@ export const reviewService = {
       rating: data.rating,
       title: data.title || "",
       body: data.body.trim(),
-      status: "approved",
+      status: isModerate ? "pending" : "published",
     });
 
     await reviewService.recalculateRating(data.businessId);
