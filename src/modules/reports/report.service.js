@@ -150,12 +150,12 @@ export const reportService = {
       totalChapters,
       paymentsAgg,
     ] = await Promise.all([
-      Business.countDocuments({ status: "Active" }),
+      Business.countDocuments(),
       Business.countDocuments({ verification: "verified" }),
       Verification.countDocuments({ status: "pending" }),
-      User.countDocuments({ status: "Active" }),
+      User.countDocuments(),
       Enquiry.countDocuments(),
-      Chapter.countDocuments({ status: "Active" }),
+      Chapter.countDocuments(),
       Payment.aggregate([
         { $match: { status: "Paid" } },
         { $group: { _id: null, totalRevenue: { $sum: "$amount" }, count: { $sum: 1 } } },
