@@ -25,7 +25,15 @@ export const enquiryService = {
       { label: "Enquiry closed", at: "Pending", done: false },
     ];
 
-    const targetType = data.targetType || (data.targetBusiness ? "business" : (data.chapter && data.chapter !== "All Chapters" ? "chamber" : "all"));
+    const isCustomerOrGuest = !user || user.role === "customer" || user.role === "user";
+    let targetType = data.targetType || (data.targetBusiness ? "business" : (data.chapter && data.chapter !== "All Chapters" ? "chamber" : "all"));
+    let targetBusiness = data.targetBusiness;
+
+    if (isCustomerOrGuest) {
+      // Customer and guest sourcing requirements are always submitted for Chamber Admin review and routing
+      targetType = data.targetType === "chamber" ? "chamber" : "all";
+      targetBusiness = undefined;
+    }
 
     let userBusiness = null;
     if (user) {
@@ -55,6 +63,7 @@ export const enquiryService = {
       ...data,
       referenceId,
       targetType,
+      targetBusiness,
       requester: user ? user.id : null,
       requesterName,
       requesterRole,
@@ -62,9 +71,9 @@ export const enquiryService = {
       chapter: resolvedChapter,
     });
 
-    if (targetType === "business" && data.targetBusiness) {
+    if (targetType === "business" && targetBusiness) {
       try {
-        const targetBiz = await Business.findById(data.targetBusiness);
+        const targetBiz = await Business.findById(targetBusiness);
         if (targetBiz?.owner) {
           await notificationService.createNotification({
             recipientId: targetBiz.owner,

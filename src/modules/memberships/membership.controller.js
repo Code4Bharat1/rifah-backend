@@ -53,16 +53,22 @@ export const membershipController = {
         const slugConflict = await Business.findOne({ slug });
         if (slugConflict) slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+        const bizCity = userDoc.city || "";
+        const bizState = userDoc.state || "";
+        const bizChapter = userDoc.chapter || "";
+        const bizIndustry = userDoc.sourcingInterest || "";
+
         business = await Business.create({
           name: rawName,
           slug,
           owner: userDoc._id,
-          city: userDoc.city || "Mumbai",
-          state: userDoc.state || "Maharashtra",
+          city: bizCity,
+          state: bizState,
           phone: userDoc.phone || "",
           email: userDoc.email || "",
-          chapter: userDoc.chapter || "Mumbai Chapter",
-          industry: "General Commerce",
+          chapter: bizChapter,
+          industry: bizIndustry,
+          categories: bizIndustry ? [bizIndustry] : [],
           status: "Pending Verification",
           verificationStatus: "Pending",
           verification: "unverified",

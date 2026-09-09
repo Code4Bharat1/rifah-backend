@@ -68,7 +68,7 @@ const userSchema = new mongoose.Schema(
     chapter: {
       type: String,
       trim: true,
-      default: "Mumbai Chapter",
+      default: "",
     },
     organization: {
       type: String,
@@ -78,7 +78,7 @@ const userSchema = new mongoose.Schema(
     city: {
       type: String,
       trim: true,
-      default: "Mumbai",
+      default: "",
     },
     sourcingInterest: {
       type: String,

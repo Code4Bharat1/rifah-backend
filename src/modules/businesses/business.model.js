@@ -29,8 +29,8 @@ const businessSchema = new mongoose.Schema(
     },
     industry: {
       type: String,
-      required: [true, "Industry is required"],
       trim: true,
+      default: "",
       index: true,
     },
     categories: [
@@ -46,14 +46,14 @@ const businessSchema = new mongoose.Schema(
     },
     city: {
       type: String,
-      required: [true, "City is required"],
       trim: true,
+      default: "",
       index: true,
     },
     state: {
       type: String,
-      required: [true, "State is required"],
       trim: true,
+      default: "",
     },
     address: {
       type: String,
@@ -66,8 +66,8 @@ const businessSchema = new mongoose.Schema(
     },
     chapter: {
       type: String,
-      required: true,
-      default: "Mumbai Chapter",
+      trim: true,
+      default: "",
       index: true,
     },
     region: {

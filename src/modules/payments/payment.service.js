@@ -142,6 +142,9 @@ export const paymentService = {
       if (payload.city && !userDoc.city) {
         userDoc.city = payload.city.trim();
       }
+      if (payload.state && !userDoc.state) {
+        userDoc.state = payload.state.trim();
+      }
       await userDoc.save();
 
       // 2. If user doesn't have an existing Business profile, auto-create one
@@ -161,19 +164,25 @@ export const paymentService = {
         const formattedTier =
           validTiers.find((t) => t.toLowerCase() === (planId || "basic").toLowerCase()) || "Basic";
 
+        const bizCity = (payload.city && payload.city.trim()) || userDoc.city || "";
+        const bizState = (payload.state && payload.state.trim()) || userDoc.state || "";
+        const bizChapter = userDoc.chapter || "";
+        const bizIndustry = (payload.industry && payload.industry.trim()) || userDoc.sourcingInterest || "";
+
         businessDoc = await Business.create({
           name: rawBizName,
           slug,
           owner: userDoc._id,
           taxId: (payload.taxId && payload.taxId.trim()) || "",
           address: (payload.billingAddress && payload.billingAddress.trim()) || "",
-          city: (payload.city && payload.city.trim()) || userDoc.city || "Mumbai",
+          city: bizCity,
           pincode: (payload.postalCode && payload.postalCode.trim()) || "",
-          state: (payload.state && payload.state.trim()) || userDoc.state || "Maharashtra",
+          state: bizState,
           phone: userDoc.phone || "",
           email: payload.billingEmail || userDoc.email || "",
-          chapter: userDoc.chapter || "Mumbai Chapter",
-          industry: "General Commerce",
+          chapter: bizChapter,
+          industry: bizIndustry,
+          categories: bizIndustry ? [bizIndustry] : [],
           status: "Pending Verification",
           verificationStatus: "Pending",
           verification: "unverified",
@@ -338,18 +347,24 @@ export const paymentService = {
         const formattedTier =
           validTiers.find((t) => t.toLowerCase() === (data.planId || "basic").toLowerCase()) || "Basic";
 
+        const bizCity = (data.city && data.city.trim()) || userDoc.city || "";
+        const bizState = (data.state && data.state.trim()) || userDoc.state || "";
+        const bizChapter = userDoc.chapter || "";
+        const bizIndustry = (data.industry && data.industry.trim()) || userDoc.sourcingInterest || "";
+
         businessDoc = await Business.create({
           name: rawBizName,
           slug,
           owner: userDoc._id,
           taxId: (data.taxId && data.taxId.trim()) || "",
           address: (data.billingAddress && data.billingAddress.trim()) || "",
-          city: (data.city && data.city.trim()) || userDoc.city || "Mumbai",
-          state: (data.state && data.state.trim()) || userDoc.state || "Maharashtra",
+          city: bizCity,
+          state: bizState,
           phone: userDoc.phone || "",
           email: data.billingEmail || userDoc.email || "",
-          chapter: userDoc.chapter || "Mumbai Chapter",
-          industry: "General Commerce",
+          chapter: bizChapter,
+          industry: bizIndustry,
+          categories: bizIndustry ? [bizIndustry] : [],
           status: "Pending Verification",
           verificationStatus: "Pending",
           verification: "unverified",
