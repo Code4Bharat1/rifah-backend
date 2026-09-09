@@ -49,7 +49,9 @@ export const leadController = {
 
   exportCsv: asyncHandler(async (req, res) => {
     const { Lead } = await import("./lead.model.js");
-    const leads = await Lead.find().populate("business", "name city chapter").populate("enquiry", "category requirement source status");
+    const { getChapterFilter } = await import("../../shared/utils/chapter-scope.js");
+    const filter = await getChapterFilter(req.user, "business_ref");
+    const leads = await Lead.find(filter).populate("business", "name city chapter").populate("enquiry", "category requirement source status");
     
     const headers = ["Business Name", "Chapter", "City", "Enquiry Category", "Enquiry Source", "Lead Status", "Date"];
     const rows = leads.map(lead => [

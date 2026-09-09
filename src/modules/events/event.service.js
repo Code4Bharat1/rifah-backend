@@ -7,6 +7,7 @@ import { parsePagination, buildPaginationMeta } from "../../shared/utils/paginat
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { STATUSES } from "../../shared/constants/statuses.js";
+import { getChapterFilter, enforceBodyChapterScope, preventChapterModification } from "../../shared/utils/chapter-scope.js";
 
 const broadcastEventToAudience = async (event) => {
   if (!event.targetAudience || event.targetAudience.length === 0 || event.status !== STATUSES.EVENT.UPCOMING) {
@@ -59,9 +60,10 @@ export const eventService = {
     const filter = {};
 
     // RBAC: Chapter Admin Scope Enforcement
-    if (user && user.role === ROLES.CHAPTER_ADMIN) {
-      filter.chapter = user.chapter;
-    } else if (queryParams.chapter) {
+    const chapterScope = await getChapterFilter(user, 'direct');
+    Object.assign(filter, chapterScope);
+
+    if (queryParams.chapter && !chapterScope.chapter) {
       filter.chapter = queryParams.chapter;
     }
 
@@ -96,14 +98,10 @@ export const eventService = {
     const isObjectId = identifier.match(/^[0-9a-fA-F]{24}$/);
     const query = isObjectId ? { _id: identifier } : { slug: identifier };
 
-    const event = await Event.findOne(query);
+    const chapterScope = await getChapterFilter(user, 'direct');
+    const event = await Event.findOne({ ...query, ...chapterScope });
     if (!event) {
-      throw new NotFoundError("Event not found");
-    }
-    
-    // RBAC: Chapter Admin Scope Enforcement
-    if (user && user.role === ROLES.CHAPTER_ADMIN && event.chapter !== user.chapter) {
-      throw new ForbiddenError("You are not authorized to view events from another chapter.");
+      throw new NotFoundError("Event not found or access denied");
     }
     
     return event;
@@ -202,16 +200,14 @@ export const eventService = {
    * Update event details
    */
   updateEvent: async (id, updateData, user) => {
-    const existing = await Event.findById(id);
+    const chapterScope = await getChapterFilter(user, 'direct');
+    const existing = await Event.findOne({ _id: id, ...chapterScope });
     if (!existing) {
-      throw new NotFoundError("Event not found");
+      throw new NotFoundError("Event not found or access denied");
     }
 
     // RBAC: Chapter Admin Scope Enforcement
     if (user && user.role === ROLES.CHAPTER_ADMIN) {
-      if (existing.chapter !== user.chapter) {
-        throw new ForbiddenError("You are not authorized to modify events from another chapter.");
-      }
       delete updateData.chapter; // Prevent modifying chapter
       // If chapter admin tries to publish or edit a published event, push it to Pending Approval
       if (updateData.status === STATUSES.EVENT.UPCOMING) {
@@ -236,14 +232,10 @@ export const eventService = {
    * Delete event
    */
   deleteEvent: async (id, user) => {
-    const existing = await Event.findById(id);
+    const chapterScope = await getChapterFilter(user, 'direct');
+    const existing = await Event.findOne({ _id: id, ...chapterScope });
     if (!existing) {
-      throw new NotFoundError("Event not found");
-    }
-
-    // RBAC: Chapter Admin Scope Enforcement
-    if (user && user.role === ROLES.CHAPTER_ADMIN && existing.chapter !== user.chapter) {
-      throw new ForbiddenError("You are not authorized to delete events from another chapter.");
+      throw new NotFoundError("Event not found or access denied");
     }
 
     const deleted = await Event.findByIdAndDelete(id);

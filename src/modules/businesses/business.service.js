@@ -4,6 +4,7 @@ import { parsePagination, buildPaginationMeta } from "../../shared/utils/paginat
 import { NotFoundError, ForbiddenError, ConflictError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
+import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const businessService = {
   /**
@@ -19,14 +20,16 @@ export const businessService = {
     }
 
     // RBAC: Chapter Admin Scope Enforcement
-    if (user && user.role === ROLES.CHAPTER_ADMIN) {
-      filter.chapter = user.chapter;
-    } else if (
+    const chapterScope = await getChapterFilter(user, 'direct');
+    Object.assign(filter, chapterScope);
+
+    if (
       queryParams.chapter &&
       queryParams.chapter !== "undefined" &&
       queryParams.chapter !== "null" &&
       queryParams.chapter.toLowerCase() !== "all" &&
-      queryParams.chapter !== "All chapters"
+      queryParams.chapter !== "All chapters" &&
+      !chapterScope.chapter
     ) {
       filter.chapter = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
     }
@@ -216,13 +219,14 @@ export const businessService = {
 
     const isOwner = String(business.owner) === String(user.id);
     const isAdmin = ["super_admin", "secretariat"].includes(user.role);
+    const isChapterAdmin = user.role === "chapter_admin";
 
-    if (!isOwner && !isAdmin) {
+    if (!isOwner && !isAdmin && !(isChapterAdmin && business.chapter === user.chapter)) {
       throw new ForbiddenError("You are not authorized to update this business profile");
     }
 
     let sanitizedData = { ...updateData };
-    if (!isAdmin) {
+    if (!isAdmin && !isChapterAdmin) {
       const ALLOWED_OWNER_FIELDS = [
         "name", "tagline", "about", "industry", "categories", "businessType",
         "city", "state", "address", "pincode", "chapter", "employees",
@@ -262,7 +266,13 @@ export const businessService = {
   /**
    * Admin: Update business verification/membership status
    */
-  updateStatus: async (id, { verification, membership, status, featured }) => {
+  updateStatus: async (id, { verification, membership, status, featured }, user) => {
+    const chapterScope = await getChapterFilter(user, 'direct');
+    const business = await Business.findOne({ _id: id, ...chapterScope });
+    if (!business) {
+      throw new NotFoundError("Business not found or access denied");
+    }
+
     const updates = {};
     if (verification) updates.verification = verification;
     if (membership) updates.membership = membership;
@@ -270,9 +280,6 @@ export const businessService = {
     if (featured !== undefined) updates.featured = featured;
 
     const updated = await Business.findByIdAndUpdate(id, updates, { new: true });
-    if (!updated) {
-      throw new NotFoundError("Business not found");
-    }
     return updated;
   },
 };

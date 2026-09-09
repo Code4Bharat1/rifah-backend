@@ -1,35 +1,43 @@
 import { Announcement } from "./announcement.model.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { NotFoundError, ValidationError } from "../../shared/errors/errors.js";
+import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const announcementService = {
   createAnnouncement: async (data) => {
     return Announcement.create(data);
   },
 
-  listAnnouncements: async (chapter) => {
-    const filter = chapter ? { chapter } : {};
+  listAnnouncements: async (queryParams, user) => {
+    const filter = {};
+    const chapterScope = await getChapterFilter(user, 'direct');
+    Object.assign(filter, chapterScope);
+
+    if (queryParams && queryParams.chapter && !chapterScope.chapter) {
+      filter.chapter = queryParams.chapter;
+    }
+    
     return Announcement.find(filter).sort({ createdAt: -1 }).populate("author", "name email");
   },
 
-  getAnnouncement: async (id, chapter) => {
-    const filter = { _id: id };
-    if (chapter) filter.chapter = chapter;
+  getAnnouncement: async (id, user) => {
+    const chapterScope = await getChapterFilter(user, 'direct');
+    const filter = { _id: id, ...chapterScope };
     
     const announcement = await Announcement.findOne(filter).populate("author", "name email");
     if (!announcement) {
-      throw new NotFoundError("Announcement not found");
+      throw new NotFoundError("Announcement not found or access denied");
     }
     return announcement;
   },
 
-  updateAnnouncement: async (id, chapter, updateData) => {
-    const filter = { _id: id };
-    if (chapter) filter.chapter = chapter;
+  updateAnnouncement: async (id, updateData, user) => {
+    const chapterScope = await getChapterFilter(user, 'direct');
+    const filter = { _id: id, ...chapterScope };
 
     const announcement = await Announcement.findOne(filter);
     if (!announcement) {
-      throw new NotFoundError("Announcement not found");
+      throw new NotFoundError("Announcement not found or access denied");
     }
 
     if (announcement.status === "Published" && updateData.status === "Draft") {
@@ -59,13 +67,13 @@ export const announcementService = {
     return announcement;
   },
 
-  deleteAnnouncement: async (id, chapter) => {
-    const filter = { _id: id };
-    if (chapter) filter.chapter = chapter;
+  deleteAnnouncement: async (id, user) => {
+    const chapterScope = await getChapterFilter(user, 'direct');
+    const filter = { _id: id, ...chapterScope };
 
     const announcement = await Announcement.findOne(filter);
     if (!announcement) {
-      throw new NotFoundError("Announcement not found");
+      throw new NotFoundError("Announcement not found or access denied");
     }
 
     if (announcement.broadcastId) {
