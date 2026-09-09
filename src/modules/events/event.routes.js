@@ -35,6 +35,14 @@ router.post(
   eventController.createEvent
 );
 
+router.get(
+  "/:id/registrations",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.getEventRegistrations
+);
+
 router.patch(
   "/:id",
   authMiddleware,
