@@ -120,3 +120,69 @@
 [2026-09-08T04:28:31.759Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/24AABCB2115P1ZV with key gak_a52d...
 
 [2026-09-08T04:28:32.266Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"24AABCB2115P1ZV","data":{"gstin":"24AABCB2115P1ZV","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PVT LTD","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"24","state_jurisdiction":null,"address":"11th FLOOR, BLOCK -A, KESHAVBAUG, VASTRAPUR, Ahemadabad","city":"Ahemadabad","address_details":{"building_number":"11th FLOOR","building_name":"BLOC
+
+[2026-09-09T07:41:46.361Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/07ABCDE1234F1Z5 with key gak_a52d...
+
+[2026-09-09T07:43:33.507Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/29ABCDE1234F1Z5 with key gak_a52d...
+
+[2026-09-09T07:43:34.090Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:43:34.092Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:44:22.749Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/07AAAAA1111A1Z1 with key gak_a52d...
+
+[2026-09-09T07:44:22.883Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:44:22.884Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:44:23.782Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/07AAAAA1111A1Z1 with key gak_a52d...
+
+[2026-09-09T07:44:23.886Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:44:23.890Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:44:24.605Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/07AAAAA1111A1Z1 with key gak_a52d...
+
+[2026-09-09T07:44:24.733Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:44:24.735Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:47:25.534Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AAAAA1111A1Z5 with key gak_a52d...
+
+[2026-09-09T07:47:25.915Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:47:25.922Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:48:37.032Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AAAAA1111A1Z5 with key gak_a52d...
+
+[2026-09-09T07:48:37.523Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:48:37.525Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:48:44.791Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AAAAA1111A1Z5 with key gak_a52d...
+
+[2026-09-09T07:48:44.933Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:48:44.934Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:49:16.363Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/29ABCDE1234F1Z5 with key gak_a52d...
+
+[2026-09-09T07:49:16.694Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:49:16.697Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:49:17.606Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/29ABCDE1234F1Z5 with key gak_a52d...
+
+[2026-09-09T07:49:17.842Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:49:17.844Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:49:20.327Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/29ABCDE1234F1Z5 with key gak_a52d...
+
+[2026-09-09T07:49:20.531Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-09T07:49:20.532Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-09T07:51:01.666Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AAACR5055K1Z7 with key gak_a52d...
+
+[2026-09-09T07:51:02.106Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AAACR5055K1Z7","data":{"gstin":"27AAACR5055K1Z7","legal_name":"RELIANCE INDUSTRIES LIMITED","trade_name":"RELIANCE INDUSTRIES LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"5, 5, TTC Industrial Area, Reliance Corporate Park, Thane Belapur Road, Ghansoli, Navi Mumbai","city":"Ghansoli, Navi Mumbai","address_details":{"buildi

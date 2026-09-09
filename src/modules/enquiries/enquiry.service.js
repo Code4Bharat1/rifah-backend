@@ -26,7 +26,15 @@ export const enquiryService = {
       { label: "Enquiry closed", at: "Pending", done: false },
     ];
 
-    const targetType = data.targetType || (data.targetBusiness ? "business" : (data.chapter && data.chapter !== "All Chapters" ? "chamber" : "all"));
+    const isCustomerOrGuest = !user || user.role === "customer" || user.role === "user";
+    let targetType = data.targetType || (data.targetBusiness ? "business" : (data.chapter && data.chapter !== "All Chapters" ? "chamber" : "all"));
+    let targetBusiness = data.targetBusiness;
+
+    if (isCustomerOrGuest) {
+      // Customer and guest sourcing requirements are always submitted for Chamber Admin review and routing
+      targetType = data.targetType === "chamber" ? "chamber" : "all";
+      targetBusiness = undefined;
+    }
 
     let userBusiness = null;
     if (user) {
@@ -56,6 +64,7 @@ export const enquiryService = {
       ...data,
       referenceId,
       targetType,
+      targetBusiness,
       requester: user ? user.id : null,
       requesterName,
       requesterRole,
@@ -63,9 +72,9 @@ export const enquiryService = {
       chapter: resolvedChapter,
     });
 
-    if (targetType === "business" && data.targetBusiness) {
+    if (targetType === "business" && targetBusiness) {
       try {
-        const targetBiz = await Business.findById(data.targetBusiness);
+        const targetBiz = await Business.findById(targetBusiness);
         if (targetBiz?.owner) {
           await notificationService.createNotification({
             recipientId: targetBiz.owner,
@@ -110,42 +119,42 @@ export const enquiryService = {
           });
         }
       } catch (err) {}
-    } else if (targetType === "chamber" && data.chapter) {
+    } else if (targetType === "chamber" || targetType === "all") {
       try {
-        const query = {
-          chapter: data.chapter,
-          status: { $in: ["Live", "Active"] },
-          ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
-        };
-        const matchingBusinesses = await Business.find(query);
+        const { Settings } = await import("../settings/settings.model.js");
+        const settings = await Settings.findOne({ isSingleton: "global" });
+        const autoRoute = settings ? settings.autoRouteLeadsByCategory : true;
 
-        if (matchingBusinesses.length > 0) {
-          const businessIds = matchingBusinesses.map(b => b._id.toString());
-          const { leadService } = await import("../leads/lead.service.js");
-          leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
-            console.error("Chapter routing background task failed:", err);
-          });
+        if (autoRoute && data.category) {
+          const query = {
+            status: { $in: ["Live", "Active"] },
+            categories: data.category,
+            ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
+          };
+
+          if (targetType === "chamber" && data.chapter && data.chapter !== "All Chapters") {
+            query.chapter = data.chapter;
+          }
+
+          const matchingBusinesses = await Business.find(query);
+
+          if (matchingBusinesses.length > 0) {
+            const businessIds = matchingBusinesses.map(b => b._id.toString());
+            const { leadService } = await import("../leads/lead.service.js");
+            leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
+              console.error("Auto routing background task failed:", err);
+            });
+            
+            enquiry.timeline = enquiry.timeline.map(t => 
+              t.label === "Routing to matching businesses" 
+                ? { label: `Automatically routed to ${matchingBusinesses.length} matching businesses`, at: "Just now", done: true } 
+                : t
+            );
+            await enquiry.save();
+          }
         }
       } catch (err) {
-        console.error("Failed to route by chapter:", err);
-      }
-    } else if (targetType === "all") {
-      try {
-        const query = {
-          status: { $in: ["Live", "Active"] },
-          ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
-        };
-        const matchingBusinesses = await Business.find(query);
-
-        if (matchingBusinesses.length > 0) {
-          const businessIds = matchingBusinesses.map(b => b._id.toString());
-          const { leadService } = await import("../leads/lead.service.js");
-          leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
-            console.error("Broadcast routing to all businesses background task failed:", err);
-          });
-        }
-      } catch (err) {
-        console.error("Failed to route to all businesses:", err);
+        console.error("Failed to auto-route leads:", err);
       }
     }
 

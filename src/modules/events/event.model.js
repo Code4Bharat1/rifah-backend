@@ -41,8 +41,12 @@ const eventSchema = new mongoose.Schema(
     },
     targetAudience: {
       type: [String],
-      enum: ["Consumers", "Businesses", "Chapter Admins"],
-      default: [],
+      enum: ["Consumers", "Businesses", "Chapter Admins", "All"],
+      default: ["All"],
+    },
+    targetChapters: {
+      type: [String],
+      default: ["All"],
     },
     date: {
       type: String,
@@ -98,8 +102,20 @@ const eventSchema = new mongoose.Schema(
     agenda: [agendaItemSchema],
     registeredUsers: [
       {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        registeredAt: {
+          type: Date,
+          default: Date.now,
+        },
+        status: {
+          type: String,
+          enum: ["Confirmed", "Cancelled", "Attended"],
+          default: "Confirmed",
+        }
       },
     ],
     coverImage: {

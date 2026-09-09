@@ -1,4 +1,5 @@
 import { verificationService } from "./verification.service.js";
+import { Business } from "../businesses/business.model.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
@@ -11,7 +12,13 @@ const __dirname = path.dirname(__filename);
 
 export const verificationController = {
   submitVerification: asyncHandler(async (req, res) => {
-    const { businessId, documents } = req.body;
+    let { businessId, documents } = req.body;
+    if (!businessId && req.user?.id) {
+      const biz = await Business.findOne({ owner: req.user.id });
+      if (biz) {
+        businessId = biz._id;
+      }
+    }
     const verification = await verificationService.submitVerification(
       businessId,
       documents || [],

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Event } from "./event.model.js";
 import { User } from "../users/user.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -63,13 +64,42 @@ export const eventService = {
     const chapterScope = await getChapterFilter(user, 'direct');
     Object.assign(filter, chapterScope);
 
+    // Enforce Audience & Chapter Targeting for normal users
+    if (user && [ROLES.BUSINESS_OWNER, ROLES.CONSUMER].includes(user.role)) {
+      // Must match role targeting
+      const userRoleDisplay = user.role === ROLES.BUSINESS_OWNER ? "Businesses" : "Consumers";
+      filter.targetAudience = { $in: [userRoleDisplay, "All"] };
+
+      // Must match chapter targeting
+      if (user.chapter) {
+        filter.$or = [
+          { targetChapters: "All" },
+          { targetChapters: user.chapter },
+          { chapter: user.chapter } // Also support the legacy chapter field
+        ];
+      }
+    }
+
     if (queryParams.chapter && !chapterScope.chapter) {
       filter.chapter = queryParams.chapter;
     }
 
     if (queryParams.status) {
-      filter.status = new RegExp(`^${queryParams.status.trim()}$`, "i");
+      if (queryParams.status.toLowerCase() === "past") {
+        filter.date = { $lt: new Date().toISOString().split("T")[0] };
+        filter.status = STATUSES.EVENT.UPCOMING; // Only show published past events
+      } else if (queryParams.status.toLowerCase() === "upcoming") {
+        filter.date = { $gte: new Date().toISOString().split("T")[0] };
+        filter.status = STATUSES.EVENT.UPCOMING;
+      } else {
+        filter.status = new RegExp(`^${queryParams.status.trim()}$`, "i");
+      }
     }
+
+    if (queryParams.targetRole) {
+      filter.targetAudience = { $in: [queryParams.targetRole, "All"] };
+    }
+    
     if (queryParams.city) filter.city = queryParams.city;
     if (queryParams.mode) filter.mode = queryParams.mode;
 
@@ -149,7 +179,7 @@ export const eventService = {
     }
 
     const isAlreadyRegistered = event.registeredUsers.some(
-      (uId) => String(uId) === String(userId)
+      (reg) => String(reg.user || reg) === String(userId)
     );
 
     if (isAlreadyRegistered) {
@@ -163,7 +193,7 @@ export const eventService = {
     const updatedEvent = await Event.findByIdAndUpdate(
       eventId,
       {
-        $addToSet: { registeredUsers: userId },
+        $addToSet: { registeredUsers: { user: userId, registeredAt: new Date(), status: "Confirmed" } },
         $inc: { registeredCount: 1 },
       },
       { new: true }
@@ -194,6 +224,45 @@ export const eventService = {
     } catch (err) {}
 
     return updatedEvent;
+  },
+
+  /**
+   * Get registered users for an event
+   */
+  getEventRegistrations: async (eventId, user) => {
+    const chapterScope = await getChapterFilter(user, 'direct');
+    const event = await Event.findOne({ _id: eventId, ...chapterScope }).lean();
+
+    if (!event) {
+      throw new NotFoundError("Event not found or access denied");
+    }
+
+    const registrations = [];
+    for (const entry of (event.registeredUsers || [])) {
+      // Handle all possible formats: plain string, ObjectId, or { user: ObjectId }
+      let userId;
+      let registeredAt = event.createdAt;
+      let status = "Confirmed";
+
+      if (typeof entry === "string" || entry instanceof mongoose.Types.ObjectId) {
+        userId = entry;
+      } else if (entry && typeof entry === "object") {
+        userId = entry.user || entry._id;
+        registeredAt = entry.registeredAt || event.createdAt;
+        status = entry.status || "Confirmed";
+      }
+
+      if (!userId) continue;
+
+      const userData = await User.findById(userId).select("name email phone role chapter businessName").lean();
+      registrations.push({
+        user: userData || { name: "Deleted User", email: "N/A" },
+        registeredAt,
+        status,
+      });
+    }
+
+    return registrations;
   },
 
   /**

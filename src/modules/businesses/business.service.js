@@ -165,7 +165,7 @@ export const businessService = {
   createBusiness: async (data, ownerId) => {
     const existing = await Business.findOne({ owner: ownerId });
     if (existing) {
-      throw new ConflictError("You already have an existing business profile");
+      return businessService.updateBusiness(existing._id, data, { id: ownerId, role: ROLES.BUSINESS_OWNER });
     }
 
     const { Settings } = await import("../settings/settings.model.js");
@@ -243,7 +243,16 @@ export const businessService = {
     }
 
     if (sanitizedData.name && sanitizedData.name !== business.name) {
-      sanitizedData.slug = generateSlug(sanitizedData.name);
+      let slug = generateSlug(sanitizedData.name);
+      const slugConflict = await Business.findOne({ slug, _id: { $ne: id } });
+      if (slugConflict) {
+        slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+      }
+      sanitizedData.slug = slug;
+    }
+
+    if (sanitizedData.industry && (!sanitizedData.categories || sanitizedData.categories.length === 0)) {
+      sanitizedData.categories = [sanitizedData.industry];
     }
 
     const updated = await Business.findByIdAndUpdate(id, sanitizedData, {

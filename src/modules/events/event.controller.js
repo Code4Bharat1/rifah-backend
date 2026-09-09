@@ -26,6 +26,12 @@ export const eventController = {
     return ApiResponse.success(res, event, "Registered for event successfully");
   }),
 
+  getEventRegistrations: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const registrations = await eventService.getEventRegistrations(id, req.user);
+    return ApiResponse.success(res, registrations, "Event registrations retrieved");
+  }),
+
   updateEvent: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updated = await eventService.updateEvent(id, req.body, req.user);
