@@ -327,34 +327,65 @@ export const enquiryService = {
   listAllEnquiries: async (queryParams = {}, requester = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
+    const conditions = [];
 
     // RBAC: Chapter Admin Scope Enforcement
-    const chapterScope = await getChapterFilter(requester, 'direct');
-    Object.assign(filter, chapterScope);
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
+      if (!requester.chapter) {
+        conditions.push({ _id: null }); // Deny access
+      } else {
+        const baseCity = requester.chapter.replace(/\b(chapter|chamber)\b/gi, '').trim();
+        const chapterRegex = new RegExp(baseCity, "i");
+        
+        const businesses = await Business.find({ chapter: chapterRegex }).select("_id");
+        const businessIds = businesses.map((b) => b._id);
+        
+        conditions.push({
+          $or: [
+            { chapter: chapterRegex },
+            { targetType: "all" },
+            { targetBusiness: { $in: businessIds } }
+          ]
+        });
+      }
+    }
 
-    if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
-    if (queryParams.category) filter.category = queryParams.category;
+    if (queryParams.status && queryParams.status.toLowerCase() !== "all") {
+      conditions.push({ status: queryParams.status });
+    }
+    if (queryParams.category) {
+      conditions.push({ category: queryParams.category });
+    }
     
     // Type Filter (Direct RFQs vs Broadcast RFQs)
     if (queryParams.type && queryParams.type.toLowerCase() !== "all") {
       if (queryParams.type === "direct") {
-        filter.targetBusiness = { $exists: true, $ne: null };
+        conditions.push({ targetBusiness: { $exists: true, $ne: null } });
       } else if (queryParams.type === "broadcast") {
-        filter.targetBusiness = { $exists: false };
+        conditions.push({ targetBusiness: { $exists: false } });
       }
     }
 
     // Chapter Filter
-    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all" && !chapterScope.chapter) {
-      filter.chapter = queryParams.chapter;
+    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
+      // If Chapter Admin, they can only search their own chapter which is enforced by RBAC
+      if (!requester || requester.role !== ROLES.CHAPTER_ADMIN) {
+        conditions.push({ chapter: queryParams.chapter });
+      }
     }
 
     if (queryParams.search) {
-      filter.$or = [
-        { title: { $regex: queryParams.search, $options: "i" } },
-        { referenceId: { $regex: queryParams.search, $options: "i" } },
-        { requesterName: { $regex: queryParams.search, $options: "i" } },
-      ];
+      conditions.push({
+        $or: [
+          { title: { $regex: queryParams.search, $options: "i" } },
+          { referenceId: { $regex: queryParams.search, $options: "i" } },
+          { requesterName: { $regex: queryParams.search, $options: "i" } },
+        ]
+      });
+    }
+
+    if (conditions.length > 0) {
+      filter.$and = conditions;
     }
 
     const [enquiries, total] = await Promise.all([
@@ -429,32 +460,64 @@ export const enquiryService = {
    */
   exportCsv: async (queryParams = {}, requester = null) => {
     const filter = {};
-    const chapterScope = await getChapterFilter(requester, 'direct');
-    Object.assign(filter, chapterScope);
+    const conditions = [];
 
-    if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
-    if (queryParams.category) filter.category = queryParams.category;
+    // RBAC: Chapter Admin Scope Enforcement
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
+      if (!requester.chapter) {
+        conditions.push({ _id: null }); // Deny access
+      } else {
+        const baseCity = requester.chapter.replace(/\b(chapter|chamber)\b/gi, '').trim();
+        const chapterRegex = new RegExp(baseCity, "i");
+        
+        const businesses = await Business.find({ chapter: chapterRegex }).select("_id");
+        const businessIds = businesses.map((b) => b._id);
+        
+        conditions.push({
+          $or: [
+            { chapter: chapterRegex },
+            { targetType: "all" },
+            { targetBusiness: { $in: businessIds } }
+          ]
+        });
+      }
+    }
+
+    if (queryParams.status && queryParams.status.toLowerCase() !== "all") {
+      conditions.push({ status: queryParams.status });
+    }
+    if (queryParams.category) {
+      conditions.push({ category: queryParams.category });
+    }
     
     // Type Filter (Direct RFQs vs Broadcast RFQs)
     if (queryParams.type && queryParams.type.toLowerCase() !== "all") {
       if (queryParams.type === "direct") {
-        filter.targetBusiness = { $exists: true, $ne: null };
+        conditions.push({ targetBusiness: { $exists: true, $ne: null } });
       } else if (queryParams.type === "broadcast") {
-        filter.targetBusiness = { $exists: false };
+        conditions.push({ targetBusiness: { $exists: false } });
       }
     }
 
     // Chapter Filter
-    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all" && !chapterScope.chapter) {
-      filter.chapter = queryParams.chapter;
+    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
+      if (!requester || requester.role !== ROLES.CHAPTER_ADMIN) {
+        conditions.push({ chapter: queryParams.chapter });
+      }
     }
 
     if (queryParams.search) {
-      filter.$or = [
-        { title: { $regex: queryParams.search, $options: "i" } },
-        { referenceId: { $regex: queryParams.search, $options: "i" } },
-        { requesterName: { $regex: queryParams.search, $options: "i" } },
-      ];
+      conditions.push({
+        $or: [
+          { title: { $regex: queryParams.search, $options: "i" } },
+          { referenceId: { $regex: queryParams.search, $options: "i" } },
+          { requesterName: { $regex: queryParams.search, $options: "i" } },
+        ]
+      });
+    }
+
+    if (conditions.length > 0) {
+      filter.$and = conditions;
     }
 
     const enquiries = await Enquiry.find(filter)

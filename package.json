@@ -5,6 +5,7 @@
   "main": "src/server.js",
   "type": "module",
   "scripts": {
+    "predev": "npx kill-port 5000",
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "test": "node --test tests/**/*.test.js",

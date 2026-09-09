@@ -26,7 +26,9 @@ export const getChapterFilter = async (user, entityType = "direct") => {
   }
 
   // Use case-insensitive regex to handle inconsistencies like "Mumbai Chapter" vs "mumbai chapter"
-  const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
+  // Extract base city to handle "Chamber Mumbai" or "Mumbai Chapter" safely
+  const baseCity = user.chapter.replace(/\b(chapter|chamber)\b/gi, '').trim();
+  const chapterRegex = new RegExp(baseCity, "i");
 
   if (entityType === "direct") {
     return { chapter: chapterRegex };
