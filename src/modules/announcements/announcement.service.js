@@ -5,7 +5,22 @@ import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const announcementService = {
   createAnnouncement: async (data) => {
-    return Announcement.create(data);
+    const announcement = new Announcement(data);
+    
+    if (announcement.status === "Published") {
+      announcement.publishedAt = new Date();
+      const broadcastResult = await notificationService.broadcastNotification({
+        type: "Announcement",
+        title: announcement.title,
+        body: announcement.message,
+        chapter: announcement.chapter,
+        link: "/me/notifications",
+      });
+      announcement.broadcastId = broadcastResult.broadcastId;
+    }
+    
+    await announcement.save();
+    return announcement;
   },
 
   listAnnouncements: async (queryParams, user) => {
