@@ -322,6 +322,9 @@ export const eventService = {
     // Run every minute
     cron.schedule("* * * * *", async () => {
       try {
+        if (mongoose.connection.readyState !== 1) {
+          return; // Database not in connected state, skip this run
+        }
         const now = new Date();
         const scheduledEvents = await Event.find({
           status: STATUSES.EVENT.SCHEDULED,
@@ -338,7 +341,9 @@ export const eventService = {
           }
         }
       } catch (error) {
-        console.error("[EventScheduler] Error auto-publishing events:", error);
+        if (error.name !== "MongoServerSelectionError" && error.name !== "MongoNetworkError") {
+          console.error("[EventScheduler] Error auto-publishing events:", error.message || error);
+        }
       }
     });
     console.log("[EventScheduler] Started checking for scheduled events...");

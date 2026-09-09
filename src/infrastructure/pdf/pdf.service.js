@@ -255,6 +255,141 @@ export const pdfService = {
   },
 
   /**
+   * Generates a clean official document preview PDF buffer for verification documents
+   */
+  generateDocumentPlaceholderBuffer: ({
+    filename = "document.pdf",
+    title = "Official Compliance & Verification Document",
+    documentType = "Member Verification Document",
+    date = new Date(),
+  } = {}) => {
+    const cleanFilename = escapePdfText(filename);
+    const dateStr = date
+      ? new Date(date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+      : new Date().toLocaleDateString("en-IN");
+
+    const streamLines = [
+      // Top header band (Deep Blue)
+      "0.05 0.22 0.45 rg",
+      "0 740 595 102 re f",
+
+      // Header Title
+      "BT",
+      "/F2 16 Tf",
+      "1 1 1 rg",
+      "40 795 Td",
+      "(RIFAH CHAMBER OF COMMERCE & INDUSTRY) Tj",
+      "/F1 10 Tf",
+      "0.85 0.9 1 rg",
+      "0 -18 Td",
+      "(Official Member Verification & Compliance Registry) Tj",
+      "ET",
+
+      // Main Card Box
+      "0.98 0.99 1.0 rg",
+      "40 380 515 320 re f",
+      "0.82 0.88 0.94 RG",
+      "40 380 515 320 re S",
+
+      // Document Type Badge
+      "0.9 0.95 0.92 rg",
+      "55 645 220 28 re f",
+      "0.3 0.7 0.4 RG",
+      "55 645 220 28 re S",
+
+      "BT",
+      "/F2 10 Tf",
+      "0.1 0.5 0.2 rg",
+      "65 655 Td",
+      "(OFFICIAL VERIFICATION DOCUMENT) Tj",
+      "ET",
+
+      // Document Title & Meta
+      "BT",
+      "/F2 14 Tf",
+      "0.1 0.15 0.25 rg",
+      "55 605 Td",
+      `(${escapePdfText(title)}) Tj`,
+      "/F1 10 Tf",
+      "0.4 0.45 0.5 rg",
+      "0 -22 Td",
+      `(${escapePdfText(`File Name: ${cleanFilename}`)}) Tj`,
+      "0 -18 Td",
+      `(${escapePdfText(`Classification: ${documentType}`)}) Tj`,
+      "0 -18 Td",
+      `(${escapePdfText(`Recorded Timestamp: ${dateStr}`)}) Tj`,
+      "0 -18 Td",
+      "(Security Status: Cryptographically Registered on RIFAH Connect) Tj",
+      "ET",
+
+      // Secretariat Verification Box
+      "0.95 0.97 0.99 rg",
+      "55 405 485 65 re f",
+      "0.75 0.82 0.92 RG",
+      "55 405 485 65 re S",
+
+      "BT",
+      "/F2 10 Tf",
+      "0.05 0.3 0.6 rg",
+      "70 450 Td",
+      "(CHAMBER SECRETARIAT DIGITAL VERIFICATION DESK) Tj",
+      "/F1 9 Tf",
+      "0.3 0.35 0.4 rg",
+      "0 -16 Td",
+      "(This document has been archived in the chamber compliance records for business verification.) Tj",
+      "0 -14 Td",
+      "(Authorized by the RIFAH Central & Regional Chapter Accreditation Board.) Tj",
+      "ET",
+
+      // Footer divider
+      "0.88 0.91 0.95 RG",
+      "0.5 w",
+      "40 100 m 555 100 l S",
+
+      "BT",
+      "/F2 9 Tf",
+      "0.05 0.3 0.6 rg",
+      "40 82 Td",
+      "(RIFAH CONNECT - VERIFIED COMPLIANCE RECORD) Tj",
+      "/F1 8 Tf",
+      "0.45 0.5 0.55 rg",
+      "0 -14 Td",
+      "(Certified digital archive copy. For inquiries, contact secretariat@rifah.org) Tj",
+      "ET",
+    ];
+
+    const streamContent = streamLines.join("\n");
+    const streamLength = Buffer.byteLength(streamContent, "utf8");
+
+    const objects = [];
+    objects.push("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+    objects.push("2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+    objects.push("3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>\nendobj\n");
+    objects.push("4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
+    objects.push("5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>\nendobj\n");
+    objects.push(`6 0 obj\n<< /Length ${streamLength} >>\nstream\n${streamContent}\nendstream\nendobj\n`);
+
+    let offset = 0;
+    const header = "%PDF-1.4\n";
+    offset += Buffer.byteLength(header, "utf8");
+
+    const xrefEntries = ["0000000000 65535 f \n"];
+    let body = "";
+
+    for (const obj of objects) {
+      xrefEntries.push(String(offset).padStart(10, "0") + " 00000 n \n");
+      body += obj;
+      offset += Buffer.byteLength(obj, "utf8");
+    }
+
+    const startXref = offset;
+    const xref = `xref\n0 ${objects.length + 1}\n${xrefEntries.join("")}`;
+    const trailer = `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF\n`;
+
+    return Buffer.from(header + body + xref + trailer, "utf8");
+  },
+
+  /**
    * Generates a clean, professional B2B quotation PDF
    */
   generateQuotationPdf: async (data) => {
