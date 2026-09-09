@@ -75,14 +75,21 @@ export const catalogueService = {
       throw new ForbiddenError("You do not own this business");
     }
 
-    // --- Enforce global settings limits ---
+    // --- Enforce plan-based limits ---
+    const tier = (business.membership || "Free").toLowerCase();
+    const tierCatalogueLimits = {
+      free: 2,
+      basic: 5,
+      premium: 25,
+      enterprise: 100,
+    };
     const globalSettings = await Settings.findOne({ isSingleton: "global" });
-    const maxItems = globalSettings?.maxCatalogueItems ?? 50;
+    const maxItems = tierCatalogueLimits[tier] || (globalSettings?.maxCatalogueItems ?? 50);
     const maxImages = globalSettings?.maxImagesPerItem ?? 5;
 
     const currentCount = await Catalogue.countDocuments({ business: business._id });
     if (currentCount >= maxItems) {
-      throw new ForbiddenError(`Catalogue limit reached. Maximum ${maxItems} items allowed per business.`);
+      throw new ForbiddenError(`Catalogue limit reached for ${business.membership || "Free"} plan. Maximum ${maxItems} items allowed. Please upgrade your plan for higher catalogue capacity.`);
     }
 
     if (data.images && Array.isArray(data.images) && data.images.length > maxImages) {

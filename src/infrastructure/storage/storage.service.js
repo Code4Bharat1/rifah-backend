@@ -18,42 +18,53 @@ if (!fs.existsSync(baseUploadDir)) {
 
 export const storageService = {
   /**
-   * Uploads a file to Cloudinary if configured, or uses local storage fallback
-   * @param {Object} file - Express multer file object
+   * Uploads a file to Cloudinary directly from memory Buffer without disk clutter
+   * @param {Object} file - Express multer file object (with .buffer or .path)
    * @param {string} [subfolder=''] - e.g. 'logos', 'covers', 'gallery', 'documents'
    * @returns {Promise<string>} Public URL (Cloudinary secure_url or local static path)
    */
   uploadFile: async (file, subfolder = "") => {
     if (!file) return null;
 
-    if (cloudinaryService.isConfigured()) {
+    const source = file.buffer || file.path;
+
+    if (cloudinaryService.isConfigured() && source) {
       try {
-        const source = file.path || file.buffer;
         const cleanSub = subfolder.replace(/^\/+|\/+$/g, "");
         const folder = cleanSub ? `rifah/${cleanSub}` : "rifah";
 
         const result = await cloudinaryService.upload(source, {
           folder,
           resource_type: "auto",
+          mimetype: file.mimetype,
         });
 
-        // Clean up temporary local disk file if present
-        if (file.path && fs.existsSync(file.path)) {
-          try {
-            fs.unlinkSync(file.path);
-          } catch (e) {
-            // Ignore unlink error
-          }
+        if (result && result.secure_url) {
+          logger.info(`File streamed directly to Cloudinary: ${result.secure_url}`);
+          return result.secure_url;
         }
-
-        logger.info(`File uploaded to Cloudinary: ${result.secure_url}`);
-        return result.secure_url;
       } catch (err) {
-        logger.error("Cloudinary upload failed, falling back to local file path:", err);
+        logger.error("Cloudinary stream failed, falling back to local file disk:", err);
       }
     }
 
-    return storageService.getPublicUrl(file.filename, subfolder);
+    // Fallback: only if Cloudinary is unavailable, save buffer to local disk
+    const cleanSub = subfolder ? `${subfolder.replace(/^\/+|\/+$/g, "")}/` : "";
+    const targetDir = path.join(baseUploadDir, cleanSub);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const ext = path.extname(file.originalname || "").toLowerCase() || ".jpg";
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const filename = `${file.fieldname || "file"}-${uniqueSuffix}${ext}`;
+    const localFilePath = path.join(targetDir, filename);
+
+    if (file.buffer) {
+      fs.writeFileSync(localFilePath, file.buffer);
+    }
+
+    return `/${env.STORAGE.UPLOAD_DIR}/${cleanSub}${filename}`;
   },
 
   /**

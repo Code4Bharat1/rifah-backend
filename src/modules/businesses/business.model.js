@@ -83,7 +83,7 @@ const businessSchema = new mongoose.Schema(
     },
     membership: {
       type: String,
-      enum: ["Free", "Basic", "Premium", "Enterprise", "free", "basic", "premium", "enterprise"],
+      enum: ["Free", "Basic", "Verified", "Premium", "Enterprise", "free", "basic", "verified", "premium", "enterprise"],
       default: "Free",
       index: true,
     },
