@@ -7,6 +7,7 @@ import { generateSlug } from "../../shared/utils/generate-id.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { NotFoundError } from "../../shared/errors/errors.js";
+import { auditService } from "../audit/audit.service.js";
 
 export const membershipController = {
   getPlans: asyncHandler(async (req, res) => {
@@ -16,16 +17,40 @@ export const membershipController = {
 
   createPlan: asyncHandler(async (req, res) => {
     const plan = await membershipService.createPlan(req.body);
+    await auditService.logAction({
+      actor: req.user,
+      action: "CREATE",
+      targetModel: "Plan",
+      targetId: plan._id,
+      summary: `Created new membership plan: ${plan.name}`,
+      ipAddress: req.ip
+    });
     return ApiResponse.created(res, plan, "Membership plan created");
   }),
 
   updatePlan: asyncHandler(async (req, res) => {
     const plan = await membershipService.updatePlan(req.params.planId, req.body);
+    await auditService.logAction({
+      actor: req.user,
+      action: "UPDATE",
+      targetModel: "Plan",
+      targetId: plan._id,
+      summary: `Updated membership plan: ${plan.name}`,
+      ipAddress: req.ip
+    });
     return ApiResponse.success(res, plan, "Membership plan updated");
   }),
 
   deletePlan: asyncHandler(async (req, res) => {
     await membershipService.deletePlan(req.params.planId);
+    await auditService.logAction({
+      actor: req.user,
+      action: "DELETE",
+      targetModel: "Plan",
+      targetId: req.params.planId,
+      summary: `Deleted membership plan: ${req.params.planId}`,
+      ipAddress: req.ip
+    });
     return ApiResponse.success(res, null, "Membership plan deleted");
   }),
 

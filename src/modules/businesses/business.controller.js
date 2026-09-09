@@ -3,6 +3,7 @@ import { gstService } from "./gst.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
+import { auditService } from "../audit/audit.service.js";
 
 export const businessController = {
   searchDirectory: asyncHandler(async (req, res) => {
@@ -79,6 +80,24 @@ export const businessController = {
   updateStatus: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updated = await businessService.updateStatus(id, req.body, req.user);
+    
+    // Log the significant status changes
+    let summaryParts = [];
+    if (req.body.verification) summaryParts.push(`verification to ${req.body.verification}`);
+    if (req.body.membership) summaryParts.push(`membership to ${req.body.membership}`);
+    if (req.body.status) summaryParts.push(`status to ${req.body.status}`);
+    
+    if (summaryParts.length > 0) {
+      await auditService.logAction({
+        actor: req.user,
+        action: "UPDATE",
+        targetModel: "Business",
+        targetId: updated._id,
+        summary: `Updated business ${updated.name}: ${summaryParts.join(', ')}`,
+        ipAddress: req.ip
+      });
+    }
+
     return ApiResponse.success(res, updated, "Business status updated successfully");
   }),
 

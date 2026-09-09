@@ -28,6 +28,16 @@ export const auditService = {
 
     if (queryParams.action) filter.action = queryParams.action;
     if (queryParams.targetModel) filter.targetModel = queryParams.targetModel;
+    
+    if (queryParams.search) {
+      const searchRegex = new RegExp(queryParams.search, "i");
+      filter.$or = [
+        { action: searchRegex },
+        { actorName: searchRegex },
+        { targetModel: searchRegex },
+        { summary: searchRegex },
+      ];
+    }
 
     const [logs, total] = await Promise.all([
       Audit.find(filter).sort(sort).skip(skip).limit(limit),
