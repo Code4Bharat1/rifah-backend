@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import cron from "node-cron";
 import { Event } from "./event.model.js";
 import { User } from "../users/user.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -313,4 +314,33 @@ export const eventService = {
     }
     return deleted;
   },
+
+  /**
+   * Start the scheduler to publish scheduled events automatically
+   */
+  startEventScheduler: () => {
+    // Run every minute
+    cron.schedule("* * * * *", async () => {
+      try {
+        const now = new Date();
+        const scheduledEvents = await Event.find({
+          status: STATUSES.EVENT.SCHEDULED,
+          scheduledAt: { $lte: now }
+        });
+
+        for (const event of scheduledEvents) {
+          event.status = STATUSES.EVENT.UPCOMING;
+          await event.save();
+          console.log(`[EventScheduler] Auto-published event: ${event.title}`);
+          
+          if (event.targetAudience && event.targetAudience.length > 0) {
+            broadcastEventToAudience(event);
+          }
+        }
+      } catch (error) {
+        console.error("[EventScheduler] Error auto-publishing events:", error);
+      }
+    });
+    console.log("[EventScheduler] Started checking for scheduled events...");
+  }
 };

@@ -3,6 +3,7 @@ import { env } from "./config/env.js";
 import { connectDatabase, disconnectDatabase } from "./infrastructure/database/mongoose.js";
 import { logger } from "./infrastructure/logger/logger.js";
 import { initSocket } from "./infrastructure/socket/socket.js";
+import { eventService } from "./modules/events/event.service.js";
 import dns from "dns";
 dns.setDefaultResultOrder("ipv4first");
 dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
@@ -13,7 +14,10 @@ const startServer = async () => {
     // 1. Connect to MongoDB
     await connectDatabase();
 
-    // 2. Start HTTP Server
+    // 2. Start Scheduled Background Tasks
+    eventService.startEventScheduler();
+
+    // 3. Start HTTP Server
     server = app.listen(env.PORT, () => {
       logger.info(`Port:${env.PORT}`);
       logger.info(`Health Check: http://localhost:${env.PORT}/health`);

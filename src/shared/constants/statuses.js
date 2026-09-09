@@ -57,6 +57,7 @@ export const STATUSES = Object.freeze({
 
   EVENT: {
     DRAFT: "Draft",
+    SCHEDULED: "Scheduled",
     PENDING_APPROVAL: "Pending Approval",
     UPCOMING: "Upcoming",
     ONGOING: "Ongoing",

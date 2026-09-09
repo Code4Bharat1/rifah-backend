@@ -99,6 +99,10 @@ const eventSchema = new mongoose.Schema(
       default: STATUSES.EVENT.DRAFT,
       index: true,
     },
+    scheduledAt: {
+      type: Date,
+      default: null,
+    },
     agenda: [agendaItemSchema],
     registeredUsers: [
       {
