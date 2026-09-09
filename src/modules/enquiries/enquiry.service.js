@@ -7,6 +7,7 @@ import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
+import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const enquiryService = {
   /**
@@ -224,9 +225,8 @@ export const enquiryService = {
     const filter = {};
 
     // RBAC: Chapter Admin Scope Enforcement
-    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      filter.chapter = requester.chapter || "UNASSIGNED_CHAPTER_FALLBACK";
-    }
+    const chapterScope = await getChapterFilter(requester, 'direct');
+    Object.assign(filter, chapterScope);
 
     if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
     if (queryParams.category) filter.category = queryParams.category;
@@ -241,7 +241,7 @@ export const enquiryService = {
     }
 
     // Chapter Filter
-    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
+    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all" && !chapterScope.chapter) {
       filter.chapter = queryParams.chapter;
     }
 
@@ -273,10 +273,11 @@ export const enquiryService = {
   /**
    * Update enquiry status, assignment & timeline
    */
-  updateEnquiryStatus: async (id, { status, assignedTo, resolutionNote, timelineUpdate }) => {
-    const enquiry = await Enquiry.findById(id);
+  updateEnquiryStatus: async (id, { status, assignedTo, resolutionNote, timelineUpdate }, requester) => {
+    const chapterScope = await getChapterFilter(requester, 'direct');
+    const enquiry = await Enquiry.findOne({ _id: id, ...chapterScope });
     if (!enquiry) {
-      throw new NotFoundError("Enquiry not found");
+      throw new NotFoundError("Enquiry not found or access denied");
     }
 
     const oldStatus = enquiry.status;
@@ -323,11 +324,9 @@ export const enquiryService = {
    * Export Enquiries to CSV
    */
   exportCsv: async (queryParams = {}, requester = null) => {
-    // Reuse the exact same filter logic as listAllEnquiries
     const filter = {};
-    if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      filter.chapter = requester.chapter || "UNASSIGNED_CHAPTER_FALLBACK";
-    }
+    const chapterScope = await getChapterFilter(requester, 'direct');
+    Object.assign(filter, chapterScope);
 
     if (queryParams.status && queryParams.status.toLowerCase() !== "all") filter.status = queryParams.status;
     if (queryParams.category) filter.category = queryParams.category;
@@ -342,7 +341,7 @@ export const enquiryService = {
     }
 
     // Chapter Filter
-    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all") {
+    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all" && !chapterScope.chapter) {
       filter.chapter = queryParams.chapter;
     }
 

@@ -78,7 +78,7 @@ export const businessController = {
 
   updateStatus: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updated = await businessService.updateStatus(id, req.body);
+    const updated = await businessService.updateStatus(id, req.body, req.user);
     return ApiResponse.success(res, updated, "Business status updated successfully");
   }),
 

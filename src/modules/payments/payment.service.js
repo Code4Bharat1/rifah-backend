@@ -11,6 +11,7 @@ import { parsePagination, buildPaginationMeta } from "../../shared/utils/paginat
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { signAccessToken, signRefreshToken } from "../../infrastructure/auth/jwt.js";
+import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const paymentService = {
   /**
@@ -486,9 +487,10 @@ export const paymentService = {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
 
-    if (user && user.role === ROLES.CHAPTER_ADMIN) {
-      const usersInChapter = await User.find({ chapter: user.chapter }).select("_id");
-      const businessesInChapter = await Business.find({ chapter: user.chapter }).select("_id");
+    if (user && user.role === ROLES.CHAPTER_ADMIN && user.chapter) {
+      const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
+      const usersInChapter = await User.find({ chapter: chapterRegex }).select("_id");
+      const businessesInChapter = await Business.find({ chapter: chapterRegex }).select("_id");
       
       const userIds = usersInChapter.map(u => u._id);
       const businessIds = businessesInChapter.map(b => b._id);
@@ -533,11 +535,15 @@ export const paymentService = {
       throw new NotFoundError("Invoice not found");
     }
 
-    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+    if (user && user.role === ROLES.CHAPTER_ADMIN && user.chapter) {
+      const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
       const payerChapter = payment.payer?.chapter;
       const businessChapter = payment.business?.chapter;
       
-      if (payerChapter !== user.chapter && businessChapter !== user.chapter) {
+      const isPayerInChapter = payerChapter && chapterRegex.test(payerChapter);
+      const isBusinessInChapter = businessChapter && chapterRegex.test(businessChapter);
+      
+      if (!isPayerInChapter && !isBusinessInChapter) {
         throw new ForbiddenError("Access denied: Payment does not belong to your chapter");
       }
     }
