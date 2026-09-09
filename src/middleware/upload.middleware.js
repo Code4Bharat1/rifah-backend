@@ -9,31 +9,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const baseUploadPath = path.resolve(__dirname, `../../${env.STORAGE.UPLOAD_DIR}`);
 
-// Configure disk storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Determine subfolder dynamically based on fieldname or route
-    let subfolder = "";
-    if (file.fieldname === "avatar") subfolder = "avatars";
-    else if (file.fieldname === "logo") subfolder = "logos";
-    else if (file.fieldname === "cover" || file.fieldname === "coverImage") subfolder = "covers";
-    else if (file.fieldname === "gallery") subfolder = "gallery";
-    else if (file.fieldname === "document" || file.fieldname === "verification") subfolder = "documents";
-    else if (file.fieldname === "catalogue" || file.fieldname === "product") subfolder = "catalogue";
-    else if (file.fieldname === "attachment" || file.fieldname === "file" || file.fieldname === "media") subfolder = "attachments";
-
-    const targetDir = path.join(baseUploadPath, subfolder);
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-    cb(null, targetDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
-  },
-});
+// Configure in-memory storage for direct Cloudinary streaming (no local disk clutter)
+const storage = multer.memoryStorage();
 
 // File filter (strictly safe images, videos, audio, PDFs, and office documents)
 const fileFilter = (req, file, cb) => {

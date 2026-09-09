@@ -100,26 +100,52 @@ app.get(
   }
 );
 
-app.use(
-  `/${env.STORAGE.UPLOAD_DIR}`,
-  (req, res, next) => {
+const staticOptions = {
+  setHeaders: (res, filePath) => {
     res.removeHeader("X-Frame-Options");
     res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     res.setHeader("Content-Security-Policy", "frame-ancestors *");
-    next();
+    if (filePath.endsWith(".pdf")) {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", "inline");
+    }
   },
-  express.static(uploadsPath, {
-    setHeaders: (res, filePath) => {
-      res.removeHeader("X-Frame-Options");
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Content-Security-Policy", "frame-ancestors *");
-      if (filePath.endsWith(".pdf")) {
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", "inline");
-      }
-    },
-  })
-);
+};
+
+const handleStaticHeaders = (req, res, next) => {
+  res.removeHeader("X-Frame-Options");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Content-Security-Policy", "frame-ancestors *");
+  next();
+};
+
+app.use(`/${env.STORAGE.UPLOAD_DIR}`, handleStaticHeaders, express.static(uploadsPath, staticOptions));
+app.use(`${env.API_PREFIX}/${env.STORAGE.UPLOAD_DIR}`, handleStaticHeaders, express.static(uploadsPath, staticOptions));
+
+// Fallback search in root uploads and subfolders if file moved/flattened
+app.use([`/${env.STORAGE.UPLOAD_DIR}/:subfolder/:filename`, `/${env.STORAGE.UPLOAD_DIR}/:filename`], (req, res, next) => {
+  const filename = req.params.filename || req.params.subfolder;
+  if (!filename) return next();
+  
+  // Check root uploads
+  const rootPath = path.join(uploadsPath, filename);
+  if (fs.existsSync(rootPath) && fs.statSync(rootPath).isFile()) {
+    return res.sendFile(rootPath);
+  }
+
+  // Check all subfolders in uploads
+  const subdirs = ["logos", "covers", "gallery", "documents", "certificates", "catalogue", "avatars", "attachments"];
+  for (const sub of subdirs) {
+    const subPath = path.join(uploadsPath, sub, filename);
+    if (fs.existsSync(subPath) && fs.statSync(subPath).isFile()) {
+      return res.sendFile(subPath);
+    }
+  }
+
+  next();
+});
 
 // Health check endpoint (root level)
 app.use("/health", healthRoutes);
