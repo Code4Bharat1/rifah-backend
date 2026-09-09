@@ -17,6 +17,7 @@ import fs from "fs";
 import { apiRouter } from "./routes/index.js";
 import { healthRoutes } from "./routes/health.routes.js";
 import { quotationHelper } from "./modules/leads/quotation.helper.js";
+import { pdfService } from "./infrastructure/pdf/pdf.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -124,28 +125,77 @@ const handleStaticHeaders = (req, res, next) => {
 app.use(`/${env.STORAGE.UPLOAD_DIR}`, handleStaticHeaders, express.static(uploadsPath, staticOptions));
 app.use(`${env.API_PREFIX}/${env.STORAGE.UPLOAD_DIR}`, handleStaticHeaders, express.static(uploadsPath, staticOptions));
 
-// Fallback search in root uploads and subfolders if file moved/flattened
-app.use([`/${env.STORAGE.UPLOAD_DIR}/:subfolder/:filename`, `/${env.STORAGE.UPLOAD_DIR}/:filename`], (req, res, next) => {
-  const filename = req.params.filename || req.params.subfolder;
-  if (!filename) return next();
-  
-  // Check root uploads
-  const rootPath = path.join(uploadsPath, filename);
-  if (fs.existsSync(rootPath) && fs.statSync(rootPath).isFile()) {
-    return res.sendFile(rootPath);
-  }
+// Fallback search in root uploads and subfolders, with auto-generation for missing PDFs
+app.use(
+  [`/${env.STORAGE.UPLOAD_DIR}/:subfolder/:filename`, `/${env.STORAGE.UPLOAD_DIR}/:filename`, `${env.API_PREFIX}/${env.STORAGE.UPLOAD_DIR}/:subfolder/:filename`, `${env.API_PREFIX}/${env.STORAGE.UPLOAD_DIR}/:filename`],
+  async (req, res, next) => {
+    const rawFilename = req.params.filename || req.params.subfolder || "";
+    const filename = rawFilename.split("?")[0];
+    if (!filename) return next();
 
-  // Check all subfolders in uploads
-  const subdirs = ["logos", "covers", "gallery", "documents", "certificates", "catalogue", "avatars", "attachments"];
-  for (const sub of subdirs) {
-    const subPath = path.join(uploadsPath, sub, filename);
-    if (fs.existsSync(subPath) && fs.statSync(subPath).isFile()) {
-      return res.sendFile(subPath);
+    // 1. Check root uploads
+    const rootPath = path.join(uploadsPath, filename);
+    if (fs.existsSync(rootPath) && fs.statSync(rootPath).isFile()) {
+      return res.sendFile(rootPath);
     }
-  }
 
-  next();
-});
+    // 2. Check all subfolders in uploads
+    const subdirs = ["logos", "covers", "gallery", "documents", "certificates", "catalogue", "avatars", "attachments"];
+    for (const sub of subdirs) {
+      const subPath = path.join(uploadsPath, sub, filename);
+      if (fs.existsSync(subPath) && fs.statSync(subPath).isFile()) {
+        return res.sendFile(subPath);
+      }
+    }
+
+    // 3. Dynamic PDF fallback (never 404 on documents, quotations or certificates)
+    if (filename.toLowerCase().endsWith(".pdf")) {
+      const isQuotation = filename.toLowerCase().startsWith("quotation-");
+      const targetSub = req.params.filename ? (req.params.subfolder || "documents") : "documents";
+      const targetDir = path.join(uploadsPath, targetSub);
+
+      try {
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
+        }
+        const localSavePath = path.join(targetDir, filename);
+
+        let pdfBuffer = null;
+        if (isQuotation) {
+          pdfBuffer = await quotationHelper.getOrGenerateQuotationPdf(filename);
+        }
+
+        if (!pdfBuffer) {
+          pdfBuffer = pdfService.generateDocumentPlaceholderBuffer({
+            filename,
+            title: filename.includes("certificate") ? "RIFAH Business Certificate" : "Official Compliance & Verification Document",
+            documentType: targetSub === "certificates" ? "Chamber Business Certificate" : "Member Verification Document",
+          });
+        }
+
+        if (pdfBuffer) {
+          try {
+            fs.writeFileSync(localSavePath, pdfBuffer);
+          } catch (writeErr) {
+            // Non-fatal if write fails
+          }
+
+          res.removeHeader("X-Frame-Options");
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+          res.setHeader("Content-Security-Policy", "frame-ancestors *");
+          res.setHeader("Content-Type", "application/pdf");
+          res.setHeader("Content-Disposition", "inline");
+          return res.send(pdfBuffer);
+        }
+      } catch (err) {
+        console.error("Dynamic PDF fallback generation error:", err);
+      }
+    }
+
+    next();
+  }
+);
 
 // Health check endpoint (root level)
 app.use("/health", healthRoutes);
