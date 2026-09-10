@@ -1,5 +1,7 @@
 import { Audit } from "./audit.model.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
+import { ROLES } from "../../shared/constants/roles.js";
+import { User } from "../users/user.model.js";
 
 export const auditService = {
   /**
@@ -22,9 +24,20 @@ export const auditService = {
   /**
    * List audit logs (Admin only)
    */
-  listAuditLogs: async (queryParams = {}) => {
+  listAuditLogs: async (queryParams = {}, user = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
+
+    // Restrict chapter admins to see only actions performed by users in their chapter
+    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+      if (!user.chapterId) {
+        filter._id = null; // Deny access if they have no chapter assigned
+      } else {
+        const usersInChapter = await User.find({ chapterId: user.chapterId }).select("_id");
+        const userIds = usersInChapter.map((u) => u._id);
+        filter.actor = { $in: userIds };
+      }
+    }
 
     if (queryParams.action) filter.action = queryParams.action;
     if (queryParams.targetModel) filter.targetModel = queryParams.targetModel;

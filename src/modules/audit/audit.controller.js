@@ -4,7 +4,7 @@ import { ApiResponse } from "../../shared/utils/response.js";
 
 export const auditController = {
   listAuditLogs: asyncHandler(async (req, res) => {
-    const { logs, meta } = await auditService.listAuditLogs(req.query);
+    const { logs, meta } = await auditService.listAuditLogs(req.query, req.user);
     return ApiResponse.success(res, logs, "Audit logs retrieved", 200, meta);
   }),
 };
