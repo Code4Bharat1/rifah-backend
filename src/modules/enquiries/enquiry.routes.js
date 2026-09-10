@@ -47,9 +47,16 @@ router.get(
 router.patch(
   "/:id/status",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
   validateRequest(validateUpdateEnquiryStatus),
   enquiryController.updateEnquiryStatus
+);
+
+router.post(
+  "/:id/escalate",
+  authMiddleware,
+  requireRole(ROLES.CHAPTER_ADMIN),
+  enquiryController.escalateEnquiry
 );
 
 export { router as enquiryRoutes };

@@ -70,6 +70,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    chapterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Chapter",
+      default: null,
+      index: true,
+    },
     organization: {
       type: String,
       trim: true,

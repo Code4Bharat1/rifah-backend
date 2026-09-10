@@ -1,10 +1,33 @@
 import { Business } from "./business.model.js";
+import { Chapter } from "../chapters/chapter.model.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError, ConflictError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
-import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
+import { getChapterFilter, resolveChapterIdByName } from "../../shared/utils/chapter-scope.js";
+
+/**
+ * Resolves { chapterId, chapter } from either a provided chapterId or a plain chapter name,
+ * keeping the two fields in sync on the document.
+ */
+const resolveChapterFields = async (data) => {
+  if (data.chapterId) {
+    const chapter = await Chapter.findById(data.chapterId);
+    if (chapter) {
+      return { chapterId: chapter._id, chapter: chapter.name };
+    }
+  }
+  if (data.chapter) {
+    const chapterId = await resolveChapterIdByName(data.chapter);
+    if (chapterId) {
+      const chapter = await Chapter.findById(chapterId);
+      return { chapterId, chapter: chapter.name };
+    }
+    return { chapter: data.chapter };
+  }
+  return {};
+};
 
 export const businessService = {
   /**
@@ -20,7 +43,7 @@ export const businessService = {
     }
 
     // RBAC: Chapter Admin Scope Enforcement
-    const chapterScope = await getChapterFilter(user, 'direct');
+    const chapterScope = await getChapterFilter(user, 'direct_id');
     Object.assign(filter, chapterScope);
 
     if (
@@ -29,7 +52,7 @@ export const businessService = {
       queryParams.chapter !== "null" &&
       queryParams.chapter.toLowerCase() !== "all" &&
       queryParams.chapter !== "All chapters" &&
-      !chapterScope.chapter
+      !chapterScope.chapterId
     ) {
       filter.chapter = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
     }
@@ -176,7 +199,7 @@ export const businessService = {
 
     const ALLOWED_CREATE_FIELDS = [
       "name", "tagline", "about", "industry", "categories", "businessType",
-      "city", "state", "address", "pincode", "chapter", "employees",
+      "city", "state", "address", "pincode", "chapter", "chapterId", "employees",
       "founded", "website", "taxId", "phone", "email", "hours",
       "accent", "logo", "coverImage", "gallery", "productsSummary",
       "servicesSummary", "certifications"
@@ -188,6 +211,9 @@ export const businessService = {
         sanitizedData[key] = data[key];
       }
     }
+
+    const chapterFields = await resolveChapterFields(sanitizedData);
+    Object.assign(sanitizedData, chapterFields);
 
     let slug = generateSlug(sanitizedData.name || data.name);
     const slugConflict = await Business.findOne({ slug });
@@ -220,8 +246,9 @@ export const businessService = {
     const isOwner = String(business.owner) === String(user.id);
     const isAdmin = ["super_admin", "secretariat"].includes(user.role);
     const isChapterAdmin = user.role === "chapter_admin";
+    const isOwnChapterAdmin = isChapterAdmin && business.chapterId && user.chapterId && String(business.chapterId) === String(user.chapterId);
 
-    if (!isOwner && !isAdmin && !(isChapterAdmin && business.chapter === user.chapter)) {
+    if (!isOwner && !isAdmin && !isOwnChapterAdmin) {
       throw new ForbiddenError("You are not authorized to update this business profile");
     }
 
@@ -240,6 +267,11 @@ export const businessService = {
           sanitizedData[key] = updateData[key];
         }
       }
+    }
+
+    if (sanitizedData.chapter || sanitizedData.chapterId) {
+      const chapterFields = await resolveChapterFields(sanitizedData);
+      Object.assign(sanitizedData, chapterFields);
     }
 
     if (sanitizedData.name && sanitizedData.name !== business.name) {
@@ -267,7 +299,7 @@ export const businessService = {
    * Admin: Update business verification/membership status
    */
   updateStatus: async (id, { verification, membership, status, featured }, user) => {
-    const chapterScope = await getChapterFilter(user, 'direct');
+    const chapterScope = await getChapterFilter(user, 'direct_id');
     const business = await Business.findOne({ _id: id, ...chapterScope });
     if (!business) {
       throw new NotFoundError("Business not found or access denied");

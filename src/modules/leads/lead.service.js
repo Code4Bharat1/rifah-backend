@@ -20,12 +20,18 @@ export const leadService = {
       throw new NotFoundError("Enquiry not found");
     }
 
-    if (user && user.role === "chapter_admin" && user.chapter) {
+    if (user && user.role === "chapter_admin") {
+      if (!user.chapterId || String(enquiry.chapterId || "") !== String(user.chapterId) || enquiry.status === "Escalated") {
+        throw new ForbiddenError("Security Violation: You can only route leads that belong to your own chapter and have not been escalated.");
+      }
       const targetBusinesses = await Business.find({ _id: { $in: businessIds } });
-      const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
-      const outOfChapter = targetBusinesses.some(b => !chapterRegex.test(b.chapter));
+      const outOfChapter = targetBusinesses.some(b => String(b.chapterId || "") !== String(user.chapterId));
       if (outOfChapter) {
         throw new ForbiddenError("Security Violation: You can only route leads to businesses within your chapter.");
+      }
+    } else if (user && [ "super_admin", "secretariat" ].includes(user.role)) {
+      if (enquiry.status !== "Escalated") {
+        throw new ForbiddenError("Head Office can only route a lead after it has been escalated.");
       }
     }
 
@@ -214,9 +220,8 @@ export const leadService = {
       if (!isOwner && !isRequester && !isSameBusiness && !isAdmin && (businessOwnerId || enquiryRequesterId)) {
         throw new ForbiddenError("You are not authorized to view this lead");
       }
-      if (user.role === "chapter_admin" && user.chapter) {
-        const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
-        if (lead.business && lead.business.chapter && !chapterRegex.test(lead.business.chapter)) {
+      if (user.role === "chapter_admin") {
+        if (lead.business && lead.business.chapterId && String(lead.business.chapterId) !== String(user.chapterId)) {
           throw new ForbiddenError("You are not authorized to view leads outside your chapter");
         }
       }
@@ -418,9 +423,8 @@ export const leadService = {
       if (!isOwner && !isSameBusiness && !isAdmin && businessOwnerId) {
         throw new ForbiddenError("You are not authorized to update this lead's status");
       }
-      if (user.role === "chapter_admin" && user.chapter) {
-        const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
-        if (lead.business && lead.business.chapter && !chapterRegex.test(lead.business.chapter)) {
+      if (user.role === "chapter_admin") {
+        if (lead.business && lead.business.chapterId && String(lead.business.chapterId) !== String(user.chapterId)) {
           throw new ForbiddenError("You are not authorized to update leads outside your chapter");
         }
       }

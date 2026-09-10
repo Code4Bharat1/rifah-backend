@@ -24,7 +24,7 @@ export const chapterController = {
 
   getChapterDetails: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const details = await chapterService.getChapterDetails(id);
+    const details = await chapterService.getChapterDetails(id, req.user);
     return ApiResponse.success(res, details, "Chapter details retrieved");
   }),
 

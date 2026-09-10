@@ -187,8 +187,14 @@
 
 [2026-09-09T07:51:02.106Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AAACR5055K1Z7","data":{"gstin":"27AAACR5055K1Z7","legal_name":"RELIANCE INDUSTRIES LIMITED","trade_name":"RELIANCE INDUSTRIES LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"5, 5, TTC Industrial Area, Reliance Corporate Park, Thane Belapur Road, Ghansoli, Navi Mumbai","city":"Ghansoli, Navi Mumbai","address_details":{"buildi
 
+<<<<<<< HEAD
 [2026-09-10T07:02:46.399Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/21AABCB2115P1Z1 with key gak_a52d...
 
 [2026-09-10T07:02:55.143Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/32AABCB2115P1ZY with key gak_a52d...
 
 [2026-09-10T07:02:56.625Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"32AABCB2115P1ZY","data":{"gstin":"32AABCB2115P1ZY","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"32","state_jurisdiction":null,"address":"3627, M/S S.T. REDDIAR PRINTERS, Veekshanam Road, Kochi","city":"Kochi","address_details":{"building_number":"3627","building_name":"M/S S.T
+=======
+[2026-09-10T08:51:10.015Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/33AABCB2115P1ZW with key gak_a52d...
+
+[2026-09-10T08:51:10.546Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"33AABCB2115P1ZW","data":{"gstin":"33AABCB2115P1ZW","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"33","state_jurisdiction":null,"address":"Level 6, 10/11, Dr. Radhakrishnan Salai, Mylapore, CHENNAI","city":"Mylapore , CHENNAI","address_details":{"building_number":"Level 6","buil
+>>>>>>> 286bef21aa93a89af307bd1257cf1d5d35ec976c

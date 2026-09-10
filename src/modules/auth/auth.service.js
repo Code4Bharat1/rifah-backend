@@ -17,6 +17,7 @@ import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { OAuth2Client } from "google-auth-library";
 import { env } from "../../config/env.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
+import { resolveChapterIdByName } from "../../shared/utils/chapter-scope.js";
 
 const googleClient = new OAuth2Client(env.GOOGLE.CLIENT_ID || undefined);
 
@@ -31,12 +32,14 @@ export const authService = {
     }
 
     const passwordHash = await hashPassword(password);
+    const chapterId = await resolveChapterIdByName(chapter);
     const user = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
       passwordHash,
       phone: phone || "",
       chapter: chapter || "",
+      chapterId,
       organization: organization || "",
       city: city || "",
       sourcingInterest: sourcingInterest ? sourcingInterest.trim() : "",
@@ -54,6 +57,7 @@ export const authService = {
       email: user.email,
       role: user.role,
       chapter: user.chapter,
+      chapterId: user.chapterId,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -180,6 +184,8 @@ export const authService = {
       }
     }
 
+    const chapterId = await resolveChapterIdByName(chapter);
+
     // Check if user exists
     let user = await User.findOne({ email: cleanEmail });
     if (user) {
@@ -193,6 +199,7 @@ export const authService = {
       user.passwordHash = passwordHash;
       user.phone = phone || "";
       user.chapter = chapter || "";
+      user.chapterId = chapterId;
       user.taxId = cleanTaxId;
       await user.save();
     } else {
@@ -203,6 +210,7 @@ export const authService = {
         passwordHash,
         phone: phone || "",
         chapter: chapter || "",
+        chapterId,
         taxId: cleanTaxId,
         role: ROLES.BUSINESS_OWNER,
         isProfileComplete: true,
@@ -233,6 +241,7 @@ export const authService = {
       pincode: pincode || "",
       founded: founded || "",
       chapter: chapter || "",
+      chapterId,
       membership: cleanMembership,
       about: about || "",
       taxId: cleanTaxId,
@@ -258,6 +267,7 @@ export const authService = {
       email: user.email,
       role: user.role,
       chapter: user.chapter,
+      chapterId: user.chapterId,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -301,6 +311,7 @@ export const authService = {
       email: user.email,
       role: user.role,
       chapter: user.chapter,
+      chapterId: user.chapterId,
       forcePasswordChange: user.forcePasswordChange,
     };
 
@@ -338,6 +349,7 @@ export const authService = {
         email: user.email,
         role: user.role,
         chapter: user.chapter,
+        chapterId: user.chapterId,
       };
 
       const newAccessToken = signAccessToken(tokenPayload);
@@ -381,6 +393,7 @@ export const authService = {
       email: user.email,
       role: user.role,
       chapter: user.chapter,
+      chapterId: user.chapterId,
       forcePasswordChange: user.forcePasswordChange,
     };
 
@@ -423,6 +436,7 @@ export const authService = {
       email: user.email,
       role: user.role,
       chapter: user.chapter,
+      chapterId: user.chapterId,
       forcePasswordChange: false,
     };
 
@@ -599,6 +613,7 @@ export const authService = {
         email: existingUser.email,
         role: existingUser.role,
         chapter: existingUser.chapter,
+        chapterId: existingUser.chapterId,
       };
 
       const accessToken = signAccessToken(tokenPayload);
@@ -622,6 +637,7 @@ export const authService = {
     const assignedRole =
       roleTarget === ROLES.BUSINESS_OWNER ? ROLES.BUSINESS_OWNER : ROLES.CUSTOMER;
 
+    const defaultChapterId = await resolveChapterIdByName("Mumbai Chapter");
     const newUser = await User.create({
       name: googlePayload.name || email.split("@")[0],
       email: email,
@@ -630,6 +646,7 @@ export const authService = {
       authProvider: "google",
       role: assignedRole,
       chapter: "Mumbai Chapter",
+      chapterId: defaultChapterId,
       city: "Mumbai",
       status: "Active",
       isProfileComplete: false,
@@ -640,6 +657,7 @@ export const authService = {
       email: newUser.email,
       role: newUser.role,
       chapter: newUser.chapter,
+      chapterId: newUser.chapterId,
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -697,7 +715,10 @@ export const authService = {
     if (contactPerson && contactPerson.trim()) user.name = contactPerson.trim();
     if (phone) user.phone = phone.trim();
     if (city) user.city = city.trim();
-    if (chapter) user.chapter = chapter.trim();
+    if (chapter) {
+      user.chapter = chapter.trim();
+      user.chapterId = await resolveChapterIdByName(chapter);
+    }
     if (organization) user.organization = organization.trim();
     if (sourcingInterest) {
       user.sourcingInterest = sourcingInterest.trim();
@@ -730,7 +751,10 @@ export const authService = {
         if (address) existingBiz.address = address.trim();
         if (city) existingBiz.city = city.trim();
         if (state) existingBiz.state = state.trim();
-        if (chapter) existingBiz.chapter = chapter.trim();
+        if (chapter) {
+          existingBiz.chapter = chapter.trim();
+          existingBiz.chapterId = user.chapterId;
+        }
         if (taxId) existingBiz.taxId = taxId.trim();
         existingBiz.membership = formattedTier;
         existingBiz.verification = "pending";
@@ -757,6 +781,7 @@ export const authService = {
           city: user.city || "Mumbai",
           state: state || "Maharashtra",
           chapter: user.chapter || "Mumbai Chapter",
+          chapterId: user.chapterId || (await resolveChapterIdByName("Mumbai Chapter")),
           taxId: taxId ? taxId.trim() : "",
           membership: formattedTier,
           verification: "pending",
@@ -769,6 +794,7 @@ export const authService = {
       email: user.email,
       role: user.role,
       chapter: user.chapter,
+      chapterId: user.chapterId,
     };
 
     const accessToken = signAccessToken(tokenPayload);

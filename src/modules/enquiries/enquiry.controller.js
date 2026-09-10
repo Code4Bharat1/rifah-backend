@@ -45,6 +45,12 @@ export const enquiryController = {
     return ApiResponse.success(res, updated, "Enquiry status updated successfully");
   }),
 
+  escalateEnquiry: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updated = await enquiryService.escalateEnquiry(id, req.user, req.body?.note);
+    return ApiResponse.success(res, updated, "Lead escalated to Head Office successfully");
+  }),
+
   exportCsv: asyncHandler(async (req, res) => {
     const csvData = await enquiryService.exportCsv(req.query, req.user);
     res.setHeader("Content-Type", "text/csv");

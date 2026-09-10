@@ -5,9 +5,10 @@ import { notificationService } from "../notifications/notification.service.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
-import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
+import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
-import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
+import { getChapterFilter, resolveChapterIdForLocation, resolveChapterIdByName } from "../../shared/utils/chapter-scope.js";
+import { Chapter } from "../chapters/chapter.model.js";
 
 export const enquiryService = {
   /**
@@ -56,9 +57,22 @@ export const enquiryService = {
       }
     }
 
-    const resolvedChapter = targetType === "chamber" && data.chapter
-      ? data.chapter
-      : (targetType === "all" ? (data.chapter || "All Chapters") : (data.chapter || user?.chapter || "Mumbai Chapter"));
+    // Resolve the owning chapter for this enquiry: explicit chamber-targeting is trusted directly;
+    // otherwise derive it from the buyer's delivery location so it only reaches that chapter's admin.
+    let resolvedChapter;
+    let resolvedChapterId = null;
+    if (targetType === "chamber" && data.chapter) {
+      resolvedChapter = data.chapter;
+      resolvedChapterId = await resolveChapterIdByName(data.chapter);
+    } else {
+      resolvedChapterId = await resolveChapterIdForLocation(data.location);
+      if (resolvedChapterId) {
+        const matchedChapter = await Chapter.findById(resolvedChapterId);
+        resolvedChapter = matchedChapter.name;
+      } else {
+        resolvedChapter = targetType === "all" ? (data.chapter || "All Chapters") : (data.chapter || "Unassigned");
+      }
+    }
 
     const enquiry = await Enquiry.create({
       ...data,
@@ -70,6 +84,7 @@ export const enquiryService = {
       requesterRole,
       timeline: initialTimeline,
       chapter: resolvedChapter,
+      chapterId: resolvedChapterId,
     });
 
     if (targetType === "business" && targetBusiness) {
@@ -132,8 +147,8 @@ export const enquiryService = {
             ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
           };
 
-          if (targetType === "chamber" && data.chapter && data.chapter !== "All Chapters") {
-            query.chapter = data.chapter;
+          if (resolvedChapterId) {
+            query.chapterId = resolvedChapterId;
           }
 
           const matchingBusinesses = await Business.find(query);
@@ -266,7 +281,7 @@ export const enquiryService = {
             { targetBusiness: userBusiness._id },
             { _id: { $in: routedEnquiryIds } },
             { targetType: "all" },
-            { targetType: "chamber", chapter: userBusiness.chapter },
+            { targetType: "chamber", chapterId: userBusiness.chapterId },
             { targetType: { $exists: false }, targetBusiness: userBusiness._id },
           ],
         },
@@ -340,19 +355,15 @@ export const enquiryService = {
 
     // RBAC: Chapter Admin Scope Enforcement
     if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      if (!requester.chapter) {
+      if (!requester.chapterId) {
         conditions.push({ _id: null }); // Deny access
       } else {
-        const baseCity = requester.chapter.replace(/\b(chapter|chamber)\b/gi, '').trim();
-        const chapterRegex = new RegExp(baseCity, "i");
-        
-        const businesses = await Business.find({ chapter: chapterRegex }).select("_id");
+        const businesses = await Business.find({ chapterId: requester.chapterId }).select("_id");
         const businessIds = businesses.map((b) => b._id);
-        
+
         conditions.push({
           $or: [
-            { chapter: chapterRegex },
-            { targetType: "all" },
+            { chapterId: requester.chapterId },
             { targetBusiness: { $in: businessIds } }
           ]
         });
@@ -365,7 +376,7 @@ export const enquiryService = {
     if (queryParams.category) {
       conditions.push({ category: queryParams.category });
     }
-    
+
     // Type Filter (Direct RFQs vs Broadcast RFQs)
     if (queryParams.type && queryParams.type.toLowerCase() !== "all") {
       if (queryParams.type === "direct") {
@@ -418,7 +429,7 @@ export const enquiryService = {
    * Update enquiry status, assignment & timeline
    */
   updateEnquiryStatus: async (id, { status, assignedTo, resolutionNote, timelineUpdate }, requester) => {
-    const chapterScope = await getChapterFilter(requester, 'direct');
+    const chapterScope = await getChapterFilter(requester, 'direct_id');
     const enquiry = await Enquiry.findOne({ _id: id, ...chapterScope });
     if (!enquiry) {
       throw new NotFoundError("Enquiry not found or access denied");
@@ -465,6 +476,51 @@ export const enquiryService = {
   },
 
   /**
+   * Escalate a chapter-owned enquiry to Head Office (Chapter Admin only, own chapter only)
+   */
+  escalateEnquiry: async (id, requester, note) => {
+    const enquiry = await Enquiry.findById(id);
+    if (!enquiry) {
+      throw new NotFoundError("Enquiry not found");
+    }
+
+    if (!requester.chapterId || String(enquiry.chapterId || "") !== String(requester.chapterId)) {
+      throw new ForbiddenError("You can only escalate leads that belong to your own chapter");
+    }
+
+    if (enquiry.status === "Escalated") {
+      throw new BadRequestError("This lead has already been escalated");
+    }
+
+    enquiry.status = "Escalated";
+    enquiry.escalatedAt = new Date();
+    enquiry.escalatedBy = requester.id;
+    if (note !== undefined) enquiry.resolutionNote = note;
+    enquiry.timeline.push({ label: `Escalated to Head Office by chapter admin`, at: "Just now", done: true });
+    await enquiry.save();
+
+    try {
+      const headOfficeUsers = await User.find({ role: { $in: [ROLES.SUPER_ADMIN, ROLES.SECRETARIAT] } }).select("_id");
+      await Promise.all(
+        headOfficeUsers.map((admin) =>
+          notificationService.createNotification({
+            recipientId: admin._id,
+            type: "Enquiry",
+            title: "Lead Escalated",
+            body: `A lead ("${enquiry.title}") was escalated from ${enquiry.chapter} for Head Office routing.`,
+            entityId: enquiry._id,
+            link: "/admin/leads",
+          })
+        )
+      );
+    } catch (err) {
+      console.error("Failed to notify Head Office about escalation:", err);
+    }
+
+    return enquiry;
+  },
+
+  /**
    * Export Enquiries to CSV
    */
   exportCsv: async (queryParams = {}, requester = null) => {
@@ -473,19 +529,15 @@ export const enquiryService = {
 
     // RBAC: Chapter Admin Scope Enforcement
     if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      if (!requester.chapter) {
+      if (!requester.chapterId) {
         conditions.push({ _id: null }); // Deny access
       } else {
-        const baseCity = requester.chapter.replace(/\b(chapter|chamber)\b/gi, '').trim();
-        const chapterRegex = new RegExp(baseCity, "i");
-        
-        const businesses = await Business.find({ chapter: chapterRegex }).select("_id");
+        const businesses = await Business.find({ chapterId: requester.chapterId }).select("_id");
         const businessIds = businesses.map((b) => b._id);
-        
+
         conditions.push({
           $or: [
-            { chapter: chapterRegex },
-            { targetType: "all" },
+            { chapterId: requester.chapterId },
             { targetBusiness: { $in: businessIds } }
           ]
         });
@@ -498,7 +550,7 @@ export const enquiryService = {
     if (queryParams.category) {
       conditions.push({ category: queryParams.category });
     }
-    
+
     // Type Filter (Direct RFQs vs Broadcast RFQs)
     if (queryParams.type && queryParams.type.toLowerCase() !== "all") {
       if (queryParams.type === "direct") {
