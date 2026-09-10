@@ -20,7 +20,7 @@ router.get("/slug/:slug", optionalAuthMiddleware, chapterController.getChapterBy
 router.get(
   "/:id/details",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   chapterController.getChapterDetails
 );

@@ -70,6 +70,12 @@ const businessSchema = new mongoose.Schema(
       default: "",
       index: true,
     },
+    chapterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Chapter",
+      default: null,
+      index: true,
+    },
     region: {
       type: String,
       enum: ["national", "international"],

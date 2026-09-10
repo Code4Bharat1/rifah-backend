@@ -32,7 +32,7 @@ export const validateCreateEnquiry = (data = {}) => {
 
 export const validateUpdateEnquiryStatus = (data = {}) => {
   const errors = [];
-  const allowed = ["New", "Routed", "In Progress", "Responded", "Won", "Closed", "Rejected"];
+  const allowed = ["New", "Routed", "In Progress", "Responded", "Won", "Closed", "Rejected", "Escalated"];
   if (!data.status || !allowed.includes(data.status)) {
     errors.push({ field: "status", message: `Status must be one of: ${allowed.join(", ")}` });
   }

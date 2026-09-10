@@ -15,9 +15,9 @@ export const chapterService = {
     
     // RBAC: Chapter Admin Scope Enforcement
     if (user && user.role === ROLES.CHAPTER_ADMIN) {
-      query.name = user.chapter;
+      query._id = user.chapterId || null;
     }
-    
+
     return Chapter.find(query).sort({ name: 1 });
   },
 
@@ -29,16 +29,20 @@ export const chapterService = {
     return chapter;
   },
 
-  getChapterDetails: async (id) => {
+  getChapterDetails: async (id, requester) => {
+    if (requester && requester.role === ROLES.CHAPTER_ADMIN && String(requester.chapterId || "") !== String(id)) {
+      throw new NotFoundError("Chapter not found");
+    }
+
     const chapter = await Chapter.findById(id);
     if (!chapter) {
       throw new NotFoundError("Chapter not found");
     }
 
     const [businessesCount, customersCount, admin] = await Promise.all([
-      Business.countDocuments({ chapter: chapter.name }),
-      User.countDocuments({ chapter: chapter.name, role: ROLES.CUSTOMER }),
-      User.findOne({ chapter: chapter.name, role: ROLES.CHAPTER_ADMIN }).select("-passwordHash"),
+      Business.countDocuments({ chapterId: chapter._id }),
+      User.countDocuments({ chapterId: chapter._id, role: ROLES.CUSTOMER }),
+      User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN }).select("-passwordHash"),
     ]);
 
     return {
@@ -108,11 +112,12 @@ export const chapterService = {
 
     const existingUserWithEmail = await User.findOne({ email: email.toLowerCase() });
     // Check if an admin already exists for this chapter
-    const oldAdmin = await User.findOne({ chapter: chapter.name, role: ROLES.CHAPTER_ADMIN });
+    const oldAdmin = await User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN });
     if (oldAdmin && oldAdmin.email !== email) {
       // Downgrade old admin to their previous role, or customer
       oldAdmin.role = oldAdmin.previousRole || ROLES.CUSTOMER;
       oldAdmin.previousRole = "";
+      oldAdmin.chapterId = null;
       await oldAdmin.save();
       // Send removal notice
       if (oldAdmin.email) {
@@ -132,6 +137,7 @@ export const chapterService = {
       
       existingUserWithEmail.role = ROLES.CHAPTER_ADMIN;
       existingUserWithEmail.chapter = chapter.name;
+      existingUserWithEmail.chapterId = chapter._id;
       existingUserWithEmail.name = name; // Update name just in case
       await existingUserWithEmail.save();
 
@@ -150,6 +156,7 @@ export const chapterService = {
       passwordHash,
       role: ROLES.CHAPTER_ADMIN,
       chapter: chapter.name,
+      chapterId: chapter._id,
       forcePasswordChange: true,
     });
 

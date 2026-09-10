@@ -59,6 +59,12 @@ const enquirySchema = new mongoose.Schema(
       default: "Mumbai Chapter",
       index: true,
     },
+    chapterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Chapter",
+      default: null,
+      index: true,
+    },
     category: {
       type: String,
       required: [true, "Category is required"],
@@ -106,6 +112,15 @@ const enquirySchema = new mongoose.Schema(
     },
     resolutionNote: {
       type: String,
+    },
+    escalatedAt: {
+      type: Date,
+      default: null,
+    },
+    escalatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
     timeline: [timelineEventSchema],
   },

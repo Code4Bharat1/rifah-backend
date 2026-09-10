@@ -186,3 +186,7 @@
 [2026-09-09T07:51:01.666Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AAACR5055K1Z7 with key gak_a52d...
 
 [2026-09-09T07:51:02.106Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AAACR5055K1Z7","data":{"gstin":"27AAACR5055K1Z7","legal_name":"RELIANCE INDUSTRIES LIMITED","trade_name":"RELIANCE INDUSTRIES LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"5, 5, TTC Industrial Area, Reliance Corporate Park, Thane Belapur Road, Ghansoli, Navi Mumbai","city":"Ghansoli, Navi Mumbai","address_details":{"buildi
+
+[2026-09-10T08:51:10.015Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/33AABCB2115P1ZW with key gak_a52d...
+
+[2026-09-10T08:51:10.546Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"33AABCB2115P1ZW","data":{"gstin":"33AABCB2115P1ZW","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"33","state_jurisdiction":null,"address":"Level 6, 10/11, Dr. Radhakrishnan Salai, Mylapore, CHENNAI","city":"Mylapore , CHENNAI","address_details":{"building_number":"Level 6","buil

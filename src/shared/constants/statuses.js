@@ -23,6 +23,7 @@ export const STATUSES = Object.freeze({
     WON: "Won",
     CLOSED: "Closed",
     REJECTED: "Rejected",
+    ESCALATED: "Escalated",
   },
 
   LEAD: {

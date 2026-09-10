@@ -79,10 +79,10 @@ export const userService = {
     const filter = {};
 
     // RBAC: Chapter Admin Scope Enforcement
-    const chapterScope = await getChapterFilter(requester, 'direct');
+    const chapterScope = await getChapterFilter(requester, 'direct_id');
     Object.assign(filter, chapterScope);
 
-    if (queryParams.chapter && !chapterScope.chapter) {
+    if (queryParams.chapter && !chapterScope.chapterId) {
       filter.chapter = queryParams.chapter;
     }
 
@@ -114,7 +114,7 @@ export const userService = {
    * Update user status or role (admin)
    */
   updateUserStatus: async (userId, { status, role }, requester) => {
-    const chapterScope = await getChapterFilter(requester, 'direct');
+    const chapterScope = await getChapterFilter(requester, 'direct_id');
     const userToUpdate = await User.findOne({ _id: userId, ...chapterScope });
     if (!userToUpdate) {
       throw new NotFoundError("User not found or access denied");
@@ -122,7 +122,7 @@ export const userService = {
 
     // Role-based constraints for Chapter Admin
     if (requester && requester.role === ROLES.CHAPTER_ADMIN) {
-      if (userToUpdate.chapter !== requester.chapter) {
+      if (String(userToUpdate.chapterId || "") !== String(requester.chapterId || "")) {
         throw new ForbiddenError("Cannot modify users outside your chapter");
       }
       if (userToUpdate.role === ROLES.SUPER_ADMIN || userToUpdate.role === ROLES.SECRETARIAT) {

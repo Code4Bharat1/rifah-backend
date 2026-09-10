@@ -18,7 +18,7 @@ const broadcastEventToAudience = async (event) => {
 
   try {
     const rolesToTarget = [];
-    if (event.targetAudience.includes("Consumers")) rolesToTarget.push(ROLES.CONSUMER);
+    if (event.targetAudience.includes("Consumers")) rolesToTarget.push(ROLES.CUSTOMER);
     if (event.targetAudience.includes("Businesses")) rolesToTarget.push(ROLES.BUSINESS_OWNER);
     if (event.targetAudience.includes("Chapter Admins")) rolesToTarget.push(ROLES.CHAPTER_ADMIN);
 
@@ -66,7 +66,7 @@ export const eventService = {
     Object.assign(filter, chapterScope);
 
     // Enforce Audience & Chapter Targeting for normal users
-    if (user && [ROLES.BUSINESS_OWNER, ROLES.CONSUMER].includes(user.role)) {
+    if (user && [ROLES.BUSINESS_OWNER, ROLES.CUSTOMER].includes(user.role)) {
       // Must match role targeting
       const userRoleDisplay = user.role === ROLES.BUSINESS_OWNER ? "Businesses" : "Consumers";
       filter.targetAudience = { $in: [userRoleDisplay, "All"] };

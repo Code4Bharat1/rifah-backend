@@ -23,7 +23,7 @@ const seedAdmin = async () => {
     } else {
       const passwordHash = await hashPassword("12345678");
       await User.create({
-        name: "RIFAH Secretariat General",
+        name: "RIFAH Super Admin",
         email: adminEmail,
         passwordHash,
         phone: "+91 22 2345 6789",
