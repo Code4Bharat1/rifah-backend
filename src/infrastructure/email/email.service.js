@@ -540,41 +540,124 @@ export const emailService = {
   },
 
   /**
-   * Sends Business Verification Status update email
+   * Sends Business Verification Status update email with detailed reason & resubmission CTA
    */
   sendVerificationStatusEmail: async ({ email, ownerName, businessName, status, notes }) => {
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
-    const isVerified = status === "verified";
-    const subject = isVerified
-      ? `✅ Business Verification Approved: ${businessName}`
-      : `⚠️ Business Verification Update: ${businessName}`;
+    const isVerified = status === "verified" || status === "approved";
+    const isRejected = status === "rejected";
+    const isCorrection = status === "correction_requested" || status === "changes_required" || status === "correction";
+
+    let subject = `📋 Business Verification Update: ${businessName}`;
+    let badgeText = "STATUS UPDATE";
+    let badgeBg = "#f1f5f9";
+    let badgeColor = "#334155";
+    let topBarGrad = "linear-gradient(90deg, #dc2626 0%, #2563eb 100%)";
+    let buttonText = "View Verification Status →";
+    let buttonBg = "#0284c7";
+
+    if (isVerified) {
+      subject = `✅ Business Verification Approved: ${businessName}`;
+      badgeText = "VERIFIED MEMBER";
+      badgeBg = "#dcfce7";
+      badgeColor = "#166534";
+      topBarGrad = "linear-gradient(90deg, #10b981 0%, #059669 100%)";
+      buttonText = "View Verification Badge →";
+      buttonBg = "#059669";
+    } else if (isRejected) {
+      subject = `❌ Business Verification Not Approved: ${businessName}`;
+      badgeText = "VERIFICATION REJECTED";
+      badgeBg = "#ffe4e6";
+      badgeColor = "#9f1239";
+      topBarGrad = "linear-gradient(90deg, #e11d48 0%, #be123c 100%)";
+      buttonText = "Update Details & Re-submit →";
+      buttonBg = "#e11d48";
+    } else if (isCorrection) {
+      subject = `⚠️ Verification Action Required: ${businessName}`;
+      badgeText = "CHANGES REQUIRED";
+      badgeBg = "#fef3c7";
+      badgeColor = "#92400e";
+      topBarGrad = "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)";
+      buttonText = "Replace Documents & Re-submit →";
+      buttonBg = "#d97706";
+    }
 
     const html = `
-      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
-        <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
+      <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <div style="height: 6px; background: ${topBarGrad};"></div>
         <div style="padding: 32px;">
-          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`}
-          <span style="background-color: ${isVerified ? "#dcfce7" : "#fef3c7"}; color: ${isVerified ? "#166534" : "#92400e"}; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">
-            ${isVerified ? "VERIFIED MEMBER" : "STATUS UPDATE"}
-          </span>
-          <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">Verification Update for ${businessName}</h2>
-          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${ownerName || "Member"}</strong>,</p>
-          <p style="color: #475569; font-size: 14px; line-height: 1.6;">
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <tr>
+              <td>
+                ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; display: block;" />` : `<h1 style="color: #0b192c; font-size: 22px; margin: 0;">RIFAH CONNECT</h1>`}
+              </td>
+              <td style="text-align: right;">
+                <span style="background-color: ${badgeBg}; color: ${badgeColor}; font-size: 11px; font-weight: 800; padding: 5px 14px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block;">
+                  ${badgeText}
+                </span>
+              </td>
+            </tr>
+          </table>
+
+          <h2 style="color: #0f172a; font-size: 19px; font-weight: 700; margin: 16px 0 8px 0;">
             ${
               isVerified
-                ? `Congratulations! Your business <strong>${businessName}</strong> has been officially verified by the RIFAH Chamber Secretariat.`
-                : `The verification status for <strong>${businessName}</strong> has been updated to: <strong>${status}</strong>.`
+                ? `Congratulations! ${businessName} is now Verified`
+                : isRejected
+                ? `Verification Application Decision: ${businessName}`
+                : `Action Required for ${businessName}`
+            }
+          </h2>
+
+          <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">Dear <strong>${ownerName || "Member"}</strong>,</p>
+
+          <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+            ${
+              isVerified
+                ? `We are pleased to inform you that your business <strong>${businessName}</strong> has been officially vetted and approved by the RIFAH Chamber Secretariat. Your listing is now active with the official verified badge.`
+                : isRejected
+                ? `Following document and compliance evaluation, the RIFAH Chamber Secretariat has <strong>declined</strong> the current verification submission for <strong>${businessName}</strong>.`
+                : `The RIFAH Chamber Secretariat has reviewed your application for <strong>${businessName}</strong> and requested specific updates or document replacements before verification can be approved.`
             }
           </p>
 
-          ${notes ? `<div style="background-color: #f8fafc; border-left: 4px solid #0284c7; padding: 16px; margin: 20px 0; font-size: 13px; color: #334155;"><strong>Secretariat Notes:</strong> ${notes}</div>` : ""}
+          ${
+            notes
+              ? `
+              <div style="background-color: ${isRejected ? "#fff1f2" : isCorrection ? "#fffbeb" : "#f8fafc"}; border: 1px solid ${isRejected ? "#fecdd3" : isCorrection ? "#fde68a" : "#e2e8f0"}; border-left: 4px solid ${isRejected ? "#e11d48" : isCorrection ? "#d97706" : "#0284c7"}; border-radius: 8px; padding: 16px; margin: 20px 0;">
+                <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: ${isRejected ? "#9f1239" : isCorrection ? "#92400e" : "#0369a1"};">
+                  ${isRejected ? "Reason for Rejection / Secretariat Decision:" : "Secretariat Instructions & Feedback:"}
+                </p>
+                <p style="margin: 0; font-size: 13px; font-weight: 500; color: #1e293b; line-height: 1.6;">
+                  ${notes}
+                </p>
+              </div>
+            `
+              : ""
+          }
 
-          <div style="margin-top: 24px;">
-            <a href="http://localhost:3000/biz/verification" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Verification Badge →</a>
+          ${
+            !isVerified
+              ? `
+              <p style="color: #475569; font-size: 13px; line-height: 1.6; margin: 16px 0 20px 0;">
+                You can upload revised documents, fix company details, and <strong>re-submit your application for immediate re-evaluation</strong> directly from your RIFAH workspace.
+              </p>
+            `
+              : ""
+          }
+
+          <div style="margin-top: 24px; margin-bottom: 24px;">
+            <a href="http://localhost:3000/biz/verification" style="background-color: ${buttonBg}; color: #ffffff; padding: 13px 28px; border-radius: 10px; font-weight: 700; text-decoration: none; display: inline-block; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+              ${buttonText}
+            </a>
           </div>
+
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
-          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Secretariat Verification Desk</p>
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0; line-height: 1.5;">
+            RIFAH Chamber of Commerce & Industry · Secretariat Verification Desk<br />
+            Need assistance? Reply to this email or contact support at <a href="mailto:secretariat@rifah.org" style="color: #0284c7; text-decoration: none;">secretariat@rifah.org</a>
+          </p>
         </div>
       </div>
     `;

@@ -83,7 +83,6 @@ const businessSchema = new mongoose.Schema(
     },
     membership: {
       type: String,
-      enum: ["Free", "Basic", "Verified", "Premium", "Enterprise", "free", "basic", "verified", "premium", "enterprise"],
       default: "Free",
       index: true,
     },
@@ -193,6 +192,22 @@ const businessSchema = new mongoose.Schema(
       default: "Active",
       index: true,
     },
+    verificationReviewReason: {
+      type: String,
+      default: "",
+    },
+    verificationRemarks: {
+      type: String,
+      default: "",
+    },
+    verificationHistory: [
+      {
+        action: { type: String },
+        reason: { type: String },
+        reviewer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

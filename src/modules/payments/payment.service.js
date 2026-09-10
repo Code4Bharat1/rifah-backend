@@ -163,7 +163,8 @@ export const paymentService = {
 
         const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
         const formattedTier =
-          validTiers.find((t) => t.toLowerCase() === (planId || "basic").toLowerCase()) || "Basic";
+          validTiers.find((t) => t.toLowerCase() === (planId || "basic").toLowerCase()) ||
+          (planId ? planId.charAt(0).toUpperCase() + planId.slice(1) : "Basic");
 
         const bizCity = (payload.city && payload.city.trim()) || userDoc.city || "";
         const bizState = (payload.state && payload.state.trim()) || userDoc.state || "";
@@ -346,7 +347,8 @@ export const paymentService = {
 
         const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
         const formattedTier =
-          validTiers.find((t) => t.toLowerCase() === (data.planId || "basic").toLowerCase()) || "Basic";
+          validTiers.find((t) => t.toLowerCase() === (data.planId || "basic").toLowerCase()) ||
+          (data.planId ? data.planId.charAt(0).toUpperCase() + data.planId.slice(1) : "Basic");
 
         const bizCity = (data.city && data.city.trim()) || userDoc.city || "";
         const bizState = (data.state && data.state.trim()) || userDoc.state || "";

@@ -14,28 +14,10 @@ const storage = multer.memoryStorage();
 
 // File filter (strictly safe images, videos, audio, PDFs, and office documents)
 const fileFilter = (req, file, cb) => {
-  const allowedImageMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-  const isImage = allowedImageMimes.includes(file.mimetype);
-  const isVideo = file.mimetype.startsWith("video/");
-  const isAudio = file.mimetype.startsWith("audio/");
+  const mime = (file.mimetype || "").toLowerCase();
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  const cleanName = path.basename(file.originalname || "").replace(/[\x00-\x1f\x80-\x9f]/g, "").toLowerCase();
 
-  const allowedDocMimeTypes = [
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "text/plain",
-    "text/csv",
-    "application/zip",
-    "application/x-zip-compressed",
-  ];
-
-  const ext = path.extname(file.originalname).toLowerCase();
-  const cleanName = path.basename(file.originalname).replace(/[\x00-\x1f\x80-\x9f]/g, "").toLowerCase();
-  
   // Guard against dangerous extensions and double extension tricks (e.g. payload.php.png)
   const dangerousPatterns = [/\.php/i, /\.html?/i, /\.svg/i, /\.exe/i, /\.js/i, /\.jsx/i, /\.ts/i, /\.tsx/i, /\.sh/i, /\.bat/i, /\.cmd/i, /\.vbs/i, /\.msi/i];
   for (const pattern of dangerousPatterns) {
@@ -55,12 +37,43 @@ const fileFilter = (req, file, cb) => {
     );
   }
 
-  if (isImage || isVideo || isAudio || allowedDocMimeTypes.includes(file.mimetype)) {
+  const allowedImageMimes = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/pjpeg",
+    "image/x-png",
+    "image/avif",
+    "image/heic",
+    "image/heif",
+    "image/bmp",
+  ];
+  const isImage = allowedImageMimes.includes(mime) || (mime.startsWith("image/") && mime !== "image/svg+xml");
+  const isVideo = mime.startsWith("video/");
+  const isAudio = mime.startsWith("audio/");
+
+  const allowedDocMimeTypes = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "text/csv",
+    "application/zip",
+    "application/x-zip-compressed",
+  ];
+
+  if (isImage || isVideo || isAudio || allowedDocMimeTypes.includes(mime)) {
     cb(null, true);
   } else {
     cb(
       new BadRequestError(
-        `Unsupported or insecure file type: ${file.mimetype}. Allowed: JPEG, PNG, WEBP, GIF, standard videos, audio, PDF, and office documents.`
+        `Unsupported or insecure file type: ${file.mimetype}. Allowed: JPEG, JPG, PNG, WEBP, GIF, AVIF, standard videos, audio, PDF, and office documents.`
       ),
       false
     );

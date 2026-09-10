@@ -9,9 +9,9 @@ import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const verificationService = {
   /**
-   * Submit verification request with documents
+   * Submit verification request with documents (New submission or Re-submission)
    */
-  submitVerification: async (businessId, documents, user) => {
+  submitVerification: async (businessId, documents, user, notes = "") => {
     const business = await Business.findById(businessId);
     if (!business) {
       throw new NotFoundError("Business not found");
@@ -26,6 +26,9 @@ export const verificationService = {
       verification.documents = documents;
       verification.status = "pending";
       verification.submittedBy = user.id;
+      if (notes) {
+        verification.remarks = `Re-submitted: ${notes}`;
+      }
       await verification.save();
     } else {
       verification = await Verification.create({
@@ -33,10 +36,20 @@ export const verificationService = {
         submittedBy: user.id,
         documents,
         status: "pending",
+        remarks: notes || "",
       });
     }
 
     business.verification = "pending";
+    if (!Array.isArray(business.verificationHistory)) {
+      business.verificationHistory = [];
+    }
+    business.verificationHistory.push({
+      action: "re_submitted",
+      reason: notes || "Business owner re-submitted updated verification documents",
+      reviewer: user.id,
+      createdAt: new Date(),
+    });
     await business.save();
 
     return verification;
@@ -47,7 +60,7 @@ export const verificationService = {
    */
   getVerificationByBusinessId: async (businessId, requester = null) => {
     const verification = await Verification.findOne({ business: businessId })
-      .populate("business", "name slug chapter")
+      .populate("business", "name slug chapter verification verificationReviewReason verificationRemarks verificationHistory")
       .populate("submittedBy", "name email");
 
     if (!verification) return null;
@@ -86,7 +99,7 @@ export const verificationService = {
 
     const [verifications, total] = await Promise.all([
       Verification.find(filter)
-        .populate("business", "name slug city state chapter membership")
+        .populate("business", "name slug city state chapter membership verification verificationReviewReason")
         .populate("submittedBy", "name email phone")
         .populate("reviewedBy", "name chapter role")
         .sort(sort)
@@ -104,7 +117,7 @@ export const verificationService = {
   /**
    * Review verification (Secretariat/Admin: approve/reject/request changes)
    */
-  reviewVerification: async (verificationId, { status, remarks }, reviewer) => {
+  reviewVerification: async (verificationId, { status, remarks, reason }, reviewer) => {
     const verification = await Verification.findById(verificationId);
     if (!verification) {
       throw new NotFoundError("Verification request not found");
@@ -122,10 +135,12 @@ export const verificationService = {
 
     let finalStatus = status;
     if (status === "approved") finalStatus = "verified";
-    if (status === "correction") finalStatus = "correction_requested";
+    if (status === "correction" || status === "changes_required") finalStatus = "correction_requested";
+
+    const finalRemarks = (remarks || reason || "").trim();
 
     verification.status = finalStatus;
-    if (remarks) verification.remarks = remarks;
+    if (finalRemarks) verification.remarks = finalRemarks;
     verification.reviewedBy = reviewer.id || reviewer;
     verification.reviewedAt = new Date();
 
@@ -143,9 +158,22 @@ export const verificationService = {
 
     await verification.save();
 
-    // Update business profile verification status
+    // Update business profile verification status & reason
     if (business) {
       business.verification = finalStatus;
+      business.verificationReviewReason = finalRemarks;
+      business.verificationRemarks = finalRemarks;
+
+      if (!Array.isArray(business.verificationHistory)) {
+        business.verificationHistory = [];
+      }
+      business.verificationHistory.push({
+        action: finalStatus,
+        reason: finalRemarks,
+        reviewer: reviewer.id || reviewer,
+        createdAt: new Date(),
+      });
+
       await business.save();
 
       if (business.owner) {
@@ -157,10 +185,12 @@ export const verificationService = {
               ownerName: ownerUser.name,
               businessName: business.name,
               status: finalStatus,
-              notes: remarks,
+              notes: finalRemarks,
             });
           }
-        } catch (err) {}
+        } catch (err) {
+          console.error("Failed to send verification status email:", err);
+        }
       }
     }
 

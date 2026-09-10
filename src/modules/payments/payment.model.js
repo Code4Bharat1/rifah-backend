@@ -40,7 +40,6 @@ const paymentSchema = new mongoose.Schema(
     },
     method: {
       type: String,
-      enum: ENUMS.PAYMENT_METHODS,
       default: "UPI",
     },
     status: {

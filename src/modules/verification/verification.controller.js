@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 
 export const verificationController = {
   submitVerification: asyncHandler(async (req, res) => {
-    let { businessId, documents } = req.body;
+    let { businessId, documents, notes } = req.body;
     if (!businessId && req.user?.id) {
       const biz = await Business.findOne({ owner: req.user.id });
       if (biz) {
@@ -22,7 +22,8 @@ export const verificationController = {
     const verification = await verificationService.submitVerification(
       businessId,
       documents || [],
-      req.user
+      req.user,
+      notes || ""
     );
     return ApiResponse.success(res, verification, "Verification submitted for review");
   }),

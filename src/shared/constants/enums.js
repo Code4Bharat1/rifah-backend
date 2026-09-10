@@ -1,5 +1,5 @@
 export const ENUMS = Object.freeze({
-  MEMBERSHIP_TIERS: ["Free", "Basic", "Premium", "Enterprise"],
+  MEMBERSHIP_TIERS: ["Free", "Basic", "Premium", "Enterprise", "Platinum", "Gold", "Silver", "Custom"],
   BUSINESS_TYPES: [
     "Proprietorship",
     "Partnership",
@@ -23,7 +23,7 @@ export const ENUMS = Object.freeze({
     "System",
     "General",
   ],
-  PAYMENT_METHODS: ["Card", "Bank transfer", "UPI", "Net Banking"],
+  PAYMENT_METHODS: ["Card", "Bank transfer", "UPI", "Net Banking", "Razorpay", "International Card", "Online Payment"],
   AUDIT_ACTIONS: [
     "CREATE",
     "UPDATE",
