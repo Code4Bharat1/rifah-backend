@@ -30,10 +30,8 @@ export const leadService = {
         throw new ForbiddenError("Security Violation: You can only route leads to businesses within your chapter.");
       }
     } else if (user && [ "super_admin", "secretariat" ].includes(user.role)) {
-      const isUnassigned = !enquiry.chapterId;
-      const isEscalated = enquiry.status === "Escalated";
-      if (!isUnassigned && !isEscalated) {
-        throw new ForbiddenError("This lead belongs to a chapter and must be escalated by its chapter admin before Head Office can route it.");
+      if (enquiry.status !== "Escalated") {
+        throw new ForbiddenError("Head Office can only route a lead after it has been escalated.");
       }
     }
 
