@@ -66,24 +66,16 @@ export const cloudinaryService = {
 
     // If source is a Buffer (from memoryStorage or fs.readFileSync)
     if (Buffer.isBuffer(fileSource)) {
-      try {
-        const mimeType = options.mimetype || "image/jpeg";
-        const base64Data = `data:${mimeType};base64,${fileSource.toString("base64")}`;
-        const result = await cloudinary.uploader.upload(base64Data, defaultOptions);
-        return result;
-      } catch (error) {
-        // Fallback to upload_stream if base64 upload errors
-        return new Promise((resolve, reject) => {
-          const stream = cloudinary.uploader.upload_stream(defaultOptions, (err, res) => {
-            if (err) {
-              logger.error("Cloudinary stream upload error:", err);
-              return reject(err);
-            }
-            resolve(res);
-          });
-          stream.end(fileSource);
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(defaultOptions, (err, res) => {
+          if (err) {
+            logger.error("Cloudinary stream upload error:", err);
+            return reject(err);
+          }
+          resolve(res);
         });
-      }
+        stream.end(fileSource);
+      });
     }
 
     throw new Error("Invalid file source provided to Cloudinary uploader. Expected file path string or Buffer.");

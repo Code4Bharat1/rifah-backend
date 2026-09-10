@@ -772,4 +772,82 @@ export const emailService = {
     const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
     return emailService.sendEmail({ to: email, subject, html, attachments });
   },
+
+  /**
+   * Sends Business Verification Status Email (Approval, Rejection with Reason, or Correction Request)
+   */
+  sendVerificationStatusEmail: async ({ email, ownerName, businessName, status, notes }) => {
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+    const isApproved = status === "verified" || status === "approved";
+    const isRejected = status === "rejected";
+    const isCorrection = status === "correction_requested" || status === "changes_required";
+
+    let subject = `RIFAH Chamber Verification: ${businessName}`;
+    let badgeColor = "#0284c7";
+    let badgeBg = "#e0f2fe";
+    let statusText = "UNDER REVIEW";
+    let headline = "Verification Status Update";
+    let description = "";
+
+    if (isApproved) {
+      subject = `🎉 Congratulations! ${businessName} is officially Chamber Verified on RIFAH`;
+      badgeColor = "#16a34a";
+      badgeBg = "#dcfce7";
+      statusText = "VERIFIED & APPROVED";
+      headline = "Your Business Profile is Now Verified & Live!";
+      description = `Your chamber verification documents have been reviewed and approved by the RIFAH Central Secretariat. Your verified chamber badge is now active on your public profile and directory listings.`;
+    } else if (isRejected) {
+      subject = `⚠️ Verification Notice: ${businessName} profile requires attention`;
+      badgeColor = "#dc2626";
+      badgeBg = "#fee2e2";
+      statusText = "APPLICATION REJECTED";
+      headline = "Action Required: Verification Review Notice";
+      description = `The Secretariat has reviewed your chamber verification submission and could not approve it at this time. Please see the detailed reason below:`;
+    } else if (isCorrection) {
+      subject = `📝 Correction Required: RIFAH Verification for ${businessName}`;
+      badgeColor = "#d97706";
+      badgeBg = "#fef3c7";
+      statusText = "CORRECTION REQUESTED";
+      headline = "Additional Information or Documents Required";
+      description = `The Secretariat has reviewed your submission and requested additional clarification or updated documents:`;
+    }
+
+    const actionUrl = `https://rifah.nexcorealliance.com/workspace/verification`;
+
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+        <div style="height: 6px; background: linear-gradient(90deg, ${isApproved ? '#16a34a, #0284c7' : isRejected ? '#dc2626, #ea580c' : '#d97706, #0284c7'});"></div>
+        <div style="padding: 32px;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`}
+          <span style="background-color: ${badgeBg}; color: ${badgeColor}; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">${statusText}</span>
+          <h2 style="color: #0f172a; font-size: 20px; margin-top: 12px; margin-bottom: 8px;">${headline}</h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${ownerName || "Member"}</strong>,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">${description}</p>
+
+          ${
+            notes
+              ? `<div style="background-color: #f8fafc; border-left: 4px solid ${badgeColor}; border-radius: 8px; padding: 16px 20px; margin: 20px 0;">
+                  <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">SECRETARIAT REMARKS / REASON</p>
+                  <p style="margin: 0; font-size: 14px; color: #1e293b; line-height: 1.5; font-weight: 500;">${notes}</p>
+                </div>`
+              : ""
+          }
+
+          <div style="margin-top: 28px; text-align: center;">
+            <a href="${actionUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; display: inline-block; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);">
+              ${isApproved ? "View Verified Business Workspace" : "Review & Resubmit Documents"}
+            </a>
+          </div>
+
+          <p style="color: #94a3b8; font-size: 12px; margin-top: 24px; text-align: center;">You can also access your verification dashboard anytime by logging into your RIFAH Business Workspace.</p>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Central Secretariat</p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
 };

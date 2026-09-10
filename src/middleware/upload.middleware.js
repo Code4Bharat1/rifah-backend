@@ -88,10 +88,11 @@ export const upload = multer({
   },
 });
 
-// PDF-only filter specifically for compliance and verification documents
+// PDF and official document scans filter specifically for compliance and verification documents
 const pdfFileFilter = (req, file, cb) => {
-  const ext = path.extname(file.originalname).toLowerCase();
-  const cleanName = path.basename(file.originalname).replace(/[\x00-\x1f\x80-\x9f]/g, "").toLowerCase();
+  const mime = (file.mimetype || "").toLowerCase();
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  const cleanName = path.basename(file.originalname || "").replace(/[\x00-\x1f\x80-\x9f]/g, "").toLowerCase();
 
   const dangerousPatterns = [/\.php/i, /\.html?/i, /\.svg/i, /\.exe/i, /\.js/i, /\.jsx/i, /\.ts/i, /\.tsx/i, /\.sh/i, /\.bat/i, /\.cmd/i, /\.vbs/i, /\.msi/i];
   for (const pattern of dangerousPatterns) {
@@ -103,11 +104,46 @@ const pdfFileFilter = (req, file, cb) => {
     }
   }
 
-  if (file.mimetype === "application/pdf" && ext === ".pdf") {
+  const dangerousExtensions = [".html", ".htm", ".svg", ".php", ".js", ".jsx", ".ts", ".tsx", ".exe", ".sh", ".bat", ".cmd", ".vbs", ".msi"];
+  if (dangerousExtensions.includes(ext)) {
+    return cb(
+      new BadRequestError(`File extension '${ext}' is not permitted for upload due to security restrictions.`),
+      false
+    );
+  }
+
+  const allowedPdfMimes = [
+    "application/pdf",
+    "application/x-pdf",
+    "application/acrobat",
+    "applications/vnd.pdf",
+    "text/pdf",
+    "text/x-pdf",
+    "application/download",
+    "application/octet-stream",
+  ];
+
+  const allowedImageMimes = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/pjpeg",
+    "image/x-png",
+    "image/avif",
+    "image/heic",
+    "image/heif",
+    "image/bmp",
+  ];
+
+  const isPdf = allowedPdfMimes.includes(mime) || ext === ".pdf";
+  const isImageScan = allowedImageMimes.includes(mime) || [".jpg", ".jpeg", ".png", ".webp", ".avif", ".heic", ".bmp"].includes(ext);
+
+  if (isPdf || isImageScan) {
     cb(null, true);
   } else {
     cb(
-      new BadRequestError("Only official PDF documents (.pdf) are permitted for chamber verification."),
+      new BadRequestError("Only official PDF documents (.pdf) or image scans (.jpg, .png, .webp) are permitted for chamber verification."),
       false
     );
   }
@@ -117,6 +153,6 @@ export const uploadPdfOnly = multer({
   storage,
   fileFilter: pdfFileFilter,
   limits: {
-    fileSize: 15 * 1024 * 1024, // 15 MB limit for PDF documents
+    fileSize: 25 * 1024 * 1024, // 25 MB limit for high-res PDF / official scans
   },
 });
