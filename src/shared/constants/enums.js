@@ -22,6 +22,7 @@ export const ENUMS = Object.freeze({
     "Verification",
     "System",
     "General",
+    "Announcement",
   ],
   PAYMENT_METHODS: ["Card", "Bank transfer", "UPI", "Net Banking", "Razorpay", "International Card", "Online Payment"],
   AUDIT_ACTIONS: [

@@ -14,7 +14,7 @@ const announcementSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Draft", "Published", "Archived"],
+      enum: ["Draft", "Scheduled", "Published", "Archived"],
       default: "Draft",
       index: true,
     },
@@ -32,6 +32,9 @@ const announcementSchema = new mongoose.Schema(
     broadcastId: {
       type: String,
       default: "",
+    },
+    scheduledAt: {
+      type: Date,
     },
     publishedAt: {
       type: Date,

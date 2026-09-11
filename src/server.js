@@ -4,6 +4,7 @@ import { connectDatabase, disconnectDatabase } from "./infrastructure/database/m
 import { logger } from "./infrastructure/logger/logger.js";
 import { initSocket } from "./infrastructure/socket/socket.js";
 import { eventService } from "./modules/events/event.service.js";
+import { announcementService } from "./modules/announcements/announcement.service.js";
 import dns from "dns";
 dns.setDefaultResultOrder("ipv4first");
 dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
@@ -16,6 +17,7 @@ const startServer = async () => {
 
     // 2. Start Scheduled Background Tasks
     eventService.startEventScheduler();
+    announcementService.startAnnouncementScheduler();
 
     // 3. Start HTTP Server
     server = app.listen(env.PORT, () => {
