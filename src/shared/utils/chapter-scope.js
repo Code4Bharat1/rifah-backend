@@ -23,24 +23,36 @@ export const getChapterFilter = async (user, entityType = "direct") => {
     return {};
   }
 
+  let resolvedChapterId = user.chapterId;
+  if (!resolvedChapterId && user.chapter) {
+    resolvedChapterId = await resolveChapterIdByName(user.chapter);
+  }
+
+  const baseCity = user.chapter ? user.chapter.replace(/\b(chapter|chamber)\b/gi, "").trim() : "";
+  const chapterRegex = baseCity ? new RegExp(baseCity, "i") : null;
+
   if (entityType === "direct_id") {
-    if (!user.chapterId) return { _id: null };
-    return { chapterId: user.chapterId };
+    const conditions = [];
+    if (resolvedChapterId) conditions.push({ chapterId: resolvedChapterId });
+    if (chapterRegex) conditions.push({ chapter: chapterRegex });
+    if (conditions.length === 0) return { _id: null };
+    return conditions.length === 1 ? conditions[0] : { $or: conditions };
   }
 
   if (entityType === "business_ref") {
-    if (!user.chapterId) return { _id: null };
-    const businesses = await Business.find({ chapterId: user.chapterId }).select("_id");
+    const conditions = [];
+    if (resolvedChapterId) conditions.push({ chapterId: resolvedChapterId });
+    if (chapterRegex) conditions.push({ chapter: chapterRegex });
+    if (conditions.length === 0) return { _id: null };
+    const businesses = await Business.find(conditions.length === 1 ? conditions[0] : { $or: conditions }).select("_id");
     const businessIds = businesses.map((b) => b._id);
     return { business: { $in: businessIds } };
   }
 
   // Legacy 'direct': models that only carry the free-text `chapter` name (e.g. Announcement, Event)
-  if (!user.chapter) {
+  if (!chapterRegex) {
     return { _id: null };
   }
-  const baseCity = user.chapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
-  const chapterRegex = new RegExp(baseCity, "i");
   return { chapter: chapterRegex };
 };
 

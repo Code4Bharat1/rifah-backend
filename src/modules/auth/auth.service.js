@@ -1,11 +1,13 @@
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
+import { Verification } from "../verification/verification.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
 import { OtpVerification } from "./otp.model.js";
 import crypto from "crypto";
 import { hashPassword, comparePassword } from "../../infrastructure/auth/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../infrastructure/auth/jwt.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { notificationService } from "../notifications/notification.service.js";
 import {
   ConflictError,
   UnauthorizedError,
@@ -250,8 +252,20 @@ export const authService = {
       phone: phone || "",
       email: cleanEmail,
       status: "Active",
-      verification: "unverified",
+      verification: "pending",
     });
+
+    // Create initial verification queue entry so chapter admin sees it immediately in Verify page
+    let verification = await Verification.findOne({ business: business._id });
+    if (!verification) {
+      verification = await Verification.create({
+        business: business._id,
+        submittedBy: user._id,
+        documents: [],
+        status: "pending",
+        remarks: "New business registration awaiting verification and chapter approval",
+      });
+    }
 
     // Cleanup OTP record once registration and business are successfully created
     if (verifiedToken) {
@@ -261,6 +275,30 @@ export const authService = {
     try {
       await emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role });
     } catch (err) {}
+
+    // Notify the Chapter Admin(s) of the chapter selected during registration
+    try {
+      const chapterAdminFilter = {
+        role: ROLES.CHAPTER_ADMIN,
+        $or: [
+          ...(chapterId ? [{ chapterId }] : []),
+          ...(chapter ? [{ chapter: new RegExp(chapter.replace(/\b(chapter|chamber)\b/gi, "").trim(), "i") }] : []),
+        ],
+      };
+      const chapterAdmins = await User.find(chapterAdminFilter);
+      for (const admin of chapterAdmins) {
+        await notificationService.createNotification({
+          recipientId: admin._id,
+          type: "Verification",
+          title: "New Business Pending Verification",
+          body: `New business "${business.name}" has registered under your chapter (${chapter || "your chapter"}) and is waiting for your review in the Verify queue.`,
+          entityId: verification._id,
+          link: "/chapter-admin/verification",
+        });
+      }
+    } catch (notifErr) {
+      console.error("Failed to notify chapter admins on new registration:", notifErr);
+    }
 
     const tokenPayload = {
       id: user._id,

@@ -2,6 +2,7 @@ import { Verification } from "./verification.model.js";
 import { Business } from "../businesses/business.model.js";
 import { User } from "../users/user.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { notificationService } from "../notifications/notification.service.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { ROLES } from "../../shared/constants/roles.js";
@@ -66,6 +67,32 @@ export const verificationService = {
       createdAt: new Date(),
     });
     await business.save();
+
+    // Send in-app notification to the Chapter Admin(s) of the business's chapter
+    try {
+      const targetChapter = business.chapter;
+      const targetChapterId = business.chapterId;
+      const chapterAdminFilter = {
+        role: ROLES.CHAPTER_ADMIN,
+        $or: [
+          ...(targetChapterId ? [{ chapterId: targetChapterId }] : []),
+          ...(targetChapter ? [{ chapter: new RegExp(targetChapter.replace(/\b(chapter|chamber)\b/gi, "").trim(), "i") }] : []),
+        ],
+      };
+      const chapterAdmins = await User.find(chapterAdminFilter);
+      for (const admin of chapterAdmins) {
+        await notificationService.createNotification({
+          recipientId: admin._id,
+          type: "Verification",
+          title: "New Verification Submission",
+          body: `Business "${business.name}" from your chapter (${targetChapter || "your chapter"}) has submitted verification documents for approval.`,
+          entityId: verification._id,
+          link: "/chapter-admin/verification",
+        });
+      }
+    } catch (notifErr) {
+      console.error("Failed to notify chapter admins on verification submission:", notifErr);
+    }
 
     return verification;
   },
@@ -219,8 +246,21 @@ export const verificationService = {
               notes: finalRemarks,
             });
           }
+
+          // In-app notification
+          const isApproved = finalStatus === "verified";
+          await notificationService.createNotification({
+            recipientId: business.owner,
+            type: "Verification",
+            title: isApproved ? "Business Verification Approved" : "Verification Status Updated",
+            body: isApproved
+              ? `Congratulations! Your business "${business.name}" has been verified and approved by your Chapter Administrator.`
+              : `Your verification request has been updated to "${finalStatus}". Remarks: ${finalRemarks || "None"}.`,
+            entityId: business._id,
+            link: "/biz/profile",
+          });
         } catch (err) {
-          console.error("Failed to send verification status email:", err);
+          console.error("Failed to send verification status email/notification:", err);
         }
       }
     }
