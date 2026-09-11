@@ -4,8 +4,13 @@ import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError, ConflictError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
+import { Payment } from "../payments/payment.model.js";
+import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 import { getChapterFilter, resolveChapterIdByName } from "../../shared/utils/chapter-scope.js";
+import { User } from "../users/user.model.js";
+import { hashPassword } from "../../infrastructure/auth/password.js";
+import { emailService } from "../../infrastructure/email/email.service.js";
 
 /**
  * Resolves { chapterId, chapter } from either a provided chapterId or a plain chapter name,
@@ -243,6 +248,17 @@ export const businessService = {
       await Business.findByIdAndUpdate(business._id, { rating: avg, reviewsCount: count });
     }
 
+    if (business && Array.isArray(business.verificationHistory)) {
+      const hasEverBeenApproved = business.verificationHistory.some(
+        (h) => h.action === "verified" || h.action === "approved"
+      );
+      if (hasEverBeenApproved && business.verification !== "verified" && business.verification !== "rejected") {
+        business.verification = "verified";
+        business.isVerified = true;
+        await Business.findByIdAndUpdate(business._id, { verification: "verified", isVerified: true });
+      }
+    }
+
     return business;
   },
 
@@ -250,7 +266,18 @@ export const businessService = {
    * Get business owned by a specific user
    */
   getBusinessByOwnerId: async (ownerId) => {
-    return Business.findOne({ owner: ownerId });
+    const business = await Business.findOne({ owner: ownerId });
+    if (business && Array.isArray(business.verificationHistory)) {
+      const hasEverBeenApproved = business.verificationHistory.some(
+        (h) => h.action === "verified" || h.action === "approved"
+      );
+      if (hasEverBeenApproved && business.verification !== "verified" && business.verification !== "rejected") {
+        business.verification = "verified";
+        business.isVerified = true;
+        await Business.findByIdAndUpdate(business._id, { verification: "verified", isVerified: true });
+      }
+    }
+    return business;
   },
 
   /**
@@ -364,6 +391,117 @@ export const businessService = {
     });
 
     return updated;
+  },
+
+  /**
+   * Admin: Directly register a new business and auto-generate credentials
+   */
+  createBusinessByAdmin: async (adminUser, data) => {
+    // Determine scope/permissions (Chapter Admin vs Super Admin)
+    const chapterScope = await getChapterFilter(adminUser, 'direct');
+    
+    // Only Super/Secretariat can assign ANY chapter, Chapter Admins are restricted to their own
+    let finalChapter = data.chapter;
+    if (Object.keys(chapterScope).length > 0 && chapterScope.chapter) {
+      finalChapter = chapterScope.chapter;
+    }
+
+    const cleanEmail = data.email.toLowerCase().trim();
+    let user = await User.findOne({ email: cleanEmail });
+    let isNewUser = false;
+    
+    // Generate a random 8-character password
+    const rawPassword = Math.random().toString(36).slice(-8);
+
+    if (!user) {
+      const passwordHash = await hashPassword(rawPassword);
+      const chapterId = await resolveChapterIdByName(finalChapter);
+      
+      user = await User.create({
+        name: data.ownerName.trim(),
+        email: cleanEmail,
+        passwordHash,
+        phone: data.phone || "",
+        chapter: finalChapter || "",
+        chapterId,
+        role: ROLES.BUSINESS_OWNER,
+        isProfileComplete: true,
+        forcePasswordChange: true, // Forces them to change password on first login
+      });
+      isNewUser = true;
+    }
+
+    // Provision Business Profile
+    let slug = generateSlug(data.businessName || data.ownerName);
+    const slugConflict = await Business.findOne({ slug });
+    if (slugConflict) {
+      slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    const { chapterId, chapter } = await resolveChapterFields({ chapter: finalChapter });
+
+    const business = await Business.create({
+      name: data.businessName.trim(),
+      slug,
+      owner: user._id,
+      industry: data.industry || "General",
+      businessType: data.businessType || "Proprietorship",
+      city: data.city || "",
+      state: data.state || "",
+      address: data.address || "",
+      pincode: data.pincode || "",
+      founded: data.founded || "",
+      employees: data.employees || "1-10",
+      taxId: data.taxId || "",
+      region: data.region || "national",
+      contactPerson: data.contactPerson || "",
+      chapter: chapter || "",
+      chapterId,
+      membership: data.membershipTier || "Free",
+      about: data.about || "",
+      phone: data.phone || "",
+      email: cleanEmail,
+      verification: "Verified",
+      status: "Active",
+    });
+
+    // If it's a paid tier, create a cash payment record
+    const amountCollected = parseFloat(data.amountCollected) || 0;
+    if (amountCollected > 0 || (data.membershipTier && data.membershipTier !== "Free")) {
+      let invoiceNumber = generateReferenceId("INV", 4);
+      while (await Payment.findOne({ invoiceNumber })) {
+        invoiceNumber = generateReferenceId("INV", 4);
+      }
+
+      await Payment.create({
+        invoiceNumber,
+        payer: user._id,
+        business: business._id,
+        itemType: "Membership",
+        description: "Admin Registered Business (Cash)",
+        amount: amountCollected,
+        currency: "INR",
+        method: "CASH",
+        status: "Paid",
+        paidAt: new Date(),
+      });
+    }
+
+    // Send Welcome Email if it's a new user
+    if (isNewUser) {
+      try {
+        await emailService.sendAdminCreatedWelcomeEmail({
+          email: cleanEmail,
+          name: data.ownerName,
+          password: rawPassword,
+          businessName: data.businessName,
+        });
+      } catch (err) {
+        console.error("Failed to send welcome email for admin-created business:", err);
+      }
+    }
+
+    return business;
   },
 
   /**

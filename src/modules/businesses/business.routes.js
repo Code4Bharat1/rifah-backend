@@ -81,7 +81,14 @@ router.post(
   businessController.uploadCertificate
 );
 
-// Admin moderation
+// Admin restricted routes
+router.post(
+  "/admin/create",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  businessController.createBusinessByAdmin
+);
+
 router.patch(
   "/:id/status",
   authMiddleware,

@@ -19,7 +19,7 @@ export const authRateLimitMiddleware = rateLimit({
 
 export const gstRateLimitMiddleware = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30, // max 30 GST lookups per 15 min
+  max: 1000, // Increased for smooth user testing and verification
   standardHeaders: true,
   legacyHeaders: false,
   message: {

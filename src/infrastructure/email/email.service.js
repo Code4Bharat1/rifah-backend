@@ -152,6 +152,54 @@ export const emailService = {
   },
 
   /**
+   * Sends welcome email with auto-generated credentials when an admin creates a business
+   */
+  sendAdminCreatedWelcomeEmail: async ({ email, name, password, businessName }) => {
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+    const subject = `Welcome to RIFAH: Action Required`;
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+        <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
+        <div style="padding: 32px;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`}
+          <span style="background-color: #dcfce7; color: #166534; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">WELCOME TO RIFAH</span>
+          <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">Your Account & Business Registration</h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${name}</strong>,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">An administrator has registered your business <strong>${businessName}</strong> on the RIFAH Connect platform.</p>
+          
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #475569;">Your temporary login credentials are:</p>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 8px 0; color: #64748b; width: 80px;"><strong>Email:</strong></td>
+                <td style="padding: 8px 0; color: #0f172a; font-weight: 500;">${email}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #64748b;"><strong>Password:</strong></td>
+                <td style="padding: 8px 0; color: #0f172a; font-family: monospace; font-size: 16px; font-weight: bold; letter-spacing: 1px;">${password}</td>
+              </tr>
+            </table>
+          </div>
+
+          <div style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+            <p style="color: #b45309; font-size: 13px; margin: 0; line-height: 1.5;"><strong>Important:</strong> For your security, you will be required to change this temporary password immediately upon your first login.</p>
+          </div>
+
+          <div style="margin-top: 24px;">
+            <a href="http://localhost:3000/login" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Log In Now →</a>
+          </div>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Administration</p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
+
+  /**
    * Sends a Membership Invoice Receipt Email with attached PDF matching exact website template
    */
   sendMembershipInvoiceEmail: async ({
