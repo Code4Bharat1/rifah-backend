@@ -248,6 +248,17 @@ export const businessService = {
       await Business.findByIdAndUpdate(business._id, { rating: avg, reviewsCount: count });
     }
 
+    if (business && Array.isArray(business.verificationHistory)) {
+      const hasEverBeenApproved = business.verificationHistory.some(
+        (h) => h.action === "verified" || h.action === "approved"
+      );
+      if (hasEverBeenApproved && business.verification !== "verified" && business.verification !== "rejected") {
+        business.verification = "verified";
+        business.isVerified = true;
+        await Business.findByIdAndUpdate(business._id, { verification: "verified", isVerified: true });
+      }
+    }
+
     return business;
   },
 
@@ -255,7 +266,18 @@ export const businessService = {
    * Get business owned by a specific user
    */
   getBusinessByOwnerId: async (ownerId) => {
-    return Business.findOne({ owner: ownerId });
+    const business = await Business.findOne({ owner: ownerId });
+    if (business && Array.isArray(business.verificationHistory)) {
+      const hasEverBeenApproved = business.verificationHistory.some(
+        (h) => h.action === "verified" || h.action === "approved"
+      );
+      if (hasEverBeenApproved && business.verification !== "verified" && business.verification !== "rejected") {
+        business.verification = "verified";
+        business.isVerified = true;
+        await Business.findByIdAndUpdate(business._id, { verification: "verified", isVerified: true });
+      }
+    }
+    return business;
   },
 
   /**
