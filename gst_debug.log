@@ -198,3 +198,27 @@
 
 [2026-09-10T08:51:10.546Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"33AABCB2115P1ZW","data":{"gstin":"33AABCB2115P1ZW","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"33","state_jurisdiction":null,"address":"Level 6, 10/11, Dr. Radhakrishnan Salai, Mylapore, CHENNAI","city":"Mylapore , CHENNAI","address_details":{"building_number":"Level 6","buil
 >>>>>>> 286bef21aa93a89af307bd1257cf1d5d35ec976c
+
+[2026-09-11T08:57:02.826Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/29AKLPM8755F1Z2 with key gak_a52d...
+
+[2026-09-11T09:00:10.580Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AABCI6363G1ZJ with key gak_a52d...
+
+[2026-09-11T09:00:11.094Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AABCI6363G1ZJ","data":{"gstin":"27AABCI6363G1ZJ","legal_name":"RELIANCE JIO INFOCOMM LIMITED","trade_name":"RELIANCE JIO INFOCOMM LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"RELIANCE CORPORATE PARK, GR FLOOR, RCP, 5 TTC Industrial Area, Ghansoli, Thane Belapur Road, Navi Mumbai","city":"Thane Belapur Road , Navi Mumbai",
+
+[2026-09-11T09:44:53.558Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AABCI6363G1ZJ with key gak_a52d...
+
+[2026-09-11T09:44:54.268Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AABCI6363G1ZJ","data":{"gstin":"27AABCI6363G1ZJ","legal_name":"RELIANCE JIO INFOCOMM LIMITED","trade_name":"RELIANCE JIO INFOCOMM LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"RELIANCE CORPORATE PARK, GR FLOOR, RCP, 5 TTC Industrial Area, Ghansoli, Thane Belapur Road, Navi Mumbai","city":"Thane Belapur Road , Navi Mumbai",
+
+[2026-09-11T09:51:45.002Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AABCI6363G1ZJ with key gak_a52d...
+
+[2026-09-11T09:51:45.308Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AABCI6363G1ZJ","data":{"gstin":"27AABCI6363G1ZJ","legal_name":"RELIANCE JIO INFOCOMM LIMITED","trade_name":"RELIANCE JIO INFOCOMM LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"RELIANCE CORPORATE PARK, GR FLOOR, RCP, 5 TTC Industrial Area, Ghansoli, Thane Belapur Road, Navi Mumbai","city":"Thane Belapur Road , Navi Mumbai",
+
+[2026-09-11T10:06:39.398Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/07ABCDE1234F1Z5 with key gak_a52d...
+
+[2026-09-11T10:06:40.366Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-11T10:06:40.367Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-11T10:07:35.858Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AABCI6363G1ZJ with key gak_a52d...
+
+[2026-09-11T10:07:36.422Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AABCI6363G1ZJ","data":{"gstin":"27AABCI6363G1ZJ","legal_name":"RELIANCE JIO INFOCOMM LIMITED","trade_name":"RELIANCE JIO INFOCOMM LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"RELIANCE CORPORATE PARK, GR FLOOR, RCP, 5 TTC Industrial Area, Ghansoli, Thane Belapur Road, Navi Mumbai","city":"Thane Belapur Road , Navi Mumbai",

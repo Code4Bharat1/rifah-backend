@@ -27,6 +27,21 @@ export const businessController = {
     return ApiResponse.created(res, business, "Business profile created successfully");
   }),
 
+  createBusinessByAdmin: asyncHandler(async (req, res) => {
+    const business = await businessService.createBusinessByAdmin(req.user, req.body);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "CREATE",
+      targetModel: "Business",
+      targetId: business._id,
+      summary: `Admin created business ${business.name} directly`,
+      ipAddress: req.ip
+    });
+
+    return ApiResponse.created(res, business, "Business registered successfully by Admin");
+  }),
+
   updateBusiness: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updated = await businessService.updateBusiness(id, req.body, req.user);
