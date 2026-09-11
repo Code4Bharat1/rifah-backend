@@ -15,6 +15,9 @@ export const validateCreateEvent = (data = {}) => {
   if (data.targetAudience !== undefined && !Array.isArray(data.targetAudience)) {
     errors.push({ field: "targetAudience", message: "Target audience must be an array" });
   }
+  if (data.isPaid && typeof data.ticketPrice !== "number") {
+    errors.push({ field: "ticketPrice", message: "Ticket price must be a valid number for paid events" });
+  }
   return { valid: errors.length === 0, errors };
 };
 

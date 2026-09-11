@@ -81,6 +81,14 @@ const eventSchema = new mongoose.Schema(
       type: String,
       default: "RIFAH Chamber Secretariat",
     },
+    isPaid: {
+      type: Boolean,
+      default: false,
+    },
+    ticketPrice: {
+      type: Number,
+      default: 0,
+    },
     fee: {
       type: String,
       default: "Complimentary for Members",
@@ -119,6 +127,17 @@ const eventSchema = new mongoose.Schema(
           type: String,
           enum: ["Confirmed", "Cancelled", "Attended"],
           default: "Confirmed",
+        },
+        paymentStatus: {
+          type: String,
+          enum: ["Free", "Pending", "Paid"],
+          default: "Free",
+        },
+        paymentId: {
+          type: String,
+        },
+        transactionId: {
+          type: String,
         }
       },
     ],

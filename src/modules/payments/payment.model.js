@@ -21,6 +21,11 @@ const paymentSchema = new mongoose.Schema(
       ref: "Business",
       index: true,
     },
+    eventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Event",
+      index: true,
+    },
     itemType: {
       type: String,
       enum: ["Membership", "Event Pass", "Sponsorship", "Directory Addon"],

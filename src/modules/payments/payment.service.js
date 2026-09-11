@@ -199,6 +199,7 @@ export const paymentService = {
       invoiceNumber,
       payer: user.id,
       business: finalBusinessId || null,
+      eventId: payload.eventId || null,
       itemType: itemType || "Membership",
       description: description || `Payment for ${planId || "Membership"} tier`,
       amount: Number(amount) || (payload.currency === "USD" ? 59 : 4999),
@@ -214,39 +215,39 @@ export const paymentService = {
       updatedMembership = await membershipService.upgradePlan(finalBusinessId, planId);
     }
 
-    try {
-      await notificationService.createNotification({
-        recipientId: user.id,
-        type: "Payment",
-        title: "Payment Verified",
-        body: `Payment of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} ${payment.currency} (Invoice #${payment.invoiceNumber}) was verified successfully.`,
-        link: "/biz/payments",
-      });
-
-      const targetEmail = payload.billingEmail || userDoc?.email;
-      if (targetEmail) {
-        await emailService.sendMembershipInvoiceEmail({
-          email: targetEmail,
-          name: userDoc?.name || "Member",
-          businessName: businessDoc?.name || payload.businessName || "Member Business",
-          planName: (planId || "Membership").toUpperCase(),
-          amount: payment.amount,
-          currency: payment.currency,
-          invoiceNumber: payment.invoiceNumber,
-          paidAt: payment.paidAt,
-          transactionId: payment.transactionId || razorpay_payment_id,
-          paymentMethod: payment.method || "Razorpay Online Payment",
-        });
-      }
-
-      // Send official payment receipt to Secretariat Admin for verification
+    // Fire-and-forget: send notifications & emails without blocking the response
+    setImmediate(async () => {
       try {
+        await notificationService.createNotification({
+          recipientId: user.id,
+          type: "Payment",
+          title: "Payment Verified",
+          body: `Payment of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} ${payment.currency} (Invoice #${payment.invoiceNumber}) was verified successfully.`,
+          link: "/biz/payments",
+        });
+
+        const targetEmail = payload.billingEmail || userDoc?.email;
+        if (targetEmail) {
+          await emailService.sendMembershipInvoiceEmail({
+            email: targetEmail,
+            name: userDoc?.name || "Member",
+            businessName: businessDoc?.name || payload.businessName || "Member Business",
+            planName: (planId || "Membership").toUpperCase(),
+            amount: payment.amount,
+            currency: payment.currency,
+            invoiceNumber: payment.invoiceNumber,
+            paidAt: payment.paidAt,
+            transactionId: payment.transactionId || razorpay_payment_id,
+            paymentMethod: payment.method || "Razorpay Online Payment",
+          });
+        }
+
         const superAdmins = await User.find({ role: ROLES.SUPER_ADMIN }).select("_id email name");
         const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
         const adminEmails = [...new Set([adminFallbackEmail, ...superAdmins.map((a) => a.email)].filter(Boolean))];
 
         for (const adminMail of adminEmails) {
-          await emailService.sendAdminPaymentReceiptAlert({
+          emailService.sendAdminPaymentReceiptAlert({
             adminEmail: adminMail,
             name: userDoc?.name || "Member",
             businessName: businessDoc?.name || payload.businessName || "Member Business",
@@ -259,24 +260,22 @@ export const paymentService = {
             paymentMethod: payment.method || "Razorpay Online Payment",
             userPhone: userDoc?.phone || "",
             userEmail: targetEmail || "",
-          });
+          }).catch(() => {});
         }
 
         for (const admin of superAdmins) {
-          await notificationService.createNotification({
+          notificationService.createNotification({
             recipientId: admin._id,
             type: "Payment",
             title: "New Payment Receipt for Verification",
             body: `Receipt #${payment.invoiceNumber} of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} from ${businessDoc?.name || payload.businessName || "Member"} received for verification.`,
             link: "/admin/payments",
-          });
+          }).catch(() => {});
         }
-      } catch (adminErr) {
-        console.error("Admin receipt notification error:", adminErr);
+      } catch (bgErr) {
+        console.error("Background payment notification error:", bgErr);
       }
-    } catch (err) {
-      console.error("Payment notification / email error:", err);
-    }
+    });
 
     // Generate refreshed JWT tokens with the updated role
     const tokenPayload = {
@@ -529,6 +528,7 @@ export const paymentService = {
       Payment.find(filter)
         .populate("payer", "name email phone")
         .populate("business", "name slug chapter")
+        .populate("eventId", "title slug")
         .sort(sort)
         .skip(skip)
         .limit(limit),
@@ -550,7 +550,8 @@ export const paymentService = {
 
     const payment = await Payment.findOne(query)
       .populate("payer", "name email phone chapter")
-      .populate("business", "name slug chapter city");
+      .populate("business", "name slug chapter city")
+      .populate("eventId", "title slug date venue");
 
     if (!payment) {
       throw new NotFoundError("Invoice not found");

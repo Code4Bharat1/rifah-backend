@@ -173,7 +173,7 @@ export const eventService = {
   /**
    * Register user for an event
    */
-  registerUserForEvent: async (eventId, userId) => {
+  registerUserForEvent: async (eventId, userId, paymentData = null) => {
     const event = await Event.findById(eventId);
     if (!event) {
       throw new NotFoundError("Event not found");
@@ -191,10 +191,31 @@ export const eventService = {
       throw new BadRequestError("Event capacity has been reached");
     }
 
+    if (event.isPaid && !paymentData) {
+      throw new BadRequestError("Payment is required for this event");
+    }
+
+    let paymentStatus = "Free";
+    let paymentId = null;
+
+    if (event.isPaid && paymentData) {
+      paymentStatus = "Paid";
+      paymentId = paymentData.paymentId;
+    }
+
     const updatedEvent = await Event.findByIdAndUpdate(
       eventId,
       {
-        $addToSet: { registeredUsers: { user: userId, registeredAt: new Date(), status: "Confirmed" } },
+        $addToSet: { 
+          registeredUsers: { 
+            user: userId, 
+            registeredAt: new Date(), 
+            status: "Confirmed",
+            paymentStatus,
+            paymentId: paymentData?.paymentId,
+            transactionId: paymentData?.transactionId
+          } 
+        },
         $inc: { registeredCount: 1 },
       },
       { new: true }

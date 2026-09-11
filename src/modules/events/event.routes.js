@@ -26,6 +26,13 @@ router.post(
   eventController.registerForEvent
 );
 
+router.post(
+  "/:id/register-paid",
+  authMiddleware,
+  validateObjectIdParam("id"),
+  eventController.registerPaidForEvent
+);
+
 // Admin Event Management
 router.post(
   "/",
