@@ -89,7 +89,7 @@ const enquirySchema = new mongoose.Schema(
     },
     description: {
       type: String,
-      required: [true, "Requirement description is required"],
+      default: "",
     },
     priority: {
       type: String,

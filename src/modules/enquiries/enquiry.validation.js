@@ -15,8 +15,8 @@ export const validateCreateEnquiry = (data = {}) => {
   if (!data.requiredBy || typeof data.requiredBy !== "string") {
     errors.push({ field: "requiredBy", message: "Required-by timeline is required" });
   }
-  if (!data.description || typeof data.description !== "string" || data.description.trim().length < 10) {
-    errors.push({ field: "description", message: "Description must be at least 10 characters" });
+  if (data.description && typeof data.description !== "string") {
+    errors.push({ field: "description", message: "Description must be a valid text string" });
   }
   if (data.targetType && !["all", "chamber", "business"].includes(data.targetType)) {
     errors.push({ field: "targetType", message: "targetType must be one of: all, chamber, business" });

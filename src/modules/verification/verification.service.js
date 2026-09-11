@@ -40,7 +40,22 @@ export const verificationService = {
       });
     }
 
-    business.verification = "pending";
+    // Check if the business has previously been verified/approved
+    const isAlreadyVerified =
+      business.verification === "verified" ||
+      business.verification === "Verified" ||
+      business.isVerified === true ||
+      (Array.isArray(business.verificationHistory) &&
+        business.verificationHistory.some((h) => h.action === "verified" || h.action === "approved"));
+
+    if (isAlreadyVerified) {
+      // Keep business verified so workspace credentials & privileges are never locked
+      business.verification = "verified";
+      business.isVerified = true;
+    } else {
+      business.verification = "pending";
+    }
+
     if (!Array.isArray(business.verificationHistory)) {
       business.verificationHistory = [];
     }
@@ -160,7 +175,23 @@ export const verificationService = {
 
     // Update business profile verification status & reason
     if (business) {
-      business.verification = finalStatus;
+      if (finalStatus === "verified") {
+        business.verification = "verified";
+        business.isVerified = true;
+      } else if (finalStatus === "rejected") {
+        business.verification = "rejected";
+        business.isVerified = false;
+      } else if (finalStatus === "correction_requested") {
+        const wasVerified =
+          business.verification === "verified" ||
+          business.isVerified === true ||
+          (Array.isArray(business.verificationHistory) &&
+            business.verificationHistory.some((h) => h.action === "verified" || h.action === "approved"));
+        if (!wasVerified) {
+          business.verification = "correction_requested";
+          business.isVerified = false;
+        }
+      }
       business.verificationReviewReason = finalRemarks;
       business.verificationRemarks = finalRemarks;
 
