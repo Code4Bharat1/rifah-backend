@@ -33,19 +33,25 @@ export const businessService = {
   /**
    * Public directory search & filtering
    */
+  /**
+   * Public directory search & filtering
+   */
   searchDirectory: async (queryParams = {}, user = null) => {
-    const { page, limit, skip, sort } = parsePagination(queryParams);
-    const filter = {};
-    
+    const { page, limit, skip } = parsePagination(queryParams);
+    const andConditions = [];
+
     // Allow Active or unset status for public users
     if (!user || ![ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN].includes(user.role)) {
-      filter.status = { $ne: "Suspended" };
+      andConditions.push({ status: { $ne: "Suspended" } });
     }
 
     // RBAC: Chapter Admin Scope Enforcement
     const chapterScope = await getChapterFilter(user, 'direct_id');
-    Object.assign(filter, chapterScope);
+    if (Object.keys(chapterScope).length > 0) {
+      andConditions.push(chapterScope);
+    }
 
+    // 1. Chapter Filter
     if (
       queryParams.chapter &&
       queryParams.chapter !== "undefined" &&
@@ -54,30 +60,47 @@ export const businessService = {
       queryParams.chapter !== "All chapters" &&
       !chapterScope.chapterId
     ) {
-      filter.chapter = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
+      const chClean = escapeRegex(queryParams.chapter.trim().replace(/\s+Chapter$/i, ""));
+      andConditions.push({
+        chapter: new RegExp(chClean, "i"),
+      });
     }
 
-    if (queryParams.search && queryParams.search !== "undefined" && queryParams.search.trim()) {
-      const searchRegex = new RegExp(queryParams.search.trim(), "i");
-      filter.$or = [
-        { name: searchRegex },
-        { tagline: searchRegex },
-        { about: searchRegex },
-        { categories: searchRegex },
-        { industry: searchRegex },
-        { city: searchRegex },
-      ];
+    // 2. Keyword Search
+    const searchTerm = queryParams.search || queryParams.q;
+    if (searchTerm && searchTerm !== "undefined" && searchTerm.trim()) {
+      const searchRegex = new RegExp(escapeRegex(searchTerm.trim()), "i");
+      andConditions.push({
+        $or: [
+          { name: searchRegex },
+          { tagline: searchRegex },
+          { about: searchRegex },
+          { categories: { $in: [searchRegex] } },
+          { industry: searchRegex },
+          { city: searchRegex },
+          { state: searchRegex },
+          { chapter: searchRegex },
+        ],
+      });
     }
 
+    // 3. Category Filter
     if (
       queryParams.category &&
       queryParams.category !== "undefined" &&
       queryParams.category !== "null" &&
       queryParams.category.toLowerCase() !== "all"
     ) {
-      filter.categories = { $in: [new RegExp(queryParams.category, "i")] };
+      const catRegex = new RegExp(escapeRegex(queryParams.category.trim()), "i");
+      andConditions.push({
+        $or: [
+          { categories: { $in: [catRegex] } },
+          { industry: catRegex },
+        ],
+      });
     }
 
+    // 4. Industry Filter (matches both industry and subcategories)
     if (
       queryParams.industry &&
       queryParams.industry !== "undefined" &&
@@ -85,9 +108,16 @@ export const businessService = {
       queryParams.industry.toLowerCase() !== "all" &&
       queryParams.industry !== "All industries"
     ) {
-      filter.industry = new RegExp(`^${escapeRegex(queryParams.industry.trim())}$`, "i");
+      const indRegex = new RegExp(escapeRegex(queryParams.industry.trim()), "i");
+      andConditions.push({
+        $or: [
+          { industry: indRegex },
+          { categories: { $in: [indRegex] } },
+        ],
+      });
     }
 
+    // 5. City Filter (matches city or state)
     if (
       queryParams.city &&
       queryParams.city !== "undefined" &&
@@ -95,46 +125,65 @@ export const businessService = {
       queryParams.city.toLowerCase() !== "all" &&
       queryParams.city !== "All cities"
     ) {
-      filter.city = new RegExp(`^${escapeRegex(queryParams.city.trim())}$`, "i");
+      const cityRegex = new RegExp(escapeRegex(queryParams.city.trim()), "i");
+      andConditions.push({
+        $or: [
+          { city: cityRegex },
+          { state: cityRegex },
+        ],
+      });
     }
 
+    // 6. Membership Level Filter
     if (
       queryParams.membership &&
       queryParams.membership !== "undefined" &&
       queryParams.membership !== "null" &&
       queryParams.membership.toLowerCase() !== "all"
     ) {
-      filter.membership = new RegExp(`^${escapeRegex(queryParams.membership.trim())}$`, "i");
+      const memRegex = new RegExp(`^${escapeRegex(queryParams.membership.trim())}`, "i");
+      andConditions.push({ membership: memRegex });
     }
 
-    if (queryParams.verified === "true") {
-      filter.verification = "verified";
+    // 7. Verified Only Filter
+    if (queryParams.verified === "true" || queryParams.verified === true) {
+      andConditions.push({
+        $or: [
+          { verification: { $in: ["verified", "Verified", "approved", "Approved"] } },
+          { isVerified: true },
+        ],
+      });
     }
 
-    if (queryParams.featured === "true") {
-      filter.$or = [
-        { featured: true },
-        { membership: { $in: ["Enterprise", "Premium"] } },
-      ];
+    // 8. Featured Only Filter
+    if (queryParams.featured === "true" || queryParams.featured === true) {
+      andConditions.push({
+        $or: [
+          { featured: true },
+          { membership: { $in: ["Enterprise", "Premium"] } },
+        ],
+      });
     }
 
-    let [businesses, total] = await Promise.all([
-      Business.find(filter).sort(sort).skip(skip).limit(limit),
-      Business.countDocuments(filter),
+    const finalFilter = andConditions.length > 0 ? { $and: andConditions } : {};
+
+    // 9. Sorting Configuration
+    let sortOption = { createdAt: -1 };
+    const sortParam = (queryParams.sort || queryParams.sortBy || "").toLowerCase();
+    if (sortParam === "rating") {
+      sortOption = { rating: -1, reviewsCount: -1, createdAt: -1 };
+    } else if (sortParam === "newest") {
+      sortOption = { createdAt: -1 };
+    } else if (sortParam === "featured") {
+      sortOption = { featured: -1, rating: -1, createdAt: -1 };
+    } else if (sortParam === "recommended") {
+      sortOption = { featured: -1, rating: -1, createdAt: -1 };
+    }
+
+    const [businesses, total] = await Promise.all([
+      Business.find(finalFilter).sort(sortOption).skip(skip).limit(limit),
+      Business.countDocuments(finalFilter),
     ]);
-
-    // Fallback: If featured query returns fewer than limit, supplement with other active businesses
-    if (queryParams.featured === "true" && businesses.length < limit) {
-      const existingIds = businesses.map((b) => b._id);
-      const remainingLimit = limit - businesses.length;
-      const suppFilter = { ...filter };
-      delete suppFilter.$or;
-      delete suppFilter.featured;
-      suppFilter._id = { $nin: existingIds };
-      const extraBiz = await Business.find(suppFilter).sort(sort).limit(remainingLimit);
-      businesses = [...businesses, ...extraBiz];
-      total = businesses.length;
-    }
 
     return {
       businesses,
@@ -143,13 +192,35 @@ export const businessService = {
   },
 
   /**
-   * Get single business by slug or ID
+   * Get single business by slug or ID (with case-insensitive and name fallback)
    */
   getBusinessBySlugOrId: async (identifier) => {
-    const isObjectId = identifier.match(/^[0-9a-fA-F]{24}$/);
-    const query = isObjectId ? { _id: identifier } : { slug: identifier };
+    if (!identifier || typeof identifier !== "string") {
+      throw new NotFoundError("Business profile not found");
+    }
 
-    const business = await Business.findOne(query).populate("owner", "name email phone");
+    const trimmed = identifier.trim();
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(trimmed);
+    let business = null;
+
+    if (isObjectId) {
+      business = await Business.findById(trimmed).populate("owner", "name email phone");
+    }
+
+    if (!business) {
+      // Case-insensitive exact slug match
+      business = await Business.findOne({
+        slug: new RegExp(`^${escapeRegex(trimmed)}$`, "i"),
+      }).populate("owner", "name email phone");
+    }
+
+    if (!business) {
+      // Fallback: match by business name
+      business = await Business.findOne({
+        name: new RegExp(`^${escapeRegex(trimmed)}$`, "i"),
+      }).populate("owner", "name email phone");
+    }
+
     if (!business) {
       throw new NotFoundError("Business profile not found");
     }
