@@ -1,5 +1,6 @@
 import { announcementService } from "./announcement.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
+import { auditService } from "../audit/audit.service.js";
 
 
 
@@ -22,6 +23,16 @@ export const announcementController = {
     }
 
     const result = await announcementService.createAnnouncement(announcementData);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "CREATE",
+      targetModel: "Announcement",
+      targetId: result._id,
+      summary: `Created new announcement: ${result.title}`,
+      ipAddress: req.ip
+    });
+    
     res.status(201).json({ success: true, data: result });
   }),
 
@@ -54,6 +65,16 @@ export const announcementController = {
     delete updateData.broadcastId;
 
     const result = await announcementService.updateAnnouncement(req.params.id, updateData, req.user);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "UPDATE",
+      targetModel: "Announcement",
+      targetId: result._id,
+      summary: `Updated announcement: ${result.title}`,
+      ipAddress: req.ip
+    });
+
     res.json({ success: true, data: result });
   }),
 
@@ -61,7 +82,18 @@ export const announcementController = {
    * Delete announcement.
    */
   delete: asyncHandler(async (req, res) => {
+    const announcement = await announcementService.getAnnouncement(req.params.id, req.user);
     await announcementService.deleteAnnouncement(req.params.id, req.user);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "DELETE",
+      targetModel: "Announcement",
+      targetId: req.params.id,
+      summary: `Deleted announcement: ${announcement?.title || req.params.id}`,
+      ipAddress: req.ip
+    });
+
     res.json({ success: true, message: "Announcement deleted successfully" });
   })
 };

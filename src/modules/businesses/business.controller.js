@@ -103,9 +103,14 @@ export const businessController = {
     if (req.body.status) summaryParts.push(`status to ${req.body.status}`);
     
     if (summaryParts.length > 0) {
+      let action = "UPDATE";
+      if (req.body.verification === "Verified") action = "VERIFY_APPROVE";
+      else if (req.body.verification === "Rejected") action = "VERIFY_REJECT";
+      else if (req.body.verification === "Correction Requested") action = "VERIFY_CORRECTION";
+
       await auditService.logAction({
         actor: req.user,
-        action: "UPDATE",
+        action,
         targetModel: "Business",
         targetId: updated._id,
         summary: `Updated business ${updated.name}: ${summaryParts.join(', ')}`,
