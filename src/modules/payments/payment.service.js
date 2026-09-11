@@ -227,7 +227,7 @@ export const paymentService = {
         });
 
         const targetEmail = payload.billingEmail || userDoc?.email;
-        if (targetEmail) {
+        if (targetEmail && isMembership) {
           await emailService.sendMembershipInvoiceEmail({
             email: targetEmail,
             name: userDoc?.name || "Member",
@@ -251,7 +251,7 @@ export const paymentService = {
             adminEmail: adminMail,
             name: userDoc?.name || "Member",
             businessName: businessDoc?.name || payload.businessName || "Member Business",
-            planName: (planId || "Membership").toUpperCase(),
+            planName: isMembership ? (planId || "Membership").toUpperCase() : "EVENT PASS",
             amount: payment.amount,
             currency: payment.currency,
             invoiceNumber: payment.invoiceNumber,

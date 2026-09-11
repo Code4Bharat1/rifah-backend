@@ -221,29 +221,40 @@ export const eventService = {
       { new: true }
     );
 
-    try {
-      const user = await User.findById(userId);
-      if (user?.email) {
-        await emailService.sendEventRegistrationEmail({
-          email: user.email,
-          userName: user.name,
-          eventTitle: updatedEvent.title,
-          eventDate: updatedEvent.date || "Upcoming Chamber Event",
-          location: updatedEvent.venue || updatedEvent.location || "Chamber Main Hall",
-          ticketType: "Member Pass",
-        });
-      }
+    // Fire-and-forget: send email + notification without blocking response
+    setImmediate(async () => {
+      try {
+        const user = await User.findById(userId);
+        if (user?.email) {
+          await emailService.sendEventRegistrationEmail({
+            email: user.email,
+            userName: user.name,
+            eventTitle: updatedEvent.title,
+            eventDate: updatedEvent.date || "Upcoming Chamber Event",
+            location: updatedEvent.venue || updatedEvent.location || "Chamber Main Hall",
+            ticketType: event.isPaid ? `Paid Pass (₹${event.ticketPrice})` : "Member Pass",
+            isPaid: event.isPaid,
+            ticketPrice: event.ticketPrice,
+            paymentId: paymentData?.paymentId || null,
+            transactionId: paymentData?.transactionId || null,
+            chapter: updatedEvent.chapter || "",
+          });
+        }
 
-      // In-app notification for the customer
-      await notificationService.createNotification({
-        recipientId: userId,
-        type: "Event",
-        title: "Event Registration Confirmed",
-        body: `Your registration for "${updatedEvent.title}" is confirmed!`,
-        entityId: updatedEvent._id,
-        link: "/events"
-      });
-    } catch (err) {}
+        await notificationService.createNotification({
+          recipientId: userId,
+          type: "Event",
+          title: "Event Registration Confirmed",
+          body: event.isPaid
+            ? `Your payment of ₹${event.ticketPrice} for "${updatedEvent.title}" is confirmed!`
+            : `Your registration for "${updatedEvent.title}" is confirmed!`,
+          entityId: updatedEvent._id,
+          link: "/events"
+        });
+      } catch (err) {
+        console.error("Event registration email/notification error:", err);
+      }
+    });
 
     return updatedEvent;
   },
