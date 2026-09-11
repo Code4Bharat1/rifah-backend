@@ -200,6 +200,43 @@ export const emailService = {
   },
 
   /**
+   * Sends an email when an existing user's role is upgraded to Business Owner
+   */
+  sendRoleUpgradedEmail: async ({ email, name, newRole, businessName }) => {
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+    const subject = `Account Upgrade: You are now a ${newRole}`;
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+        <div style="height: 6px; background: linear-gradient(90deg, #10b981 0%, #3b82f6 100%);"></div>
+        <div style="padding: 32px;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`}
+          <span style="background-color: #dbeafe; color: #1e40af; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">ACCOUNT UPGRADED</span>
+          <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">Business Added to Your Account</h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${name}</strong>,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">An administrator has registered the business <strong>${businessName}</strong> under your existing RIFAH account.</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Your account role has been updated to <strong>${newRole}</strong>.</p>
+          
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <p style="margin: 0; font-size: 14px; color: #475569;">You can log in to your business dashboard using your <strong>existing email and password</strong>.</p>
+          </div>
+          
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Please log in to your account to review your business details and submit your verification documents for approval.</p>
+          
+          <div style="margin-top: 24px; text-align: center;">
+            <a href="http://localhost:3000/login" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 14px; text-decoration: none; padding: 12px 24px; border-radius: 8px;">Login to Dashboard</a>
+          </div>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+          <p style="color: #94a3b8; font-size: 12px; text-align: center; margin: 0;">If you have any questions, please contact the RIFAH Secretariat.</p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
+
+  /**
    * Sends a Membership Invoice Receipt Email with attached PDF matching exact website template
    */
   sendMembershipInvoiceEmail: async ({

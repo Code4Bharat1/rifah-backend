@@ -499,6 +499,23 @@ export const businessService = {
       } catch (err) {
         console.error("Failed to send welcome email for admin-created business:", err);
       }
+    } else {
+      // Existing User: Update their role to BUSINESS_OWNER if it isn't already
+      if (user.role !== ROLES.BUSINESS_OWNER) {
+        await User.findByIdAndUpdate(user._id, { role: ROLES.BUSINESS_OWNER });
+      }
+      
+      try {
+        // Send email notifying them of their upgraded role and new business profile
+        await emailService.sendRoleUpgradedEmail({
+          email: user.email,
+          name: user.name,
+          newRole: "Business Owner",
+          businessName: data.businessName,
+        });
+      } catch (err) {
+        console.error("Failed to send role upgrade email:", err);
+      }
     }
 
     return business;
