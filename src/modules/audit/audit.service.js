@@ -8,9 +8,19 @@ export const auditService = {
    * Record an audit log entry
    */
   logAction: async ({ actor, action, targetModel, targetId, summary, metadata, ipAddress }) => {
+    let actorName = actor.name;
+    if (!actorName && (actor._id || actor.id)) {
+      try {
+        const u = await User.findById(actor._id || actor.id).select("name");
+        if (u && u.name) actorName = u.name;
+      } catch (err) {
+        // Ignore DB errors on lookup
+      }
+    }
+
     return Audit.create({
       actor: actor._id || actor.id,
-      actorName: actor.name || "System",
+      actorName: actorName || "System",
       actorRole: actor.role || "system",
       action,
       targetModel,
