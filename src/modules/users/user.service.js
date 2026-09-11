@@ -128,8 +128,8 @@ export const userService = {
       if (userToUpdate.role === ROLES.SUPER_ADMIN || userToUpdate.role === ROLES.SECRETARIAT) {
         throw new ForbiddenError("Cannot modify global admins");
       }
-      if (role && [ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN].includes(role)) {
-        throw new ForbiddenError("Cannot assign privileged roles");
+      if (role) {
+        throw new ForbiddenError("Chapter Admins are not authorized to change user roles");
       }
     }
 
