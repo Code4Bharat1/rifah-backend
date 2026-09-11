@@ -669,28 +669,66 @@ export const emailService = {
   /**
    * Sends Event Registration / RSVP confirmation email
    */
-  sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType }) => {
+  sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType, isPaid, ticketPrice, paymentId, transactionId, invoiceNumber, chapter }) => {
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
-    const subject = `🎟️ Event Registration Confirmed: ${eventTitle}`;
+    const subject = isPaid
+      ? `🎟️ Payment & Registration Confirmed: ${eventTitle}`
+      : `🎟️ Event Registration Confirmed: ${eventTitle}`;
+
+    const paymentSection = isPaid ? `
+          <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <div style="display: flex; align-items: center; margin-bottom: 12px;">
+              <span style="background-color: #dcfce7; color: #166534; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">✓ PAYMENT RECEIVED</span>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #475569;">
+              <tr>
+                <td style="padding: 6px 0; border-bottom: 1px solid #e2e8f0;"><strong>Amount Paid</strong></td>
+                <td style="text-align: right; font-weight: 800; color: #15803d; font-size: 16px; padding: 6px 0; border-bottom: 1px solid #e2e8f0;">₹${ticketPrice || 0}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; border-bottom: 1px solid #e2e8f0;"><strong>Payment ID</strong></td>
+                <td style="text-align: right; color: #0f172a; font-family: monospace; font-size: 12px; padding: 6px 0; border-bottom: 1px solid #e2e8f0;">${paymentId || "N/A"}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; border-bottom: 1px solid #e2e8f0;"><strong>Order ID</strong></td>
+                <td style="text-align: right; color: #0f172a; font-family: monospace; font-size: 12px; padding: 6px 0; border-bottom: 1px solid #e2e8f0;">${transactionId || "N/A"}</td>
+              </tr>
+              ${invoiceNumber ? `<tr>
+                <td style="padding: 6px 0;"><strong>Invoice</strong></td>
+                <td style="text-align: right; color: #0284c7; font-weight: bold; padding: 6px 0;">${invoiceNumber}</td>
+              </tr>` : ""}
+              <tr>
+                <td style="padding: 6px 0;"><strong>Payment Status</strong></td>
+                <td style="text-align: right; padding: 6px 0;"><span style="background-color: #dcfce7; color: #166534; font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 9999px;">PAID</span></td>
+              </tr>
+            </table>
+          </div>
+    ` : "";
+
     const html = `
       <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
         <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
         <div style="padding: 32px;">
           ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`}
-          <span style="background-color: #dcfce7; color: #166534; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">RSVP CONFIRMED</span>
-          <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">Event Ticket Confirmed</h2>
+          <span style="background-color: #dcfce7; color: #166534; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">${isPaid ? "PAID & CONFIRMED" : "RSVP CONFIRMED"}</span>
+          <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">${isPaid ? "Event Pass & Payment Receipt" : "Event Ticket Confirmed"}</h2>
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${userName || "Member"}</strong>,</p>
-          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Your registration for the following RIFAH Chamber event has been confirmed:</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">${isPaid
+            ? `Your payment has been received and your seat for the following RIFAH Chamber event is confirmed:`
+            : `Your registration for the following RIFAH Chamber event has been confirmed:`}</p>
           
           <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
             <h3 style="margin: 0 0 12px 0; color: #0f172a; font-size: 16px;">${eventTitle}</h3>
             <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #475569;">
               <tr><td style="padding: 4px 0;"><strong>Date & Time:</strong></td><td style="text-align: right; font-weight: bold; color: #0f172a;">${eventDate || "Upcoming Event"}</td></tr>
               <tr><td style="padding: 4px 0;"><strong>Venue / Location:</strong></td><td style="text-align: right; color: #0f172a;">${location || "Chamber Hall"}</td></tr>
-              <tr><td style="padding: 4px 0;"><strong>Ticket Type:</strong></td><td style="text-align: right; font-weight: bold; color: #0284c7;">${ticketType || "Member Pass"}</td></tr>
+              ${chapter ? `<tr><td style="padding: 4px 0;"><strong>Chapter:</strong></td><td style="text-align: right; color: #0f172a;">${chapter}</td></tr>` : ""}
+              <tr><td style="padding: 4px 0;"><strong>Ticket Type:</strong></td><td style="text-align: right; font-weight: bold; color: #0284c7;">${isPaid ? `Paid Pass (₹${ticketPrice})` : (ticketType || "Member Pass")}</td></tr>
             </table>
           </div>
+
+          ${paymentSection}
 
           <div style="margin-top: 24px;">
             <a href="http://localhost:3000/events" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Event Details →</a>
