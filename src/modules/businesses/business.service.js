@@ -461,7 +461,7 @@ export const businessService = {
       about: data.about || "",
       phone: data.phone || "",
       email: cleanEmail,
-      verification: "Verified",
+      verification: "Pending",
       status: "Active",
     });
 
