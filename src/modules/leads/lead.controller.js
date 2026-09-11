@@ -3,11 +3,22 @@ import { businessService } from "../businesses/business.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { NotFoundError } from "../../shared/errors/errors.js";
+import { auditService } from "../audit/audit.service.js";
 
 export const leadController = {
   routeLead: asyncHandler(async (req, res) => {
     const { enquiryId, businessIds } = req.body;
     const leads = await leadService.routeEnquiryToBusinesses(enquiryId, businessIds, req.user);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "LEAD_ROUTE",
+      targetModel: "Enquiry",
+      targetId: enquiryId,
+      summary: `Routed enquiry to ${businessIds.length} businesses`,
+      ipAddress: req.ip
+    });
+
     return ApiResponse.created(res, leads, "Enquiry routed to businesses successfully");
   }),
 
@@ -32,12 +43,32 @@ export const leadController = {
   submitQuotation: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updated = await leadService.submitQuotation(id, req.body, req.user);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "UPDATE",
+      targetModel: "Lead",
+      targetId: id,
+      summary: `Quotation submitted for lead`,
+      ipAddress: req.ip
+    });
+
     return ApiResponse.success(res, updated, "Quotation submitted successfully");
   }),
 
   updateLeadStatus: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const updated = await leadService.updateLeadStatus(id, req.body, req.user);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "UPDATE",
+      targetModel: "Lead",
+      targetId: id,
+      summary: `Lead status updated to ${req.body.status}`,
+      ipAddress: req.ip
+    });
+
     return ApiResponse.success(res, updated, "Lead status updated successfully");
   }),
 
