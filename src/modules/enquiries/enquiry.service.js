@@ -133,7 +133,7 @@ export const enquiryService = {
             console.error("Direct lead routing background task failed:", err);
           });
         }
-      } catch (err) {}
+      } catch (err) { }
     } else if (targetType === "chamber" || targetType === "all") {
       try {
         const { Settings } = await import("../settings/settings.model.js");
@@ -159,10 +159,10 @@ export const enquiryService = {
             leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
               console.error("Auto routing background task failed:", err);
             });
-            
-            enquiry.timeline = enquiry.timeline.map(t => 
-              t.label === "Routing to matching businesses" 
-                ? { label: `Automatically routed to ${matchingBusinesses.length} matching businesses`, at: "Just now", done: true } 
+
+            enquiry.timeline = enquiry.timeline.map(t =>
+              t.label === "Routing to matching businesses"
+                ? { label: `Automatically routed to ${matchingBusinesses.length} matching businesses`, at: "Just now", done: true }
                 : t
             );
             await enquiry.save();
@@ -268,10 +268,8 @@ export const enquiryService = {
     const routedEnquiryIds = Array.from(userLeadMap.keys());
 
     // Build filter matching:
-    // 1. Direct enquiries to this business
-    // 2. Routed leads to this business
-    // 3. Pan-chamber broadcasts ("all")
-    // 4. Chamber broadcasts matching this business's chapter
+    // 1. Direct enquiries to this business (targetBusiness === userBusiness._id)
+    // 2. Enquiries explicitly routed to this business by admin/lead routing (_id in routedEnquiryIds)
     // STRICT RULE: Exclude user's own posted enquiries (which are in My Enquiries)
     const filter = {
       $and: [
@@ -439,7 +437,7 @@ export const enquiryService = {
     if (status) enquiry.status = status;
     if (assignedTo !== undefined) enquiry.assignedTo = assignedTo;
     if (resolutionNote !== undefined) enquiry.resolutionNote = resolutionNote;
-    
+
     if (timelineUpdate) {
       enquiry.timeline.push(timelineUpdate);
     }

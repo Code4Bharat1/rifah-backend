@@ -29,7 +29,7 @@ export const notificationService = {
   broadcastNotification: async ({ type, title, body, chapter, link, targetRole }) => {
     const query = { status: "Active" };
     if (chapter && chapter !== "all") query.chapter = chapter;
-    
+
     if (targetRole && targetRole !== "all") {
       if (targetRole === "business_owner") query.role = "business_owner";
       else if (targetRole === "customer") query.role = "customer";
