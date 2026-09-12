@@ -15,8 +15,7 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
 endobj
 6 0 obj
-<<<<<<< HEAD
-<< /Length 2240 >>
+<< /Length 2288 >>
 stream
 0.05 0.22 0.45 rg
 0 740 595 102 re
@@ -37,13 +36,13 @@ BT
 /F2 11 Tf
 1 1 1 rg
 400 795 Td
-(Ref: QTN-577991) Tj
+(Ref: QTN-0EE291) Tj
 ET
 BT
 /F1 9 Tf
 0.85 0.92 1.0 rg
 400 775 Td
-(Date: 9 Sept 2026) Tj
+(Date: 11 Sept 2026) Tj
 ET
 0.85 0.88 0.92 RG
 1 w
@@ -60,13 +59,13 @@ BT
 /F2 12 Tf
 0 0 0 rg
 0 -18 Td
-(BUSINESS STANDARD PRIVATE LIMITED) Tj
+(CENTRAL WARE HOUSING CORP.LTD.) Tj
 /F1 9 Tf
 0.3 0.35 0.4 rg
 0 -16 Td
-(rs9940806@gmail.com) Tj
+(dev08.nexcore@gmail.com) Tj
 0 -14 Td
-(Phone: 9898765656) Tj
+(Phone: 9969854732) Tj
 ET
 0.96 0.97 0.99 rg
 310 600 245 105 re f
@@ -84,9 +83,9 @@ BT
 /F1 9 Tf
 0.3 0.35 0.4 rg
 0 -16 Td
-(khandarevishwajeet4@gmail.com) Tj
+(admin.mumbai-chapter@rifah.org) Tj
 0 -14 Td
-(Enquiry: ENQ-9800) Tj
+(Enquiry: ENQ-7420) Tj
 ET
 0.10 0.18 0.30 rg
 40 545 515 28 re f
@@ -106,15 +105,15 @@ BT
 /F2 12 Tf
 0.05 0.1 0.2 rg
 55 522 Td
-(nice) Tj
+(qwerty) Tj
 /F1 9 Tf
 0.4 0.45 0.5 rg
 0 -16 Td
-(Enquiry Ref: ENQ-9800) Tj
+(Enquiry Ref: ENQ-7420) Tj
 /F2 14 Tf
 0.05 0.5 0.3 rg
 360 16 Td
-(INR 1,00,000) Tj
+(INR 5,000) Tj
 ET
 0.92 0.96 0.94 rg
 330 435 225 35 re f
@@ -127,7 +126,7 @@ BT
 (TOTAL AMOUNT: ) Tj
 /F2 14 Tf
 90 0 Td
-(INR 1,00,000) Tj
+(INR 5,000) Tj
 ET
 BT
 /F2 11 Tf
@@ -143,74 +142,13 @@ BT
 /F1 10 Tf
 0.2 0.25 0.3 rg
 55 370 Td
-(Terms: 3 days) Tj
+(Standard B2B trade terms apply. Discussion available in chat.) Tj
 /F1 9 Tf
 0.4 0.45 0.5 rg
 0 -22 Td
 (1. Quotation valid for 15 days from issuance unless otherwise agreed.) Tj
 0 -15 Td
 (2. Delivery and payment milestones subject to final work order.) Tj
-=======
-<< /Length 1432 >>
-stream
-0.05 0.22 0.45 rg
-0 740 595 102 re f
-BT
-/F2 16 Tf
-1 1 1 rg
-40 795 Td
-(RIFAH CHAMBER OF COMMERCE & INDUSTRY) Tj
-/F1 10 Tf
-0.85 0.9 1 rg
-0 -18 Td
-(Official Member Verification & Compliance Registry) Tj
-ET
-0.98 0.99 1.0 rg
-40 380 515 320 re f
-0.82 0.88 0.94 RG
-40 380 515 320 re S
-0.9 0.95 0.92 rg
-55 645 220 28 re f
-0.3 0.7 0.4 RG
-55 645 220 28 re S
-BT
-/F2 10 Tf
-0.1 0.5 0.2 rg
-65 655 Td
-(OFFICIAL VERIFICATION DOCUMENT) Tj
-ET
-BT
-/F2 14 Tf
-0.1 0.15 0.25 rg
-55 605 Td
-(Official Compliance & Verification Document) Tj
-/F1 10 Tf
-0.4 0.45 0.5 rg
-0 -22 Td
-(File Name: document-1789131459561-136865534.pdf) Tj
-0 -18 Td
-(Classification: Member Verification Document) Tj
-0 -18 Td
-(Recorded Timestamp: 11 Sept 2026, 11:10 pm) Tj
-0 -18 Td
-(Security Status: Cryptographically Registered on RIFAH Connect) Tj
-ET
-0.95 0.97 0.99 rg
-55 405 485 65 re f
-0.75 0.82 0.92 RG
-55 405 485 65 re S
-BT
-/F2 10 Tf
-0.05 0.3 0.6 rg
-70 450 Td
-(CHAMBER SECRETARIAT DIGITAL VERIFICATION DESK) Tj
-/F1 9 Tf
-0.3 0.35 0.4 rg
-0 -16 Td
-(This document has been archived in the chamber compliance records for business verification.) Tj
-0 -14 Td
-(Authorized by the RIFAH Central & Regional Chapter Accreditation Board.) Tj
->>>>>>> 6791e9d57eda6035e807051a90854828063521e5
 ET
 0.88 0.91 0.95 RG
 0.5 w
@@ -219,21 +157,13 @@ BT
 /F2 9 Tf
 0.05 0.3 0.6 rg
 40 82 Td
-<<<<<<< HEAD
 (VERIFIED BY RIFAH CHAMBER OF COMMERCE & INDUSTRY) Tj
 /F1 8 Tf
 0.45 0.5 0.55 rg
 0 -14 Td
 (Official computer-generated quotation issued on RIFAH Connect. Validated via cryptographic session.) Tj
 0 -12 Td
-(Quotation ID: QTN-577991 | Issued on 9 Sept 2026) Tj
-=======
-(RIFAH CONNECT - VERIFIED COMPLIANCE RECORD) Tj
-/F1 8 Tf
-0.45 0.5 0.55 rg
-0 -14 Td
-(Certified digital archive copy. For inquiries, contact secretariat@rifah.org) Tj
->>>>>>> 6791e9d57eda6035e807051a90854828063521e5
+(Quotation ID: QTN-0EE291 | Issued on 11 Sept 2026) Tj
 ET
 endstream
 endobj
@@ -249,9 +179,5 @@ xref
 trailer
 << /Size 7 /Root 1 0 R >>
 startxref
-<<<<<<< HEAD
-2694
-=======
-1886
->>>>>>> 6791e9d57eda6035e807051a90854828063521e5
+2742
 %%EOF

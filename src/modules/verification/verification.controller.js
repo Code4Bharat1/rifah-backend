@@ -3,6 +3,7 @@ import { Business } from "../businesses/business.model.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
+import { auditService } from "../audit/audit.service.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { env } from "../../config/env.js";
@@ -52,6 +53,7 @@ export const verificationController = {
   }),
 
   reviewVerification: asyncHandler(async (req, res) => {
+    console.log("REACHED REVIEW VERIFICATION:", req.params.id, req.body);
     const { id } = req.params;
     const status = req.body.status || req.body.decision;
     const remarks = req.body.remarks || req.body.notes || "";
@@ -60,6 +62,30 @@ export const verificationController = {
       { status, remarks },
       req.user
     );
+
+    let actionType = "UPDATE";
+    let actionSummary = `Updated verification status to ${reviewed.status}`;
+    
+    if (reviewed.status === "verified" || reviewed.status === "approved") {
+      actionType = "VERIFY_APPROVE";
+      actionSummary = `Approved business verification for ${reviewed.business?.name || 'business'}`;
+    } else if (reviewed.status === "rejected") {
+      actionType = "VERIFY_REJECT";
+      actionSummary = `Rejected business verification for ${reviewed.business?.name || 'business'}`;
+    } else if (reviewed.status === "correction_requested" || reviewed.status === "correction") {
+      actionType = "VERIFY_CORRECTION";
+      actionSummary = `Requested corrections for business verification of ${reviewed.business?.name || 'business'}`;
+    }
+
+    await auditService.logAction({
+      actor: req.user,
+      action: actionType,
+      targetModel: "Verification",
+      targetId: id,
+      summary: actionSummary,
+      ipAddress: req.ip
+    });
+
     return ApiResponse.success(res, reviewed, "Verification status updated successfully");
   }),
 

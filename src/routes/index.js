@@ -19,6 +19,7 @@ import { reviewRoutes } from "../modules/reviews/review.routes.js";
 import { reportRoutes } from "../modules/reports/report.routes.js";
 import { auditRoutes } from "../modules/audit/audit.routes.js";
 import { settingsRoutes } from "../modules/settings/settings.routes.js";
+import { queryRoutes } from "../modules/queries/query.routes.js";
 
 const apiRouter = Router();
 
@@ -45,6 +46,7 @@ apiRouter.use("/reviews", reviewRoutes);
 apiRouter.use("/reports", reportRoutes);
 apiRouter.use("/audit", auditRoutes);
 apiRouter.use("/settings", settingsRoutes);
+apiRouter.use("/queries", queryRoutes);
 
 export { apiRouter };
 export default apiRouter;

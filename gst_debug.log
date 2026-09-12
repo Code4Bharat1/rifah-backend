@@ -263,6 +263,12 @@
 
 [2026-09-11T11:41:49.822Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AABCI6363G1ZJ","data":{"gstin":"27AABCI6363G1ZJ","legal_name":"RELIANCE JIO INFOCOMM LIMITED","trade_name":"RELIANCE JIO INFOCOMM LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"RELIANCE CORPORATE PARK, GR FLOOR, RCP, 5 TTC Industrial Area, Ghansoli, Thane Belapur Road, Navi Mumbai","city":"Thane Belapur Road , Navi Mumbai",
 
+<<<<<<< HEAD
 [2026-09-11T12:53:43.998Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/36AABCB2115P1ZQ with key gak_a52d...
 
 [2026-09-11T12:53:44.371Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"36AABCB2115P1ZQ","data":{"gstin":"36AABCB2115P1ZQ","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"36","state_jurisdiction":null,"address":"1-10-39 to 44 Level 4 and 5, Gumidelli Towers, Old Airport Road, Begumpet, ","city":"Begumpet,","address_details":{"building_number":"1-10-3
+=======
+[2026-09-11T13:31:20.689Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AABCI6363G1ZJ with key gak_a52d...
+
+[2026-09-11T13:31:21.239Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AABCI6363G1ZJ","data":{"gstin":"27AABCI6363G1ZJ","legal_name":"RELIANCE JIO INFOCOMM LIMITED","trade_name":"RELIANCE JIO INFOCOMM LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"RELIANCE CORPORATE PARK, GR FLOOR, RCP, 5 TTC Industrial Area, Ghansoli, Thane Belapur Road, Navi Mumbai","city":"Thane Belapur Road , Navi Mumbai",
+>>>>>>> 6791e9d57eda6035e807051a90854828063521e5

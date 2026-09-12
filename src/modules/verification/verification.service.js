@@ -168,10 +168,14 @@ export const verificationService = {
     const business = await Business.findById(verification.business);
     
     // RBAC: Chapter Admin Scope Enforcement
-    if (reviewer && reviewer.role === ROLES.CHAPTER_ADMIN && reviewer.chapter) {
+    if (!reviewer || reviewer.role !== ROLES.CHAPTER_ADMIN) {
+      throw new ForbiddenError("Only Chapter Administrators are authorized to verify businesses.");
+    }
+    
+    if (reviewer.role === ROLES.CHAPTER_ADMIN && reviewer.chapter) {
       const chapterRegex = new RegExp(`^${reviewer.chapter.trim()}$`, "i");
       if (business && business.chapter && !chapterRegex.test(business.chapter)) {
-        throw new ForbiddenError("You are not authorized to review verifications for this chapter");
+        throw new ForbiddenError("You are not authorized to review verifications for this chapter.");
       }
     }
 
