@@ -27,7 +27,7 @@ export const reportController = {
   }),
 
   getAdminOverview: asyncHandler(async (req, res) => {
-    const stats = await reportService.getAdminOverview();
+    const stats = await reportService.getAdminOverview(req.user);
     return ApiResponse.success(res, stats, "Chamber KPI metrics retrieved");
   }),
 

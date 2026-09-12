@@ -140,7 +140,16 @@ export const reportService = {
   /**
    * Secretariat / Admin Chamber-wide KPI Dashboard
    */
-  getAdminOverview: async () => {
+  getAdminOverview: async (requester) => {
+    let directFilter = {};
+    let businessRefFilter = {};
+
+    if (requester) {
+      const { getChapterFilter } = await import("../../shared/utils/chapter-scope.js");
+      directFilter = await getChapterFilter(requester, "direct_id");
+      businessRefFilter = await getChapterFilter(requester, "business_ref");
+    }
+
     const [
       totalBusinesses,
       verifiedBusinesses,
@@ -150,20 +159,21 @@ export const reportService = {
       totalChapters,
       paymentsAgg,
     ] = await Promise.all([
-      Business.countDocuments(),
-      Business.countDocuments({ verification: "verified" }),
-      Verification.countDocuments({ status: "pending" }),
-      User.countDocuments(),
-      Enquiry.countDocuments(),
-      Chapter.countDocuments(),
+      Business.countDocuments(directFilter),
+      Business.countDocuments({ ...directFilter, verification: "verified" }),
+      Verification.countDocuments({ ...businessRefFilter, status: "pending" }),
+      User.countDocuments(directFilter),
+      Enquiry.countDocuments(directFilter),
+      Chapter.countDocuments(directFilter),
       Payment.aggregate([
-        { $match: { status: "Paid" } },
+        { $match: { ...businessRefFilter, status: "Paid" } },
         { $group: { _id: null, totalRevenue: { $sum: "$amount" }, count: { $sum: 1 } } },
       ]),
     ]);
 
     // Aggregate Membership Mix
     const membershipMixAgg = await Business.aggregate([
+      { $match: directFilter },
       { $group: { _id: "$membership", count: { $sum: 1 } } }
     ]);
     const membershipMix = { Basic: 0, Premium: 0, Enterprise: 0 };
@@ -176,7 +186,7 @@ export const reportService = {
 
     // Aggregate Chapters distribution
     const chaptersAgg = await Business.aggregate([
-      { $match: { chapter: { $exists: true, $ne: "" } } },
+      { $match: { ...directFilter, chapter: { $exists: true, $ne: "" } } },
       { $group: { _id: "$chapter", members: { $sum: 1 } } },
       { $sort: { members: -1 } },
       { $limit: 6 }
@@ -189,12 +199,12 @@ export const reportService = {
     for (let i = 5; i >= 0; i--) {
       // Last day of the month
       const d = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
-      const count = await Business.countDocuments({ createdAt: { $lte: d } });
+      const count = await Business.countDocuments({ ...directFilter, createdAt: { $lte: d } });
       const monthName = new Date(now.getFullYear(), now.getMonth() - i, 1).toLocaleString('default', { month: 'short' });
       
       // Calculate new registrations for that specific month to compute renewal rate if needed
       const startOfMonth = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const newThisMonth = await Business.countDocuments({ createdAt: { $gte: startOfMonth, $lte: d } });
+      const newThisMonth = await Business.countDocuments({ ...directFilter, createdAt: { $gte: startOfMonth, $lte: d } });
 
       growth.push({
         name: monthName,
