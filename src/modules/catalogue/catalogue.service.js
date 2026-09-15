@@ -23,16 +23,40 @@ export const catalogueService = {
       ];
     }
 
-    if (queryParams.type && typeof queryParams.type === "string") {
-      filter.type = queryParams.type.trim();
+    if (queryParams.type && typeof queryParams.type === "string" && queryParams.type.toLowerCase() !== "all") {
+      const typeStr = escapeRegex(queryParams.type.trim());
+      filter.type = { $regex: new RegExp(`^${typeStr}`, "i") };
     }
 
-    if (queryParams.category && typeof queryParams.category === "string") {
-      filter.category = queryParams.category.trim();
+    if (queryParams.category && typeof queryParams.category === "string" && queryParams.category.toLowerCase() !== "all") {
+      filter.category = { $regex: new RegExp(`^${escapeRegex(queryParams.category.trim())}`, "i") };
     }
 
-    if (queryParams.city && typeof queryParams.city === "string") {
-      filter.city = queryParams.city.trim();
+    if (
+      queryParams.city &&
+      typeof queryParams.city === "string" &&
+      !["all", "all locations", "all chapters"].includes(queryParams.city.toLowerCase().trim())
+    ) {
+      const rawCity = queryParams.city.replace(/\b(chapter|chamber)\b/gi, "").trim();
+      const safeCity = escapeRegex(rawCity);
+      if (safeCity) {
+        const matchingBusinesses = await Business.find({
+          $or: [
+            { city: { $regex: safeCity, $options: "i" } },
+            { chapter: { $regex: safeCity, $options: "i" } },
+            { state: { $regex: safeCity, $options: "i" } },
+          ],
+        }).select("_id");
+        const bizIds = matchingBusinesses.map((b) => b._id);
+
+        filter.$and = filter.$and || [];
+        filter.$and.push({
+          $or: [
+            { city: { $regex: safeCity, $options: "i" } },
+            { business: { $in: bizIds } },
+          ],
+        });
+      }
     }
 
     if (queryParams.businessId && typeof queryParams.businessId === "string") {
@@ -41,7 +65,7 @@ export const catalogueService = {
 
     const [items, total] = await Promise.all([
       Catalogue.find(filter)
-        .populate("business", "name slug chapter city rating verification membership")
+        .populate("business", "name slug chapter city rating verification isVerified verificationStatus membership")
         .sort(sort)
         .skip(skip)
         .limit(limit),
