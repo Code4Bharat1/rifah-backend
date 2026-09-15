@@ -218,6 +218,8 @@ export const paymentService = {
           (planId ? planId.charAt(0).toUpperCase() + planId.slice(1) : "Basic");
 
         businessDoc.membership = formattedTier;
+        businessDoc.paymentStatus = "Paid";
+        businessDoc.isPaid = true;
         if (!businessDoc.chapter && (userDoc.chapter || businessDoc.city || payload.city)) {
           const targetCity = (businessDoc.city || payload.city || userDoc.city || "").trim();
           if (userDoc.chapter) {

@@ -1,7 +1,7 @@
 export const validateCreateEnquiry = (data = {}) => {
   const errors = [];
-  if (!data.title || typeof data.title !== "string" || data.title.trim().length < 3) {
-    errors.push({ field: "title", message: "Enquiry title is required" });
+  if (!data.title || typeof data.title !== "string" || !data.title.trim()) {
+    errors.push({ field: "title", message: "Requirement title is required" });
   }
   if (!data.category || typeof data.category !== "string") {
     errors.push({ field: "category", message: "Category is required" });

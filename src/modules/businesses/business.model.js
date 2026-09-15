@@ -92,6 +92,17 @@ const businessSchema = new mongoose.Schema(
       default: "Free",
       index: true,
     },
+    paymentStatus: {
+      type: String,
+      enum: ["Pending", "Paid", "Failed", "Refunded", "Free", "pending", "paid", "failed", "refunded", "free"],
+      default: "Pending",
+      index: true,
+    },
+    isPaid: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     verification: {
       type: String,
       enum: [

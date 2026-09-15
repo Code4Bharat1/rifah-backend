@@ -1,6 +1,7 @@
 import { Verification } from "./verification.model.js";
 import { Business } from "../businesses/business.model.js";
 import { User } from "../users/user.model.js";
+import { Payment } from "../payments/payment.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
@@ -143,9 +144,9 @@ export const verificationService = {
       filter.status = queryParams.status;
     }
 
-    const [verifications, total] = await Promise.all([
+    const [verificationsRaw, total] = await Promise.all([
       Verification.find(filter)
-        .populate("business", "name slug city state chapter membership verification verificationReviewReason")
+        .populate("business", "name slug city state chapter membership paymentStatus isPaid verification verificationReviewReason")
         .populate("submittedBy", "name email phone")
         .populate("reviewedBy", "name chapter role")
         .sort(sort)
@@ -153,6 +154,51 @@ export const verificationService = {
         .limit(limit),
       Verification.countDocuments(filter),
     ]);
+
+    // Find all paid records for businesses and users in this queue
+    const businessIds = verificationsRaw.map((v) => v.business?._id).filter(Boolean);
+    const userIds = verificationsRaw.map((v) => v.submittedBy?._id).filter(Boolean);
+
+    let paidPayments = [];
+    if (businessIds.length > 0 || userIds.length > 0) {
+      paidPayments = await Payment.find({
+        $or: [
+          ...(businessIds.length > 0 ? [{ business: { $in: businessIds } }] : []),
+          ...(userIds.length > 0 ? [{ payer: { $in: userIds } }] : []),
+        ],
+        status: { $in: ["Paid", "paid", "Completed", "completed"] },
+      }).sort({ createdAt: -1 });
+    }
+
+    const verifications = verificationsRaw.map((v) => {
+      const doc = v.toObject ? v.toObject() : v;
+      const bizIdStr = doc.business?._id ? String(doc.business._id) : null;
+      const userIdStr = doc.submittedBy?._id ? String(doc.submittedBy._id) : null;
+
+      const hasPaidRecord = paidPayments.some(
+        (p) =>
+          (bizIdStr && p.business && String(p.business) === bizIdStr) ||
+          (userIdStr && p.payer && String(p.payer) === userIdStr)
+      );
+
+      const isPaidMembership =
+        doc.business?.membership &&
+        doc.business.membership.toLowerCase() !== "free" &&
+        doc.business.membership.toLowerCase() !== "free listing";
+
+      const isPaidStatus =
+        doc.business?.paymentStatus?.toLowerCase() === "paid" ||
+        doc.business?.isPaid === true ||
+        hasPaidRecord ||
+        isPaidMembership;
+
+      if (doc.business) {
+        doc.business.paymentStatus = isPaidStatus ? "Paid" : (doc.business.paymentStatus || "Pending");
+        doc.business.isPaid = isPaidStatus;
+      }
+      doc.paymentStatus = isPaidStatus ? "Paid" : "Pending";
+      return doc;
+    });
 
     return {
       verifications,
