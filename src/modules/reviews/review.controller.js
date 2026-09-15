@@ -28,4 +28,19 @@ export const reviewController = {
     const review = await reviewService.moderateReview(id, req.body, req.user.id);
     return ApiResponse.success(res, review, `Review ${review.status} successfully`);
   }),
+
+  deleteReview: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    await reviewService.deleteReview(id);
+    return ApiResponse.success(res, null, "Review deleted successfully");
+  }),
+
+  deleteAllReviews: asyncHandler(async (req, res) => {
+    const result = await reviewService.deleteAllReviews(req.query);
+    return ApiResponse.success(
+      res,
+      result,
+      `Successfully deleted ${result.deletedCount} review(s)`
+    );
+  }),
 };

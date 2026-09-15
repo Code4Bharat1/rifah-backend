@@ -44,5 +44,20 @@ router.patch(
   reviewController.moderateReview
 );
 
+router.delete(
+  "/admin/all",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  reviewController.deleteAllReviews
+);
+
+router.delete(
+  "/:id",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  validateObjectIdParam("id"),
+  reviewController.deleteReview
+);
+
 export { router as reviewRoutes };
 export default router;

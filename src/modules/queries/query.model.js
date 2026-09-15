@@ -24,7 +24,7 @@ const querySchema = new mongoose.Schema(
     },
     desk: {
       type: String,
-      required: [true, "Desk is required"],
+      default: "General",
     },
     chapter: {
       type: String,

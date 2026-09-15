@@ -6,12 +6,9 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
-router.get(
-  "/",
-  authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
-  settingsController.getSettings
-);
+// Public read endpoint so contact page and public forms can access platform chamber details
+router.get("/", settingsController.getSettings);
+router.get("/public", settingsController.getSettings);
 
 router.patch(
   "/",

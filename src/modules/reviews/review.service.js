@@ -10,7 +10,7 @@ export const reviewService = {
   recalculateRating: async (businessId) => {
     const reviews = await Review.find({
       business: businessId,
-      status: { $in: ["approved", "published", "pending"] },
+      status: { $in: ["approved", "published"] },
     });
     const count = reviews.length;
     let avg = 0;
@@ -130,21 +130,44 @@ export const reviewService = {
     review.moderatedAt = new Date();
     await review.save();
 
-    // Recalculate average rating for the business if approved
-    if (status === "approved") {
-      const approvedReviews = await Review.find({
-        business: review.business,
-        status: "approved",
-      });
-      const totalRating = approvedReviews.reduce((sum, r) => sum + r.rating, 0);
-      const avgRating = (totalRating / approvedReviews.length).toFixed(1);
-
-      await Business.findByIdAndUpdate(review.business, {
-        rating: Number(avgRating),
-        reviewsCount: approvedReviews.length,
-      });
-    }
+    await reviewService.recalculateRating(review.business);
 
     return review;
+  },
+
+  /**
+   * Delete review (Admin)
+   */
+  deleteReview: async (reviewId) => {
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      throw new NotFoundError("Review not found");
+    }
+
+    const businessId = review.business;
+    await Review.findByIdAndDelete(reviewId);
+    await reviewService.recalculateRating(businessId);
+
+    return { message: "Review deleted successfully" };
+  },
+
+  /**
+   * Delete all reviews (Admin)
+   */
+  deleteAllReviews: async (queryParams = {}) => {
+    const filter = {};
+    if (queryParams.status && queryParams.status !== "all") {
+      filter.status = queryParams.status;
+    }
+
+    const affectedBusinesses = await Review.distinct("business", filter);
+    const result = await Review.deleteMany(filter);
+
+    // Recalculate ratings for all affected businesses
+    await Promise.all(
+      affectedBusinesses.map((bId) => reviewService.recalculateRating(bId))
+    );
+
+    return { deletedCount: result.deletedCount };
   },
 };

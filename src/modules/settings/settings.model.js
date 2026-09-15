@@ -33,7 +33,15 @@ const settingsSchema = new mongoose.Schema(
     },
     supportPhone: {
       type: String,
-      default: "+00 0000 000000",
+      default: "+91 22 2345 6789",
+    },
+    secretariatAddress: {
+      type: String,
+      default: "Central Secretariat, Byculla, Mumbai 400 008",
+    },
+    workingHours: {
+      type: String,
+      default: "Mon–Fri · 09:30–18:00 IST",
     },
     membershipYear: {
       type: String,
