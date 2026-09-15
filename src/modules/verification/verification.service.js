@@ -68,27 +68,31 @@ export const verificationService = {
     });
     await business.save();
 
-    // Send in-app notification to the Chapter Admin(s) of the business's chapter
+    // Send in-app notification strictly to the Chapter Admin(s) of the business's chapter
     try {
-      const targetChapter = business.chapter;
+      const targetChapter = (business.chapter || "").trim();
       const targetChapterId = business.chapterId;
+      const cleanChapter = targetChapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
       const chapterAdminFilter = {
         role: ROLES.CHAPTER_ADMIN,
         $or: [
           ...(targetChapterId ? [{ chapterId: targetChapterId }] : []),
-          ...(targetChapter ? [{ chapter: new RegExp(targetChapter.replace(/\b(chapter|chamber)\b/gi, "").trim(), "i") }] : []),
+          ...(cleanChapter ? [{ chapter: new RegExp(cleanChapter, "i") }] : []),
+          ...(targetChapter ? [{ chapter: new RegExp(`^${targetChapter}$`, "i") }] : []),
         ],
       };
-      const chapterAdmins = await User.find(chapterAdminFilter);
-      for (const admin of chapterAdmins) {
-        await notificationService.createNotification({
-          recipientId: admin._id,
-          type: "Verification",
-          title: "New Verification Submission",
-          body: `Business "${business.name}" from your chapter (${targetChapter || "your chapter"}) has submitted verification documents for approval.`,
-          entityId: verification._id,
-          link: "/chapter-admin/verification",
-        });
+      if (targetChapterId || cleanChapter) {
+        const chapterAdmins = await User.find(chapterAdminFilter);
+        for (const admin of chapterAdmins) {
+          await notificationService.createNotification({
+            recipientId: admin._id,
+            type: "Verification",
+            title: "New Verification Submission",
+            body: `Business "${business.name}" from your chapter (${targetChapter || "your chapter"}) has submitted verification documents for approval.`,
+            entityId: verification._id,
+            link: "/chapter-admin/verification",
+          });
+        }
       }
     } catch (notifErr) {
       console.error("Failed to notify chapter admins on verification submission:", notifErr);
@@ -172,9 +176,22 @@ export const verificationService = {
       throw new ForbiddenError("Only Chapter Administrators are authorized to verify businesses.");
     }
     
-    if (reviewer.role === ROLES.CHAPTER_ADMIN && reviewer.chapter) {
-      const chapterRegex = new RegExp(`^${reviewer.chapter.trim()}$`, "i");
-      if (business && business.chapter && !chapterRegex.test(business.chapter)) {
+    if (reviewer.role === ROLES.CHAPTER_ADMIN) {
+      const cleanAdminChapter = (reviewer.chapter || "").replace(/\b(chapter|chamber)\b/gi, "").trim().toLowerCase();
+      const cleanBizChapter = (business?.chapter || "").replace(/\b(chapter|chamber)\b/gi, "").trim().toLowerCase();
+      const adminChapterId = reviewer.chapterId ? String(reviewer.chapterId) : "";
+      const bizChapterId = business?.chapterId ? String(business.chapterId) : "";
+
+      const idsMatch = Boolean(adminChapterId && bizChapterId && adminChapterId === bizChapterId);
+      const namesMatch = Boolean(
+        cleanAdminChapter &&
+        cleanBizChapter &&
+        (cleanAdminChapter === cleanBizChapter ||
+          cleanAdminChapter.includes(cleanBizChapter) ||
+          cleanBizChapter.includes(cleanAdminChapter))
+      );
+
+      if (!idsMatch && !namesMatch) {
         throw new ForbiddenError("You are not authorized to review verifications for this chapter.");
       }
     }

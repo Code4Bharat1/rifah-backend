@@ -18,7 +18,16 @@ export const eventController = {
   }),
 
   createEvent: asyncHandler(async (req, res) => {
-    const created = await eventService.createEvent(req.body, req.user);
+    const payload = { ...req.body };
+    if (payload.isPaid !== undefined) {
+      payload.isPaid = payload.isPaid === true || payload.isPaid === "true" || payload.isPaid === "Paid";
+      if (payload.isPaid) {
+        payload.ticketPrice = Number(payload.ticketPrice) || 0;
+      } else {
+        payload.ticketPrice = 0;
+      }
+    }
+    const created = await eventService.createEvent(payload, req.user);
     await auditService.logAction({
       actor: req.user,
       action: "CREATE",
@@ -54,7 +63,14 @@ export const eventController = {
 
   updateEvent: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updated = await eventService.updateEvent(id, req.body, req.user);
+    const payload = { ...req.body };
+    if (payload.isPaid !== undefined) {
+      payload.isPaid = payload.isPaid === true || payload.isPaid === "true" || payload.isPaid === "Paid";
+      if (payload.isPaid && payload.ticketPrice !== undefined) {
+        payload.ticketPrice = Number(payload.ticketPrice) || 0;
+      }
+    }
+    const updated = await eventService.updateEvent(id, payload, req.user);
     await auditService.logAction({
       actor: req.user,
       action: "UPDATE",

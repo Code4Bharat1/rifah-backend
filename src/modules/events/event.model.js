@@ -151,5 +151,18 @@ const eventSchema = new mongoose.Schema(
   }
 );
 
+eventSchema.pre("save", function (next) {
+  if (this.isPaid) {
+    this.ticketPrice = Number(this.ticketPrice) || 0;
+    this.fee = this.ticketPrice > 0 ? `₹${this.ticketPrice}` : (this.fee || "Free");
+  } else {
+    this.ticketPrice = 0;
+    if (!this.fee || this.fee.startsWith("₹")) {
+      this.fee = "Free";
+    }
+  }
+  next();
+});
+
 export const Event = mongoose.model("Event", eventSchema);
 export default Event;

@@ -168,7 +168,24 @@ export const paymentService = {
 
         const bizCity = (payload.city && payload.city.trim()) || userDoc.city || "";
         const bizState = (payload.state && payload.state.trim()) || userDoc.state || "";
-        const bizChapter = userDoc.chapter || "";
+        let bizChapter = (userDoc.chapter || "").trim();
+        let bizChapterId = userDoc.chapterId || null;
+        if (!bizChapter && bizCity) {
+          try {
+            const { Chapter } = await import("../chapters/chapter.model.js");
+            const cleanCity = bizCity.replace(/\b(chapter|chamber)\b/gi, "").trim();
+            const matchedChapter = await Chapter.findOne({
+              $or: [
+                { city: new RegExp(`^${cleanCity}$`, "i") },
+                { name: new RegExp(cleanCity, "i") },
+              ],
+            });
+            if (matchedChapter) {
+              bizChapter = matchedChapter.name;
+              bizChapterId = matchedChapter._id;
+            }
+          } catch (e) {}
+        }
         const bizIndustry = (payload.industry && payload.industry.trim()) || userDoc.sourcingInterest || "";
 
         businessDoc = await Business.create({
@@ -183,6 +200,7 @@ export const paymentService = {
           phone: userDoc.phone || "",
           email: payload.billingEmail || userDoc.email || "",
           chapter: bizChapter,
+          chapterId: bizChapterId,
           industry: bizIndustry,
           categories: bizIndustry ? [bizIndustry] : [],
           status: "Pending Verification",
@@ -200,6 +218,28 @@ export const paymentService = {
           (planId ? planId.charAt(0).toUpperCase() + planId.slice(1) : "Basic");
 
         businessDoc.membership = formattedTier;
+        if (!businessDoc.chapter && (userDoc.chapter || businessDoc.city || payload.city)) {
+          const targetCity = (businessDoc.city || payload.city || userDoc.city || "").trim();
+          if (userDoc.chapter) {
+            businessDoc.chapter = userDoc.chapter;
+            businessDoc.chapterId = userDoc.chapterId || businessDoc.chapterId;
+          } else if (targetCity) {
+            try {
+              const { Chapter } = await import("../chapters/chapter.model.js");
+              const cleanCity = targetCity.replace(/\b(chapter|chamber)\b/gi, "").trim();
+              const matched = await Chapter.findOne({
+                $or: [
+                  { city: new RegExp(`^${cleanCity}$`, "i") },
+                  { name: new RegExp(cleanCity, "i") },
+                ],
+              });
+              if (matched) {
+                businessDoc.chapter = matched.name;
+                businessDoc.chapterId = matched._id;
+              }
+            } catch (e) {}
+          }
+        }
         if (!businessDoc.isVerified) {
           businessDoc.status = "Pending Verification";
           businessDoc.verificationStatus = "Pending";
@@ -291,17 +331,20 @@ export const paymentService = {
           });
         }
 
-        // 1. Notify Chapter Admin of the specific Chapter
+        // 1. Notify Chapter Admin of the specific Chapter only
         const bizChapter = (businessDoc?.chapter || userDoc?.chapter || "").trim();
+        const bizChapterId = businessDoc?.chapterId || userDoc?.chapterId || null;
         let chapterAdmins = [];
-        if (bizChapter) {
+        if (bizChapter || bizChapterId) {
+          const cleanChapter = bizChapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
           chapterAdmins = await User.find({
             role: ROLES.CHAPTER_ADMIN,
-            chapter: new RegExp(`^${bizChapter}$`, "i"),
+            $or: [
+              ...(bizChapterId ? [{ chapterId: bizChapterId }] : []),
+              ...(cleanChapter ? [{ chapter: new RegExp(cleanChapter, "i") }] : []),
+              ...(bizChapter ? [{ chapter: new RegExp(`^${bizChapter}$`, "i") }] : []),
+            ],
           }).select("_id email name chapter");
-        }
-        if (!chapterAdmins || chapterAdmins.length === 0) {
-          chapterAdmins = await User.find({ role: ROLES.CHAPTER_ADMIN }).select("_id email name chapter");
         }
 
         for (const ca of chapterAdmins) {
@@ -548,17 +591,20 @@ export const paymentService = {
         });
       }
 
-      // 1. Notify Chapter Admin of the specific Chapter
+      // 1. Notify Chapter Admin of the specific Chapter only
       const bizChapter = (businessDoc?.chapter || userDoc?.chapter || "").trim();
+      const bizChapterId = businessDoc?.chapterId || userDoc?.chapterId || null;
       let chapterAdmins = [];
-      if (bizChapter) {
+      if (bizChapter || bizChapterId) {
+        const cleanChapter = bizChapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
         chapterAdmins = await User.find({
           role: ROLES.CHAPTER_ADMIN,
-          chapter: new RegExp(`^${bizChapter}$`, "i"),
+          $or: [
+            ...(bizChapterId ? [{ chapterId: bizChapterId }] : []),
+            ...(cleanChapter ? [{ chapter: new RegExp(cleanChapter, "i") }] : []),
+            ...(bizChapter ? [{ chapter: new RegExp(`^${bizChapter}$`, "i") }] : []),
+          ],
         }).select("_id email name chapter");
-      }
-      if (!chapterAdmins || chapterAdmins.length === 0) {
-        chapterAdmins = await User.find({ role: ROLES.CHAPTER_ADMIN }).select("_id email name chapter");
       }
 
       for (const ca of chapterAdmins) {

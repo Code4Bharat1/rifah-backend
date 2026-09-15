@@ -157,6 +157,15 @@ export const eventService = {
       }
     }
 
+    // Ensure paid event attributes and fee are strictly synchronized
+    const isPaid = Boolean(data.isPaid === true || data.isPaid === "true" || data.isPaid === "Paid");
+    const ticketPrice = isPaid ? (Number(data.ticketPrice) || 0) : 0;
+    const fee = isPaid ? `₹${ticketPrice}` : (data.fee && data.fee !== "Complimentary for Members" ? data.fee : "Free");
+
+    data.isPaid = isPaid;
+    data.ticketPrice = ticketPrice;
+    data.fee = fee;
+
     const event = await Event.create({
       ...data,
       slug,
@@ -320,6 +329,24 @@ export const eventService = {
     if (updateData.title && updateData.title !== existing.title) {
       updateData.slug = generateSlug(updateData.title);
     }
+
+    // Ensure paid event attributes and fee are strictly synchronized on update
+    if (updateData.isPaid !== undefined || updateData.ticketPrice !== undefined || updateData.fee !== undefined) {
+      const isPaid = updateData.isPaid !== undefined
+        ? Boolean(updateData.isPaid === true || updateData.isPaid === "true" || updateData.isPaid === "Paid")
+        : existing.isPaid;
+      const ticketPrice = isPaid
+        ? (Number(updateData.ticketPrice !== undefined ? updateData.ticketPrice : existing.ticketPrice) || 0)
+        : 0;
+      const fee = isPaid
+        ? `₹${ticketPrice}`
+        : (updateData.fee && updateData.fee !== "Complimentary for Members" ? updateData.fee : "Free");
+
+      updateData.isPaid = isPaid;
+      updateData.ticketPrice = ticketPrice;
+      updateData.fee = fee;
+    }
+
     const updated = await Event.findByIdAndUpdate(id, updateData, { new: true });
     
     // Only broadcast if status changed to UPCOMING
