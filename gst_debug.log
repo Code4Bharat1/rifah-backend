@@ -272,3 +272,19 @@
 
 [2026-09-11T13:31:21.239Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AABCI6363G1ZJ","data":{"gstin":"27AABCI6363G1ZJ","legal_name":"RELIANCE JIO INFOCOMM LIMITED","trade_name":"RELIANCE JIO INFOCOMM LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"RELIANCE CORPORATE PARK, GR FLOOR, RCP, 5 TTC Industrial Area, Ghansoli, Thane Belapur Road, Navi Mumbai","city":"Thane Belapur Road , Navi Mumbai",
 >>>>>>> 6791e9d57eda6035e807051a90854828063521e5
+
+[2026-09-16T09:20:37.217Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27ABCDE1234F1Z5 with key gak_a52d...
+
+[2026-09-16T09:20:38.692Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-16T09:20:38.694Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-16T09:21:07.742Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/09AABCB2115P1ZN with key gak_a52d...
+
+[2026-09-16T09:21:07.981Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"09AABCB2115P1ZN","data":{"gstin":"09AABCB2115P1ZN","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"09","state_jurisdiction":null,"address":"Chamber No. A08, 19-C2N, Mehra Business Chambers, Vidhan Sabha Marg, Lucknow","city":"Lucknow","address_details":{"building_number":"Chamber
+
+[2026-09-16T09:49:20.962Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/33AABCB2115P1ZW with key gak_a52d...
+
+[2026-09-16T09:49:42.695Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/32AABCB2115P1ZY with key gak_a52d...
+
+[2026-09-16T09:49:43.417Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"32AABCB2115P1ZY","data":{"gstin":"32AABCB2115P1ZY","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"32","state_jurisdiction":null,"address":"3627, M/S S.T. REDDIAR PRINTERS, Veekshanam Road, Kochi","city":"Kochi","address_details":{"building_number":"3627","building_name":"M/S S.T

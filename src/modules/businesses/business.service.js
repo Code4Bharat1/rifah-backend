@@ -499,7 +499,8 @@ export const businessService = {
       membership: data.membershipTier || "Free",
       about: data.about || "",
       phone: data.phone || "",
-      email: cleanEmail,
+      email: (data.businessEmail || cleanEmail).toLowerCase().trim(),
+      ownerEmail: cleanEmail,
       verification: "Pending",
       status: "Active",
     });
