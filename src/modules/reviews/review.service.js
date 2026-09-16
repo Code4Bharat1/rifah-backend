@@ -34,16 +34,18 @@ export const reviewService = {
       throw new NotFoundError("Business not found");
     }
 
-    const existing = await Review.findOne({ business: data.businessId, author: user.id });
-    if (existing) {
-      existing.rating = data.rating;
-      existing.title = data.title || "";
-      existing.body = data.body.trim();
-      existing.status = "approved";
-      await existing.save();
+    if (user && user.id) {
+      const existing = await Review.findOne({ business: data.businessId, author: user.id });
+      if (existing) {
+        existing.rating = data.rating;
+        existing.title = data.title || "";
+        existing.body = data.body.trim();
+        existing.status = "approved";
+        await existing.save();
 
-      await reviewService.recalculateRating(data.businessId);
-      return existing;
+        await reviewService.recalculateRating(data.businessId);
+        return existing;
+      }
     }
 
     const { Settings } = await import("../settings/settings.model.js");
@@ -52,9 +54,9 @@ export const reviewService = {
 
     const review = await Review.create({
       business: data.businessId,
-      author: user.id,
-      authorName: user.name || "Verified Member",
-      authorRole: user.role === "business" ? "Chamber Business Member" : "Verified Buyer",
+      author: user?.id || null,
+      authorName: user?.name || data.authorName || "Guest Reviewer",
+      authorRole: user?.role === "business" ? "Chamber Business Member" : (user ? "Verified Member" : "Guest Reviewer"),
       rating: data.rating,
       title: data.title || "",
       body: data.body.trim(),

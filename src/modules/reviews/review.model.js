@@ -12,7 +12,8 @@ const reviewSchema = new mongoose.Schema(
     author: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
+      default: null,
       index: true,
     },
     authorName: {
@@ -58,7 +59,7 @@ const reviewSchema = new mongoose.Schema(
   }
 );
 
-reviewSchema.index({ business: 1, author: 1 }, { unique: true });
+reviewSchema.index({ business: 1, author: 1 }, { unique: true, sparse: true });
 
 export const Review = mongoose.model("Review", reviewSchema);
 export default Review;

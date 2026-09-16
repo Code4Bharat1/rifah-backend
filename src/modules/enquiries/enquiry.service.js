@@ -462,7 +462,7 @@ export const enquiryService = {
             title,
             body,
             entityId: enquiry._id,
-            link: "/me/enquiries"
+            link: "/biz/my-enquiries"
           });
         }
       } catch (err) {

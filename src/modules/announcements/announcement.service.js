@@ -16,7 +16,7 @@ export const announcementService = {
         title: announcement.title,
         body: announcement.message,
         chapter: announcement.chapter,
-        link: "/me/notifications",
+        link: "/biz/notifications",
         targetRole: "business_owner",
       });
       announcement.broadcastId = broadcastResult.broadcastId;
@@ -83,7 +83,7 @@ export const announcementService = {
         title: announcement.title,
         body: announcement.message,
         chapter: announcement.chapter,
-        link: "/me/notifications", // A general place where members view things
+        link: "/biz/notifications", // Business workspace notifications
         targetRole: "business_owner",
       });
       announcement.broadcastId = broadcastResult.broadcastId;
@@ -135,7 +135,7 @@ export const announcementService = {
             title: ann.title,
             body: ann.message,
             chapter: ann.chapter,
-            link: "/me/notifications",
+            link: "/biz/notifications",
             targetRole: "business_owner",
           });
           ann.broadcastId = broadcastResult.broadcastId;
