@@ -11,6 +11,23 @@ import { getChapterFilter, resolveChapterIdByName } from "../../shared/utils/cha
 import { User } from "../users/user.model.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { categoryService } from "../categories/category.service.js";
+
+/**
+ * Ensures the given category/sub-category strings exist in the shared
+ * Category collection so they show up for the next business to pick from.
+ */
+const ensureCategoriesExist = async (category, subCategory) => {
+  const cleanCategory = (category || "").trim();
+  const cleanSubCategory = (subCategory || "").trim();
+  if (cleanCategory) {
+    await categoryService.ensureCategory(cleanCategory);
+  }
+  if (cleanSubCategory) {
+    await categoryService.ensureCategory(cleanSubCategory, cleanCategory);
+  }
+  return [cleanCategory, cleanSubCategory].filter(Boolean);
+};
 
 /**
  * Resolves { chapterId, chapter } from either a provided chapterId or a plain chapter name,
@@ -313,6 +330,10 @@ export const businessService = {
     const chapterFields = await resolveChapterFields(sanitizedData);
     Object.assign(sanitizedData, chapterFields);
 
+    if (sanitizedData.industry || data.subCategory) {
+      sanitizedData.categories = await ensureCategoriesExist(sanitizedData.industry, data.subCategory);
+    }
+
     let slug = generateSlug(sanitizedData.name || data.name);
     const slugConflict = await Business.findOne({ slug });
     if (slugConflict) {
@@ -385,6 +406,10 @@ export const businessService = {
       sanitizedData.categories = [sanitizedData.industry];
     }
 
+    if (sanitizedData.industry) {
+      await categoryService.ensureCategory(sanitizedData.industry);
+    }
+
     const updated = await Business.findByIdAndUpdate(id, sanitizedData, {
       new: true,
       runValidators: true,
@@ -439,12 +464,14 @@ export const businessService = {
     }
 
     const { chapterId, chapter } = await resolveChapterFields({ chapter: finalChapter });
+    const categories = await ensureCategoriesExist(data.industry, data.subCategory);
 
     const business = await Business.create({
       name: data.businessName.trim(),
       slug,
       owner: user._id,
       industry: data.industry || "General",
+      categories,
       businessType: data.businessType || "Proprietorship",
       city: data.city || "",
       state: data.state || "",

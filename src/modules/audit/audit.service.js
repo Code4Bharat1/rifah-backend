@@ -36,7 +36,7 @@ export const auditService = {
    */
   listAuditLogs: async (queryParams = {}, user = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
-    const filter = {};
+    const filter = { action: { $ne: "DELETE" } };
 
     // Restrict chapter admins to see only actions performed by users in their chapter
     if (user && user.role === ROLES.CHAPTER_ADMIN) {
@@ -49,7 +49,7 @@ export const auditService = {
       }
     }
 
-    if (queryParams.action) filter.action = queryParams.action;
+    if (queryParams.action && queryParams.action !== "DELETE") filter.action = queryParams.action;
     if (queryParams.targetModel) filter.targetModel = queryParams.targetModel;
     
     if (queryParams.search) {

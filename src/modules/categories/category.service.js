@@ -18,6 +18,35 @@ export const categoryService = {
     return category;
   },
 
+  /**
+   * Find-or-create a category by name. Used when a business enters a new
+   * category/sub-category during registration so it becomes available to
+   * everyone else via the public categories list.
+   */
+  ensureCategory: async (name, parent = "") => {
+    const cleanName = (name || "").trim();
+    if (!cleanName) return null;
+
+    const slug = generateSlug(cleanName);
+    const existing = await Category.findOne({ slug });
+    if (existing) return existing;
+
+    try {
+      return await Category.create({
+        name: cleanName,
+        slug,
+        parent: (parent || "").trim(),
+      });
+    } catch (err) {
+      // Handle race on the unique slug/name index by returning the winner
+      if (err.code === 11000) {
+        const winner = await Category.findOne({ slug });
+        if (winner) return winner;
+      }
+      throw err;
+    }
+  },
+
   createCategory: async (data) => {
     const slug = generateSlug(data.name);
     const existing = await Category.findOne({ slug });

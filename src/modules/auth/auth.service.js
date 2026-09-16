@@ -2,6 +2,7 @@ import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
 import { Verification } from "../verification/verification.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
+import { categoryService } from "../categories/category.service.js";
 import { OtpVerification } from "./otp.model.js";
 import crypto from "crypto";
 import { hashPassword, comparePassword } from "../../infrastructure/auth/password.js";
@@ -158,6 +159,7 @@ export const authService = {
     chapter,
     businessName,
     industry,
+    subCategory,
     businessType,
     city,
     state,
@@ -231,11 +233,24 @@ export const authService = {
       ? membership.charAt(0).toUpperCase() + membership.slice(1).toLowerCase()
       : "Free";
 
+    // Categories are grown organically: the category/sub-category typed here
+    // is saved to the shared Category list so it appears for future businesses.
+    const cleanCategory = (industry || "").trim();
+    const cleanSubCategory = (subCategory || "").trim();
+    if (cleanCategory) {
+      await categoryService.ensureCategory(cleanCategory);
+    }
+    if (cleanSubCategory) {
+      await categoryService.ensureCategory(cleanSubCategory, cleanCategory);
+    }
+    const categories = [cleanCategory, cleanSubCategory].filter(Boolean);
+
     const business = await Business.create({
       name: (businessName || name).trim(),
       slug,
       owner: user._id,
       industry: industry || "General",
+      categories,
       businessType: businessType || "Proprietorship",
       city: city || "",
       state: state || "",
