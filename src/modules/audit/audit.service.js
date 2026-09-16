@@ -37,7 +37,7 @@ export const auditService = {
    */
   listAuditLogs: async (queryParams = {}, user = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
-    const filter = {};
+    const filter = { action: { $ne: "DELETE" } };
 
     // 1. Scope for State Admin: only state admin and its chapter admin logs, strictly no super admin logs, no DELETE actions
     if (user && user.role === ROLES.STATE_ADMIN) {
