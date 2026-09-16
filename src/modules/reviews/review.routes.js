@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { reviewController } from "./review.controller.js";
-import { authMiddleware } from "../../middleware/auth.middleware.js";
+import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
 import {
@@ -19,10 +19,10 @@ router.get(
   reviewController.listBusinessReviews
 );
 
-// Authenticated: Submit review
+// Public / Authenticated: Submit review (guests or members)
 router.post(
   "/",
-  authMiddleware,
+  optionalAuthMiddleware,
   validateRequest(validateSubmitReview),
   reviewController.submitReview
 );

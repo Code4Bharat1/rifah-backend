@@ -106,7 +106,7 @@ export const leadService = {
           type: "System",
           title: "Enquiry Routed to Suppliers",
           body: `Your enquiry "${enquiry.title}" has been reviewed and routed to verified suppliers.`,
-          link: "/me/enquiries",
+          link: "/biz/my-enquiries",
           entityId: enquiry._id
         });
       } catch (err) {
@@ -395,7 +395,7 @@ export const leadService = {
         title: "New Quotation Received",
         body: `${lead.business?.name || 'A supplier'} sent a quotation of ${formattedAmount} for "${enquiry.title}". Check your message box.`,
         entityId: lead._id,
-        link: customerUser?.role === "business" ? `/biz/messages?userId=${user.id}` : `/me/messages?userId=${user.id}`
+        link: `/biz/messages?userId=${user.id}`
       });
     } catch (err) {
       console.error("Failed to create quotation notification:", err);

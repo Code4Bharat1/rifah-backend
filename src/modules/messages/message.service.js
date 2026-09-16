@@ -58,7 +58,7 @@ export const messageService = {
         title: "New Message",
         body: `You received a new message from ${populated.sender?.name || 'a member'}`,
         entityId: message._id,
-        link: isBiz ? `/biz/messages?userId=${senderId}` : `/me/messages?userId=${senderId}`
+        link: `/biz/messages?userId=${senderId}`
       });
     } catch (err) {
       console.error("Failed to create message notification:", err);
