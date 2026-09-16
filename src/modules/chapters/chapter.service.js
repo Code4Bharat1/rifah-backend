@@ -92,14 +92,28 @@ export const chapterService = {
     });
   },
 
-  updateChapter: async (id, data) => {
+  updateChapter: async (id, data, user) => {
+    const chapter = await Chapter.findById(id);
+    if (!chapter) {
+      throw new NotFoundError("Chapter not found");
+    }
+
+    if (user && user.role === ROLES.STATE_ADMIN) {
+      let requesterState = user.state;
+      if (!requesterState && user.id) {
+        const userDoc = await User.findById(user.id).select("state");
+        requesterState = userDoc?.state;
+      }
+      if (requesterState && chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
+        throw new ForbiddenError(`You can only update chapters within ${requesterState}`);
+      }
+      delete data.state;
+    }
+
     if (data.name) {
       data.slug = generateSlug(data.name);
     }
     const updated = await Chapter.findByIdAndUpdate(id, data, { new: true });
-    if (!updated) {
-      throw new NotFoundError("Chapter not found");
-    }
     return updated;
   },
 
@@ -124,31 +138,54 @@ export const chapterService = {
   },
 
   assignAdmin: async (chapterId, { name, email }, requester) => {
+    // STRICT DELEGATION: Super Admin cannot assign Chapter Admins directly
+    if (requester && requester.role === ROLES.SUPER_ADMIN) {
+      throw new ForbiddenError("Super Admin cannot assign Chapter Admins directly. Only the State Admin for this state can assign Chapter Admins.");
+    }
+
+    // STRICT ROLE CONSTRAINT: Only State Admin can assign Chapter Admins
+    if (!requester || requester.role !== ROLES.STATE_ADMIN) {
+      throw new ForbiddenError("Only State Admins within their state can assign Chapter Admins.");
+    }
+
     const chapter = await Chapter.findById(chapterId);
     if (!chapter) {
       throw new NotFoundError("Chapter not found");
     }
 
-    // State Admin can only assign chapter admins within their state
-    if (requester && requester.role === ROLES.STATE_ADMIN) {
-      let requesterState = requester.state;
-      if (!requesterState && requester.id) {
-        const userDoc = await User.findById(requester.id).select("state role");
-        requesterState = userDoc?.state;
-        if (userDoc && !userDoc.state && chapter.state) {
-          userDoc.state = chapter.state;
+    // Resolve State Admin's state reliably
+    let requesterState = requester.state;
+    if (!requesterState && requester.id) {
+      const userDoc = await User.findById(requester.id).select("state chapter chapterId city");
+      requesterState = userDoc?.state;
+
+      // If state is not set on userDoc, check user's chapter
+      if (!requesterState && userDoc?.chapterId) {
+        const userChapter = await Chapter.findById(userDoc.chapterId).select("state");
+        if (userChapter?.state) {
+          requesterState = userChapter.state;
+          userDoc.state = requesterState;
           await userDoc.save();
-          requesterState = chapter.state;
         }
       }
 
-      if (!requesterState) {
-        throw new ForbiddenError("Your State Admin account is not associated with any state region.");
+      // If still missing state, and managing this chapter, auto-bind to this chapter's state
+      if (!requesterState && chapter.state) {
+        requesterState = chapter.state;
+        if (userDoc) {
+          userDoc.state = chapter.state;
+          await userDoc.save();
+        }
       }
+    }
 
-      if (chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
-        throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requesterState}`);
-      }
+    if (!requesterState) {
+      throw new ForbiddenError("Your State Admin account is not associated with any state region.");
+    }
+
+    // Strict boundary: Only State Admin within their state can assign Chapter Admins
+    if (chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
+      throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requesterState}`);
     }
 
     const cleanEmail = email.toLowerCase().trim();
