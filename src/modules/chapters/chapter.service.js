@@ -16,8 +16,15 @@ export const chapterService = {
     // RBAC: Chapter Admin & State Admin Scope Enforcement
     if (user && user.role === ROLES.CHAPTER_ADMIN) {
       query._id = user.chapterId || null;
-    } else if (user && user.role === ROLES.STATE_ADMIN && user.state) {
-      query.state = new RegExp(`^${user.state.trim()}$`, "i");
+    } else if (user && user.role === ROLES.STATE_ADMIN) {
+      let state = user.state;
+      if (!state && user.id) {
+        const userDoc = await User.findById(user.id).select("state");
+        state = userDoc?.state;
+      }
+      if (state) {
+        query.state = new RegExp(`^${state.trim()}$`, "i");
+      }
     }
 
     return Chapter.find(query).sort({ name: 1 });
@@ -63,8 +70,15 @@ export const chapterService = {
   },
 
   createChapter: async (data, user) => {
-    if (user && user.role === ROLES.STATE_ADMIN && user.state) {
-      data.state = user.state;
+    if (user && user.role === ROLES.STATE_ADMIN) {
+      let state = user.state;
+      if (!state && user.id) {
+        const userDoc = await User.findById(user.id).select("state");
+        state = userDoc?.state;
+      }
+      if (state) {
+        data.state = state;
+      }
     }
     const slug = generateSlug(data.name);
     const existing = await Chapter.findOne({ slug });
@@ -110,11 +124,6 @@ export const chapterService = {
   },
 
   assignAdmin: async (chapterId, { name, email }, requester) => {
-    // STRICT DELEGATION: Super Admin cannot assign Chapter Admins directly
-    if (requester && requester.role === ROLES.SUPER_ADMIN) {
-      throw new ForbiddenError("Super Admin cannot assign Chapter Admins directly. Please allocate a State Admin for this state.");
-    }
-
     const chapter = await Chapter.findById(chapterId);
     if (!chapter) {
       throw new NotFoundError("Chapter not found");
@@ -122,15 +131,31 @@ export const chapterService = {
 
     // State Admin can only assign chapter admins within their state
     if (requester && requester.role === ROLES.STATE_ADMIN) {
-      if ((chapter.state || "").trim().toLowerCase() !== (requester.state || "").trim().toLowerCase()) {
-        throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requester.state}`);
+      let requesterState = requester.state;
+      if (!requesterState && requester.id) {
+        const userDoc = await User.findById(requester.id).select("state role");
+        requesterState = userDoc?.state;
+        if (userDoc && !userDoc.state && chapter.state) {
+          userDoc.state = chapter.state;
+          await userDoc.save();
+          requesterState = chapter.state;
+        }
+      }
+
+      if (!requesterState) {
+        throw new ForbiddenError("Your State Admin account is not associated with any state region.");
+      }
+
+      if (chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
+        throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requesterState}`);
       }
     }
 
-    const existingUserWithEmail = await User.findOne({ email: email.toLowerCase() });
+    const cleanEmail = email.toLowerCase().trim();
+    const existingUserWithEmail = await User.findOne({ email: cleanEmail });
     // Check if an admin already exists for this chapter
     const oldAdmin = await User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN });
-    if (oldAdmin && oldAdmin.email !== email) {
+    if (oldAdmin && oldAdmin.email !== cleanEmail) {
       // Downgrade old admin to their previous role, or customer
       oldAdmin.role = oldAdmin.previousRole || ROLES.CUSTOMER;
       oldAdmin.previousRole = "";
@@ -155,31 +180,34 @@ export const chapterService = {
       existingUserWithEmail.role = ROLES.CHAPTER_ADMIN;
       existingUserWithEmail.chapter = chapter.name;
       existingUserWithEmail.chapterId = chapter._id;
-      existingUserWithEmail.name = name; // Update name just in case
+      existingUserWithEmail.city = chapter.city || existingUserWithEmail.city || "";
+      existingUserWithEmail.state = chapter.state || existingUserWithEmail.state || "";
+      existingUserWithEmail.name = name.trim();
       await existingUserWithEmail.save();
 
       // Send the upgrade email without resetting password
-      await emailService.sendChapterAdminUpgradeEmail(email, null, chapter.name, name);
+      await emailService.sendChapterAdminUpgradeEmail(cleanEmail, null, chapter.name, name);
       return existingUserWithEmail;
     }
 
     // Generate random password
-    const password = crypto.randomBytes(8).toString('hex');
+    const password = crypto.randomBytes(8).toString("hex");
     const passwordHash = await hashPassword(password);
 
     const admin = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: cleanEmail,
       passwordHash,
       role: ROLES.CHAPTER_ADMIN,
       chapter: chapter.name,
       chapterId: chapter._id,
+      city: chapter.city || "",
+      state: chapter.state || "",
       forcePasswordChange: true,
     });
 
     // Send email with credentials
-    await emailService.sendChapterAdminInvite(email, password, chapter.name, name);
-
+    await emailService.sendChapterAdminInvite(cleanEmail, password, chapter.name, name);
 
     return admin;
   },

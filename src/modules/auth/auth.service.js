@@ -61,6 +61,7 @@ export const authService = {
       role: user.role,
       chapter: user.chapter,
       chapterId: user.chapterId,
+      state: user.state || "",
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -321,6 +322,7 @@ export const authService = {
       role: user.role,
       chapter: user.chapter,
       chapterId: user.chapterId,
+      state: user.state || "",
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -365,6 +367,7 @@ export const authService = {
       role: user.role,
       chapter: user.chapter,
       chapterId: user.chapterId,
+      state: user.state || "",
       forcePasswordChange: user.forcePasswordChange,
     };
 
@@ -403,6 +406,7 @@ export const authService = {
         role: user.role,
         chapter: user.chapter,
         chapterId: user.chapterId,
+        state: user.state || "",
       };
 
       const newAccessToken = signAccessToken(tokenPayload);
@@ -447,6 +451,7 @@ export const authService = {
       role: user.role,
       chapter: user.chapter,
       chapterId: user.chapterId,
+      state: user.state || "",
       forcePasswordChange: user.forcePasswordChange,
     };
 
@@ -490,6 +495,7 @@ export const authService = {
       role: user.role,
       chapter: user.chapter,
       chapterId: user.chapterId,
+      state: user.state || "",
       forcePasswordChange: false,
     };
 
@@ -667,6 +673,7 @@ export const authService = {
         role: existingUser.role,
         chapter: existingUser.chapter,
         chapterId: existingUser.chapterId,
+        state: existingUser.state || "",
       };
 
       const accessToken = signAccessToken(tokenPayload);
@@ -711,6 +718,7 @@ export const authService = {
       role: newUser.role,
       chapter: newUser.chapter,
       chapterId: newUser.chapterId,
+      state: newUser.state || "",
     };
 
     const accessToken = signAccessToken(tokenPayload);
@@ -768,6 +776,7 @@ export const authService = {
     if (contactPerson && contactPerson.trim()) user.name = contactPerson.trim();
     if (phone) user.phone = phone.trim();
     if (city) user.city = city.trim();
+    if (state) user.state = state.trim();
     if (chapter) {
       user.chapter = chapter.trim();
       user.chapterId = await resolveChapterIdByName(chapter);
@@ -848,6 +857,7 @@ export const authService = {
       role: user.role,
       chapter: user.chapter,
       chapterId: user.chapterId,
+      state: user.state || "",
     };
 
     const accessToken = signAccessToken(tokenPayload);

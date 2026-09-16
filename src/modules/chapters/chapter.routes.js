@@ -70,11 +70,11 @@ router.delete(
   chapterController.removeUnit
 );
 
-// STRICT DELEGATION: ONLY State Admin can assign Chapter Admins (Super Admin is forbidden)
+// Assign Chapter Admins (Super Admin across all chapters, State Admin within their state)
 router.post(
   "/:id/admins",
   authMiddleware,
-  requireRole(ROLES.STATE_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   chapterController.assignAdmin
 );
