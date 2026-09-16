@@ -294,7 +294,7 @@ const seedData = async () => {
         city: "Mumbai",
         chapter: "Mumbai Chapter",
         mode: "In-person",
-        organizer: "RIFAH Central Secretariat",
+        organizer: "RIFAH Central Admin",
         fee: "Complimentary for Members / ₹ 1,500 Guests",
         seats: 400,
         registeredCount: 142,
@@ -341,7 +341,7 @@ const seedData = async () => {
         startDate: new Date(),
         endDate: addDays(365),
         status: "Active",
-        features: ["All Premium features", "Secretariat advisory", "Global chapter access", "Custom expo pavilion"],
+        features: ["All Premium features", "Central Admin advisory", "Global chapter access", "Custom expo pavilion"],
       },
       {
         business: seededBusinesses[1]._id,

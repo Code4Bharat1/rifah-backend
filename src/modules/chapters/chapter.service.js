@@ -16,8 +16,15 @@ export const chapterService = {
     // RBAC: Chapter Admin & State Admin Scope Enforcement
     if (user && user.role === ROLES.CHAPTER_ADMIN) {
       query._id = user.chapterId || null;
-    } else if (user && user.role === ROLES.STATE_ADMIN && user.state) {
-      query.state = new RegExp(`^${user.state.trim()}$`, "i");
+    } else if (user && user.role === ROLES.STATE_ADMIN) {
+      let state = user.state;
+      if (!state && user.id) {
+        const userDoc = await User.findById(user.id).select("state");
+        state = userDoc?.state;
+      }
+      if (state) {
+        query.state = new RegExp(`^${state.trim()}$`, "i");
+      }
     }
 
     return Chapter.find(query).sort({ name: 1 });
@@ -63,8 +70,15 @@ export const chapterService = {
   },
 
   createChapter: async (data, user) => {
-    if (user && user.role === ROLES.STATE_ADMIN && user.state) {
-      data.state = user.state;
+    if (user && user.role === ROLES.STATE_ADMIN) {
+      let state = user.state;
+      if (!state && user.id) {
+        const userDoc = await User.findById(user.id).select("state");
+        state = userDoc?.state;
+      }
+      if (state) {
+        data.state = state;
+      }
     }
     const slug = generateSlug(data.name);
     const existing = await Chapter.findOne({ slug });
@@ -78,14 +92,28 @@ export const chapterService = {
     });
   },
 
-  updateChapter: async (id, data) => {
+  updateChapter: async (id, data, user) => {
+    const chapter = await Chapter.findById(id);
+    if (!chapter) {
+      throw new NotFoundError("Chapter not found");
+    }
+
+    if (user && user.role === ROLES.STATE_ADMIN) {
+      let requesterState = user.state;
+      if (!requesterState && user.id) {
+        const userDoc = await User.findById(user.id).select("state");
+        requesterState = userDoc?.state;
+      }
+      if (requesterState && chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
+        throw new ForbiddenError(`You can only update chapters within ${requesterState}`);
+      }
+      delete data.state;
+    }
+
     if (data.name) {
       data.slug = generateSlug(data.name);
     }
     const updated = await Chapter.findByIdAndUpdate(id, data, { new: true });
-    if (!updated) {
-      throw new NotFoundError("Chapter not found");
-    }
     return updated;
   },
 
@@ -112,7 +140,12 @@ export const chapterService = {
   assignAdmin: async (chapterId, { name, email }, requester) => {
     // STRICT DELEGATION: Super Admin cannot assign Chapter Admins directly
     if (requester && requester.role === ROLES.SUPER_ADMIN) {
-      throw new ForbiddenError("Super Admin cannot assign Chapter Admins directly. Please allocate a State Admin for this state.");
+      throw new ForbiddenError("Super Admin cannot assign Chapter Admins directly. Only the State Admin for this state can assign Chapter Admins.");
+    }
+
+    // STRICT ROLE CONSTRAINT: Only State Admin can assign Chapter Admins
+    if (!requester || requester.role !== ROLES.STATE_ADMIN) {
+      throw new ForbiddenError("Only State Admins within their state can assign Chapter Admins.");
     }
 
     const chapter = await Chapter.findById(chapterId);
@@ -120,17 +153,46 @@ export const chapterService = {
       throw new NotFoundError("Chapter not found");
     }
 
-    // State Admin can only assign chapter admins within their state
-    if (requester && requester.role === ROLES.STATE_ADMIN) {
-      if ((chapter.state || "").trim().toLowerCase() !== (requester.state || "").trim().toLowerCase()) {
-        throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requester.state}`);
+    // Resolve State Admin's state reliably
+    let requesterState = requester.state;
+    if (!requesterState && requester.id) {
+      const userDoc = await User.findById(requester.id).select("state chapter chapterId city");
+      requesterState = userDoc?.state;
+
+      // If state is not set on userDoc, check user's chapter
+      if (!requesterState && userDoc?.chapterId) {
+        const userChapter = await Chapter.findById(userDoc.chapterId).select("state");
+        if (userChapter?.state) {
+          requesterState = userChapter.state;
+          userDoc.state = requesterState;
+          await userDoc.save();
+        }
+      }
+
+      // If still missing state, and managing this chapter, auto-bind to this chapter's state
+      if (!requesterState && chapter.state) {
+        requesterState = chapter.state;
+        if (userDoc) {
+          userDoc.state = chapter.state;
+          await userDoc.save();
+        }
       }
     }
 
-    const existingUserWithEmail = await User.findOne({ email: email.toLowerCase() });
+    if (!requesterState) {
+      throw new ForbiddenError("Your State Admin account is not associated with any state region.");
+    }
+
+    // Strict boundary: Only State Admin within their state can assign Chapter Admins
+    if (chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
+      throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requesterState}`);
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const existingUserWithEmail = await User.findOne({ email: cleanEmail });
     // Check if an admin already exists for this chapter
     const oldAdmin = await User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN });
-    if (oldAdmin && oldAdmin.email !== email) {
+    if (oldAdmin && oldAdmin.email !== cleanEmail) {
       // Downgrade old admin to their previous role, or customer
       oldAdmin.role = oldAdmin.previousRole || ROLES.CUSTOMER;
       oldAdmin.previousRole = "";
@@ -141,6 +203,10 @@ export const chapterService = {
         await emailService.sendChapterAdminRemovalEmail(oldAdmin.email, oldAdmin.name, chapter.name);
       }
     }
+
+    // Generate a secure random password for the Chapter Admin
+    const randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
+    const passwordHash = await hashPassword(randomPassword);
 
     if (existingUserWithEmail) {
       if (existingUserWithEmail.role === ROLES.SUPER_ADMIN || existingUserWithEmail.role === ROLES.STATE_ADMIN) {
@@ -155,31 +221,32 @@ export const chapterService = {
       existingUserWithEmail.role = ROLES.CHAPTER_ADMIN;
       existingUserWithEmail.chapter = chapter.name;
       existingUserWithEmail.chapterId = chapter._id;
-      existingUserWithEmail.name = name; // Update name just in case
+      existingUserWithEmail.city = chapter.city || existingUserWithEmail.city || "";
+      existingUserWithEmail.state = chapter.state || existingUserWithEmail.state || "";
+      existingUserWithEmail.name = name.trim();
+      existingUserWithEmail.passwordHash = passwordHash;
+      existingUserWithEmail.forcePasswordChange = true;
       await existingUserWithEmail.save();
 
-      // Send the upgrade email without resetting password
-      await emailService.sendChapterAdminUpgradeEmail(email, null, chapter.name, name);
+      // Send email with generated credentials to the assigned chapter admin email
+      await emailService.sendChapterAdminInvite(cleanEmail, randomPassword, chapter.name, name.trim());
       return existingUserWithEmail;
     }
 
-    // Generate random password
-    const password = crypto.randomBytes(8).toString('hex');
-    const passwordHash = await hashPassword(password);
-
     const admin = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: cleanEmail,
       passwordHash,
       role: ROLES.CHAPTER_ADMIN,
       chapter: chapter.name,
       chapterId: chapter._id,
+      city: chapter.city || "",
+      state: chapter.state || "",
       forcePasswordChange: true,
     });
 
-    // Send email with credentials
-    await emailService.sendChapterAdminInvite(email, password, chapter.name, name);
-
+    // Send email with generated credentials to the assigned chapter admin email
+    await emailService.sendChapterAdminInvite(cleanEmail, randomPassword, chapter.name, name.trim());
 
     return admin;
   },

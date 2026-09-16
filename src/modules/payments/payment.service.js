@@ -819,7 +819,7 @@ export const paymentService = {
       await notificationService.createNotification({
         recipientId: payment.payer._id || payment.payer,
         type: "Payment",
-        title: "Payment Officially Verified by Secretariat",
+        title: "Payment Officially Verified by Central Admin",
         body: `Your payment receipt #${payment.invoiceNumber} (${payment.currency === "USD" ? "$" : "₹"}${payment.amount}) has been officially verified and approved.`,
         link: "/biz/payments",
       });

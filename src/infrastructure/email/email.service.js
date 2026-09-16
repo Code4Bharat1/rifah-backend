@@ -65,7 +65,7 @@ Dear ${adminName},
 
 Congratulations! You have been appointed as the State Admin for ${stateName} at RIFAH Chamber of Commerce & Industry.
 
-As State Admin, you hold executive authority over all city chapters within ${stateName}, including appointing and managing Chapter Admins, establishing city desks, and supervising regional operations.
+As State Admin, you hold executive authority over all Chapters Admin within ${stateName}, including appointing and managing Chapter Admins, establishing city desks, and supervising regional operations.
 
 Your Secure Login Credentials:
 Portal: ${portalUrl}
@@ -120,7 +120,7 @@ RIFAH Chamber of Commerce & Industry
                       Congratulations! You have been officially appointed as the <strong>State Admin</strong> for <strong>${stateName}</strong>.
                     </p>
                     <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #475569;">
-                      In this regional executive role, you oversee all city chapters within ${stateName}, including appointing Chapter Admins (e.g. for Mumbai, Pune, Nagpur), organizing local chapters, and managing regional businesses.
+                      In this regional executive role, you oversee all Chapter Admins within ${stateName}, including appointing Chapter Admins (e.g. for Mumbai, Pune, Nagpur), organizing local chapters, and managing regional businesses.
                     </p>
 
                     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; margin-bottom: 24px;">
@@ -183,7 +183,7 @@ Dear ${adminName},
 
 Congratulations! You have been appointed as the State Admin for ${stateName} at RIFAH Chamber of Commerce & Industry.
 
-Your existing login credentials remain unchanged. The next time you log in at ${portalUrl}, you will be automatically routed to the State Admin Executive Portal to oversee city chapters and regional business activities.
+Your existing login credentials remain unchanged. The next time you log in at ${portalUrl}, you will be automatically routed to the State Admin Executive Portal to oversee Chapters Admin and regional business activities.
 
 Warm regards,
 National Administrative Desk
@@ -301,7 +301,7 @@ RIFAH Chamber of Commerce & Industry
                 <tr>
                   <td style="padding: 36px 32px;">
                     <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #071328; letter-spacing: -0.5px;">RIFAH CONNECT</h1>
-                    <p style="margin: 2px 0 0 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #0284c7;">City Chapter Desk</p>
+                    <p style="margin: 2px 0 0 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #0284c7;">Chapter Admin Desk</p>
 
                     <div style="height: 1px; background-color: #e2e8f0; margin: 24px 0;"></div>
 
@@ -402,11 +402,11 @@ RIFAH Chamber of Commerce & Industry
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">Your account remains active as a regular member on the RIFAH Connect platform. You can continue to access member benefits, manage your businesses, and explore the directory.</p>
           
           <div style="margin-top: 24px; padding: 16px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-            <p style="color: #64748b; font-size: 13px; margin: 0;">If you believe this change was made in error or if you have any questions, please contact the RIFAH Central Secretariat.</p>
+            <p style="color: #64748b; font-size: 13px; margin: 0;">If you believe this change was made in error or if you have any questions, please contact the RIFAH Central Admin.</p>
           </div>
           
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
-          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Secretariat</p>
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Central Admin</p>
         </div>
       </div>
     `;
@@ -514,7 +514,7 @@ RIFAH Chamber of Commerce & Industry
             <a href="http://localhost:3000/login" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 14px; text-decoration: none; padding: 12px 24px; border-radius: 8px;">Login to Dashboard</a>
           </div>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
-          <p style="color: #94a3b8; font-size: 12px; text-align: center; margin: 0;">If you have any questions, please contact the RIFAH Secretariat.</p>
+          <p style="color: #94a3b8; font-size: 12px; text-align: center; margin: 0;">If you have any questions, please contact the RIFAH Central Admin.</p>
         </div>
       </div>
     `;
@@ -696,7 +696,7 @@ RIFAH Chamber of Commerce & Industry
   },
 
   /**
-   * Sends an immediate Payment Receipt notification to Secretariat Admin with attached PDF for verification
+   * Sends an immediate Payment Receipt notification to Central Admin with attached PDF for verification
    */
   sendAdminPaymentReceiptAlert: async ({
     adminEmail,
@@ -753,7 +753,7 @@ RIFAH Chamber of Commerce & Industry
                     ? `<img src="cid:rifahlogo" alt="RIFAH Chamber" style="height: 44px; width: auto; display: block;" />`
                     : `<h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #0b192c;">RIFAH CONNECT</h1>`
                 }
-                <p style="margin: 4px 0 0 0; font-size: 11px; font-weight: 600; color: #64748b;">Chamber Secretariat Administration</p>
+                <p style="margin: 4px 0 0 0; font-size: 11px; font-weight: 600; color: #64748b;">Chamber Central Administration</p>
               </td>
               <td style="vertical-align: top; text-align: right;">
                 <h2 style="margin: 0; font-size: 18px; font-weight: 800; color: #0f172a; text-transform: uppercase;">PAYMENT RECEIPT</h2>
@@ -861,7 +861,7 @@ RIFAH Chamber of Commerce & Industry
             <a href="http://localhost:3000/login" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Go to My Dashboard →</a>
           </div>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
-          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Digital Secretariat</p>
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Central Admin</p>
         </div>
       </div>
     `;
@@ -987,10 +987,10 @@ RIFAH Chamber of Commerce & Industry
           <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
             ${
               isVerified
-                ? `We are pleased to inform you that your business <strong>${businessName}</strong> has been officially vetted and approved by the RIFAH Chamber Secretariat. Your listing is now active with the official verified badge.`
+                ? `We are pleased to inform you that your business <strong>${businessName}</strong> has been officially vetted and approved by the RIFAH Chamber Central Admin. Your listing is now active with the official verified badge.`
                 : isRejected
-                ? `Following document and compliance evaluation, the RIFAH Chamber Secretariat has <strong>declined</strong> the current verification submission for <strong>${businessName}</strong>.`
-                : `The RIFAH Chamber Secretariat has reviewed your application for <strong>${businessName}</strong> and requested specific updates or document replacements before verification can be approved.`
+                ? `Following document and compliance evaluation, the RIFAH Chamber Central Admin has <strong>declined</strong> the current verification submission for <strong>${businessName}</strong>.`
+                : `The RIFAH Chamber Central Admin has reviewed your application for <strong>${businessName}</strong> and requested specific updates or document replacements before verification can be approved.`
             }
           </p>
 
@@ -999,7 +999,7 @@ RIFAH Chamber of Commerce & Industry
               ? `
               <div style="background-color: ${isRejected ? "#fff1f2" : isCorrection ? "#fffbeb" : "#f8fafc"}; border: 1px solid ${isRejected ? "#fecdd3" : isCorrection ? "#fde68a" : "#e2e8f0"}; border-left: 4px solid ${isRejected ? "#e11d48" : isCorrection ? "#d97706" : "#0284c7"}; border-radius: 8px; padding: 16px; margin: 20px 0;">
                 <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: ${isRejected ? "#9f1239" : isCorrection ? "#92400e" : "#0369a1"};">
-                  ${isRejected ? "Reason for Rejection / Secretariat Decision:" : "Secretariat Instructions & Feedback:"}
+                  ${isRejected ? "Reason for Rejection / Central Admin Decision:" : "Central Admin Instructions & Feedback:"}
                 </p>
                 <p style="margin: 0; font-size: 13px; font-weight: 500; color: #1e293b; line-height: 1.6;">
                   ${notes}
@@ -1027,8 +1027,8 @@ RIFAH Chamber of Commerce & Industry
 
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
           <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0; line-height: 1.5;">
-            RIFAH Chamber of Commerce & Industry · Secretariat Verification Desk<br />
-            Need assistance? Reply to this email or contact support at <a href="mailto:secretariat@rifah.org" style="color: #0284c7; text-decoration: none;">secretariat@rifah.org</a>
+            RIFAH Chamber of Commerce & Industry · Central Admin Verification Desk<br />
+            Need assistance? Reply to this email or contact support at <a href="mailto:admin@rifah.org" style="color: #0284c7; text-decoration: none;">admin@rifah.org</a>
           </p>
         </div>
       </div>
@@ -1206,21 +1206,21 @@ RIFAH Chamber of Commerce & Industry
       badgeBg = "#dcfce7";
       statusText = "VERIFIED & APPROVED";
       headline = "Your Business Profile is Now Verified & Live!";
-      description = `Your chamber verification documents have been reviewed and approved by the RIFAH Central Secretariat. Your verified chamber badge is now active on your public profile and directory listings.`;
+      description = `Your chamber verification documents have been reviewed and approved by the RIFAH Central Admin. Your verified chamber badge is now active on your public profile and directory listings.`;
     } else if (isRejected) {
       subject = `⚠️ Verification Notice: ${businessName} profile requires attention`;
       badgeColor = "#dc2626";
       badgeBg = "#fee2e2";
       statusText = "APPLICATION REJECTED";
       headline = "Action Required: Verification Review Notice";
-      description = `The Secretariat has reviewed your chamber verification submission and could not approve it at this time. Please see the detailed reason below:`;
+      description = `The Central Admin has reviewed your chamber verification submission and could not approve it at this time. Please see the detailed reason below:`;
     } else if (isCorrection) {
       subject = `📝 Correction Required: RIFAH Verification for ${businessName}`;
       badgeColor = "#d97706";
       badgeBg = "#fef3c7";
       statusText = "CORRECTION REQUESTED";
       headline = "Additional Information or Documents Required";
-      description = `The Secretariat has reviewed your submission and requested additional clarification or updated documents:`;
+      description = `The Central Admin has reviewed your submission and requested additional clarification or updated documents:`;
     }
 
     const actionUrl = `https://rifah.nexcorealliance.com/workspace/verification`;
@@ -1238,7 +1238,7 @@ RIFAH Chamber of Commerce & Industry
           ${
             notes
               ? `<div style="background-color: #f8fafc; border-left: 4px solid ${badgeColor}; border-radius: 8px; padding: 16px 20px; margin: 20px 0;">
-                  <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">SECRETARIAT REMARKS / REASON</p>
+                  <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">CENTRAL ADMIN REMARKS / REASON</p>
                   <p style="margin: 0; font-size: 14px; color: #1e293b; line-height: 1.5; font-weight: 500;">${notes}</p>
                 </div>`
               : ""
@@ -1252,7 +1252,7 @@ RIFAH Chamber of Commerce & Industry
 
           <p style="color: #94a3b8; font-size: 12px; margin-top: 24px; text-align: center;">You can also access your verification dashboard anytime by logging into your RIFAH Business Workspace.</p>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
-          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Central Secretariat</p>
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Central Admin</p>
         </div>
       </div>
     `;

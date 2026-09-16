@@ -18,7 +18,7 @@ async function main() {
   console.log("Using PASS:", process.env.SMTP_PASS ? "***" : "undefined");
   try {
     const info = await transporter.sendMail({
-      from: `"RIFAH Secretariat" <${process.env.SMTP_USER}>`,
+      from: `"RIFAH Central Admin" <${process.env.SMTP_USER}>`,
       to: process.env.SMTP_USER, // send to self for testing
       subject: "Test Email from RIFAH Backend",
       text: "This is a test email.",
