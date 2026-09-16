@@ -13,12 +13,52 @@ import { ROLES } from "../constants/roles.js";
 export const getChapterFilter = async (user, entityType = "direct") => {
   if (!user || !user.role) return {};
 
-  // Super Admins and Secretariat have unrestricted access
-  if ([ROLES.SUPER_ADMIN, ROLES.SECRETARIAT].includes(user.role)) {
+  // Super Admins have unrestricted access
+  if (user.role === ROLES.SUPER_ADMIN) {
     return {};
   }
 
-  // Only Chapter Admins are restricted by this specific chapter filter logic
+  // Handle State Admin scope
+  if (user.role === ROLES.STATE_ADMIN) {
+    if (!user.state) return { _id: null };
+    const stateRegex = new RegExp(`^${user.state.trim()}$`, "i");
+    const stateChapters = await Chapter.find({ state: stateRegex }).select("_id name");
+    const chapterIds = stateChapters.map((c) => c._id);
+    const chapterNames = stateChapters.map((c) => new RegExp(c.name.trim(), "i"));
+
+    if (entityType === "direct_id") {
+      return {
+        $or: [
+          { chapterId: { $in: chapterIds } },
+          { state: stateRegex },
+        ],
+      };
+    }
+
+    if (entityType === "business_ref") {
+      if (chapterIds.length === 0) return { _id: null };
+      const businesses = await Business.find({
+        $or: [
+          { chapterId: { $in: chapterIds } },
+          { state: stateRegex },
+        ],
+      }).select("_id");
+      return { business: { $in: businesses.map((b) => b._id) } };
+    }
+
+    // Direct text name match
+    if (chapterNames.length === 0) {
+      return { state: stateRegex };
+    }
+    return {
+      $or: [
+        { chapter: { $in: chapterNames } },
+        { state: stateRegex },
+      ],
+    };
+  }
+
+  // Only Chapter Admins are restricted by city chapter filter logic
   if (user.role !== ROLES.CHAPTER_ADMIN) {
     return {};
   }
@@ -134,17 +174,22 @@ export const enforceBodyChapterScope = (req) => {
     if (req.user.chapterId) {
       req.body.chapterId = req.user.chapterId;
     }
+  } else if (req.user && req.user.role === ROLES.STATE_ADMIN && req.user.state) {
+    req.body.state = req.user.state;
   }
 };
 
 /**
  * Enforces chapter scope on request body for UPDATE operations.
  * Prevents Chapter Admins from modifying the chapter field.
+ * Prevents State Admins from modifying the state field.
  * @param {Object} req - The Express request object.
  */
 export const preventChapterModification = (req) => {
   if (req.user && req.user.role === ROLES.CHAPTER_ADMIN) {
     delete req.body.chapter;
     delete req.body.chapterId;
+  } else if (req.user && req.user.role === ROLES.STATE_ADMIN) {
+    delete req.body.state;
   }
 };

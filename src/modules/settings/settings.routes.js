@@ -13,7 +13,7 @@ router.get("/public", settingsController.getSettings);
 router.patch(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   settingsController.updateSettings
 );
 

@@ -40,14 +40,14 @@ router.post(
 router.get(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   userController.listUsers
 );
 
 router.post(
   "/invite",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateRequest(validateInvite),
   userController.inviteUser
 );
@@ -55,7 +55,7 @@ router.post(
 router.patch(
   "/:id/status",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateUpdateStatus),
   userController.updateUserStatus

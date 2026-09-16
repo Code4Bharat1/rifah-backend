@@ -86,6 +86,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    state: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
     sourcingInterest: {
       type: String,
       trim: true,

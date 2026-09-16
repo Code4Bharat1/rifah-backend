@@ -20,14 +20,14 @@ router.delete("/:id", authMiddleware, validateObjectIdParam("id"), notificationC
 router.post(
   "/broadcast",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN),
   notificationController.broadcast
 );
 
 router.delete(
   "/broadcast/:broadcastId",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN),
   notificationController.deleteBroadcast
 );
 

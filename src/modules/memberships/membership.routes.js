@@ -12,10 +12,10 @@ const router = Router();
 // Public plan catalog
 router.get("/plans", membershipController.getPlans);
 
-// Admin plan management (Restricted to Super Admin & Secretariat)
-router.post("/plans", authMiddleware, requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT), membershipController.createPlan);
-router.put("/plans/:planId", authMiddleware, requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT), membershipController.updatePlan);
-router.delete("/plans/:planId", authMiddleware, requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT), membershipController.deletePlan);
+// Admin plan management (Restricted to Super Admin)
+router.post("/plans", authMiddleware, requireRole(ROLES.SUPER_ADMIN), membershipController.createPlan);
+router.put("/plans/:planId", authMiddleware, requireRole(ROLES.SUPER_ADMIN), membershipController.updatePlan);
+router.delete("/plans/:planId", authMiddleware, requireRole(ROLES.SUPER_ADMIN), membershipController.deletePlan);
 
 // Business Owner membership management
 router.get("/me", authMiddleware, membershipController.getMyMembership);

@@ -12,7 +12,7 @@ export const requirePermission = (permission) => {
       return next(new UnauthorizedError("Authentication required"));
     }
 
-    if (req.user.role === ROLES.SUPER_ADMIN || req.user.role === ROLES.SECRETARIAT) {
+    if (req.user.role === ROLES.SUPER_ADMIN) {
       return next();
     }
 

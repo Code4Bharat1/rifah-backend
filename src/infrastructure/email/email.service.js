@@ -28,13 +28,21 @@ export const emailService = {
         return true;
       }
 
+      const senderDisplayName = "RIFAH Chamber of Commerce";
       const info = await transporter.sendMail({
-        from: `"RIFAH Secretariat" <${env.EMAIL.USER}>`,
+        from: `"${senderDisplayName}" <${env.EMAIL.USER}>`,
+        replyTo: env.EMAIL.USER,
         to,
         subject,
         text,
         html,
         attachments,
+        headers: {
+          "X-Mailer": "RIFAH Chamber Mailer v2.0",
+          "X-Priority": "3",
+          "Importance": "Normal",
+          "Auto-Submitted": "auto-generated",
+        },
       });
 
       logger.info(`Email sent to ${to}: ${subject} (ID: ${info.messageId})`);
@@ -45,30 +53,309 @@ export const emailService = {
     }
   },
 
+  /**
+   * Sends an invitation email to a new State Admin with high-deliverability template
+   */
+  sendStateAdminInvite: async (email, password, stateName, adminName) => {
+    const subject = `RIFAH Chamber: State Admin Access Credentials for ${stateName}`;
+    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/login`;
+
+    const text = `
+Dear ${adminName},
+
+Congratulations! You have been appointed as the State Admin for ${stateName} at RIFAH Chamber of Commerce & Industry.
+
+As State Admin, you hold executive authority over all city chapters within ${stateName}, including appointing and managing Chapter Admins, establishing city desks, and supervising regional operations.
+
+Your Secure Login Credentials:
+Portal: ${portalUrl}
+Email: ${email}
+Temporary Password: ${password}
+
+Please log in and update your temporary password immediately upon your first session.
+
+Warm regards,
+National Administrative Desk
+RIFAH Chamber of Commerce & Industry
+    `.trim();
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RIFAH State Administration Credentials</title>
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden;">
+          Official credentials for your appointment as State Admin for ${stateName} - RIFAH Chamber of Commerce.
+        </div>
+
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; padding: 24px 12px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+                <tr>
+                  <td style="height: 6px; background: linear-gradient(90deg, #0060df 0%, #0284c7 100%);"></td>
+                </tr>
+
+                <tr>
+                  <td style="padding: 36px 32px;">
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td>
+                          <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #071328; letter-spacing: -0.5px;">RIFAH CONNECT</h1>
+                          <p style="margin: 2px 0 0 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #0284c7;">Chamber of Commerce & Industry</p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <div style="height: 1px; background-color: #e2e8f0; margin: 24px 0;"></div>
+
+                    <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #1e293b;">
+                      Dear <strong>${adminName}</strong>,
+                    </p>
+                    <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+                      Congratulations! You have been officially appointed as the <strong>State Admin</strong> for <strong>${stateName}</strong>.
+                    </p>
+                    <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+                      In this regional executive role, you oversee all city chapters within ${stateName}, including appointing Chapter Admins (e.g. for Mumbai, Pune, Nagpur), organizing local chapters, and managing regional businesses.
+                    </p>
+
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; margin-bottom: 24px;">
+                      <tr>
+                        <td style="padding: 20px;">
+                          <p style="margin: 0 0 12px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569;">Your Account Credentials</p>
+                          <p style="margin: 0 0 8px 0; font-size: 14px; color: #334155;"><strong>Email:</strong> <span style="color: #0f172a;">${email}</span></p>
+                          <p style="margin: 0; font-size: 14px; color: #334155;"><strong>Temporary Password:</strong> <code style="background-color: #e2e8f0; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 14px; color: #0f172a;">${password}</code></p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                      <tr>
+                        <td align="center" style="border-radius: 10px; background-color: #0060df;">
+                          <a href="${portalUrl}" target="_blank" style="font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; padding: 12px 28px; display: inline-block; border-radius: 10px; background-color: #0060df;">Access State Admin Portal</a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin: 0 0 8px 0; font-size: 13px; line-height: 1.5; color: #64748b;">
+                      <em>Important Security Note:</em> For security compliance, you will be prompted to set a permanent, private password upon your first sign-in.
+                    </p>
+
+                    <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+                      <p style="margin: 0; font-size: 13px; font-weight: 600; color: #334155;">National Administrative Desk</p>
+                      <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">RIFAH Chamber of Commerce & Industry</p>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 32px; text-align: center;">
+                    <p style="margin: 0; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+                      This is an official transactional message regarding your administrative appointment with RIFAH Chamber of Commerce & Industry.<br/>
+                      Never share your credentials with anyone.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    return emailService.sendEmail({ to: email, subject, html, text });
+  },
+
+  /**
+   * Sends an upgrade email to an existing user appointed as State Admin
+   */
+  sendStateAdminUpgradeEmail: async (email, stateName, adminName) => {
+    const subject = `RIFAH Chamber: Appointment as State Admin for ${stateName}`;
+    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/login`;
+
+    const text = `
+Dear ${adminName},
+
+Congratulations! You have been appointed as the State Admin for ${stateName} at RIFAH Chamber of Commerce & Industry.
+
+Your existing login credentials remain unchanged. The next time you log in at ${portalUrl}, you will be automatically routed to the State Admin Executive Portal to oversee city chapters and regional business activities.
+
+Warm regards,
+National Administrative Desk
+RIFAH Chamber of Commerce & Industry
+    `.trim();
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RIFAH State Leadership Appointment</title>
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; padding: 24px 12px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+                <tr>
+                  <td style="height: 6px; background: linear-gradient(90deg, #0060df 0%, #0284c7 100%);"></td>
+                </tr>
+
+                <tr>
+                  <td style="padding: 36px 32px;">
+                    <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #071328; letter-spacing: -0.5px;">RIFAH CONNECT</h1>
+                    <p style="margin: 2px 0 0 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #0284c7;">Chamber of Commerce & Industry</p>
+
+                    <div style="height: 1px; background-color: #e2e8f0; margin: 24px 0;"></div>
+
+                    <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #1e293b;">
+                      Dear <strong>${adminName}</strong>,
+                    </p>
+                    <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+                      Congratulations! You have been appointed as the <strong>State Admin</strong> for <strong>${stateName}</strong>.
+                    </p>
+                    <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+                      Your existing login credentials remain the same. On your next login, you will be automatically directed to the <strong>State Admin Portal</strong> where you can oversee ${stateName}, assign Chapter Admins to cities (such as Mumbai, Pune, Nagpur), and monitor businesses across your state.
+                    </p>
+
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                      <tr>
+                        <td align="center" style="border-radius: 10px; background-color: #0060df;">
+                          <a href="${portalUrl}" target="_blank" style="font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; padding: 12px 28px; display: inline-block; border-radius: 10px; background-color: #0060df;">Access State Admin Portal</a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+                      <p style="margin: 0; font-size: 13px; font-weight: 600; color: #334155;">National Administrative Desk</p>
+                      <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">RIFAH Chamber of Commerce & Industry</p>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 32px; text-align: center;">
+                    <p style="margin: 0; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+                      This is an official transactional message from RIFAH Chamber of Commerce & Industry.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    return emailService.sendEmail({ to: email, subject, html, text });
+  },
 
   /**
    * Sends an invitation email to a new Chapter Admin
    */
   sendChapterAdminInvite: async (email, password, chapterName, adminName) => {
-    const subject = `Welcome to RIFAH: ${chapterName} Admin Access`;
+    const subject = `RIFAH Chamber: ${chapterName} Chapter Admin Credentials`;
+    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/login`;
+
+    const text = `
+Dear ${adminName},
+
+Congratulations! You have been appointed as the Chapter Admin for ${chapterName} at RIFAH Chamber of Commerce & Industry.
+
+Your Login Credentials:
+Portal: ${portalUrl}
+Email: ${email}
+Temporary Password: ${password}
+
+Please sign in to manage local business KYC verification, events, and chapter networking. Change your password immediately upon first access.
+
+Warm regards,
+Regional State Executive Desk
+RIFAH Chamber of Commerce & Industry
+    `.trim();
+
     const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #0284c7;">Welcome to RIFAH Administration</h2>
-        <p>Dear ${adminName},</p>
-        <p>You have been appointed as the <strong>Chapter Admin</strong> for <strong>${chapterName}</strong>.</p>
-        <p>You can now log in to the RIFAH Secretariat portal to manage businesses, leads, and verifications for your region.</p>
-        <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
-          <p style="margin: 0 0 10px 0;"><strong>Portal:</strong> <a href="http://localhost:3000/login">http://localhost:3000/login</a></p>
-          <p style="margin: 0 0 10px 0;"><strong>Email:</strong> ${email}</p>
-          <p style="margin: 0;"><strong>Password:</strong> ${password}</p>
-        </div>
-        <p style="color: #64748b; font-size: 14px;">Please log in and change your password immediately.</p>
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
-        <p style="color: #94a3b8; font-size: 12px; text-align: center;">RIFAH Chamber of Commerce & Industries</p>
-      </div>
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RIFAH Chapter Admin Credentials</title>
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; padding: 24px 12px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+                <tr>
+                  <td style="height: 6px; background: linear-gradient(90deg, #0060df 0%, #0284c7 100%);"></td>
+                </tr>
+
+                <tr>
+                  <td style="padding: 36px 32px;">
+                    <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #071328; letter-spacing: -0.5px;">RIFAH CONNECT</h1>
+                    <p style="margin: 2px 0 0 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #0284c7;">City Chapter Desk</p>
+
+                    <div style="height: 1px; background-color: #e2e8f0; margin: 24px 0;"></div>
+
+                    <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #1e293b;">
+                      Dear <strong>${adminName}</strong>,
+                    </p>
+                    <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+                      You have been appointed as the <strong>Chapter Admin</strong> for <strong>${chapterName}</strong>.
+                    </p>
+                    <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #475569;">
+                      You can now access the portal to manage businesses, leads, member KYC vetting, and local chapter activities.
+                    </p>
+
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; margin-bottom: 24px;">
+                      <tr>
+                        <td style="padding: 20px;">
+                          <p style="margin: 0 0 12px 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569;">Your Account Credentials</p>
+                          <p style="margin: 0 0 8px 0; font-size: 14px; color: #334155;"><strong>Email:</strong> <span style="color: #0f172a;">${email}</span></p>
+                          <p style="margin: 0; font-size: 14px; color: #334155;"><strong>Temporary Password:</strong> <code style="background-color: #e2e8f0; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 14px; color: #0f172a;">${password}</code></p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                      <tr>
+                        <td align="center" style="border-radius: 10px; background-color: #0060df;">
+                          <a href="${portalUrl}" target="_blank" style="font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; padding: 12px 28px; display: inline-block; border-radius: 10px; background-color: #0060df;">Access Chapter Portal</a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <div style="margin-top: 32px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+                      <p style="margin: 0; font-size: 13px; font-weight: 600; color: #334155;">Regional Chapter Desk</p>
+                      <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">RIFAH Chamber of Commerce & Industry</p>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 32px; text-align: center;">
+                    <p style="margin: 0; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+                      This is an official transactional message regarding your administrative appointment.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
     `;
 
-    return emailService.sendEmail({ to: email, subject, html });
+    return emailService.sendEmail({ to: email, subject, html, text });
   },
 
   /**

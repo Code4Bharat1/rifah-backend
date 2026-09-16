@@ -332,11 +332,11 @@ export const authService = {
       throw new UnauthorizedError("Invalid email or password", ERROR_CODES.INVALID_CREDENTIALS);
     }
 
-    // Check chapter status if user is associated with a chapter and is not Super Admin / Secretariat
-    if (user.chapter && user.role !== ROLES.SUPER_ADMIN && user.role !== ROLES.SECRETARIAT) {
+    // Check chapter status if user is associated with a chapter and is not Super Admin / State Admin
+    if (user.chapter && user.role !== ROLES.SUPER_ADMIN && user.role !== ROLES.STATE_ADMIN) {
       const chapter = await Chapter.findOne({ name: user.chapter });
       if (chapter && chapter.status === "Inactive") {
-        throw new UnauthorizedError("Your chapter is currently inactive. Please contact the RIFAH Secretariat.");
+        throw new UnauthorizedError("Your chapter is currently inactive. Please contact the RIFAH Administration.");
       }
     }
 
@@ -623,14 +623,14 @@ export const authService = {
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      // SECURITY GUARD: Strictly block Admin / Secretariat Google OAuth login
+      // SECURITY GUARD: Strictly block Admin Google OAuth login
       if (
         existingUser.role === ROLES.SUPER_ADMIN ||
-        existingUser.role === ROLES.SECRETARIAT ||
+        existingUser.role === ROLES.STATE_ADMIN ||
         existingUser.role === ROLES.CHAPTER_ADMIN
       ) {
         throw new UnauthorizedError(
-          "Admin and Secretariat accounts must sign in using email and password credentials.",
+          "Administrative accounts must sign in using email and password credentials.",
           ERROR_CODES.FORBIDDEN
         );
       }

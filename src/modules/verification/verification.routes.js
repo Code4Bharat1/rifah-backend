@@ -42,18 +42,18 @@ router.get(
   verificationController.downloadDocument
 );
 
-// Chapter Admin Verification Queue
+// Admin Verification Queue (Super Admin, State Admin, Chapter Admin)
 router.get(
   "/queue",
   authMiddleware,
-  requireRole(ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   verificationController.listVerifications
 );
 
 router.patch(
   "/:id/review",
   authMiddleware,
-  requireRole(ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateReviewVerification),
   verificationController.reviewVerification

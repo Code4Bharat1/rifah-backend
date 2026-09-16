@@ -85,14 +85,14 @@ router.post(
 router.post(
   "/admin/create",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   businessController.createBusinessByAdmin
 );
 
 router.patch(
   "/:id/status",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   businessController.updateStatus
 );

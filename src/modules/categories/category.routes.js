@@ -17,7 +17,7 @@ router.get("/slug/:slug", categoryController.getCategoryBySlug);
 router.post(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN),
   validateRequest(validateCreateCategory),
   categoryController.createCategory
 );
@@ -25,7 +25,7 @@ router.post(
 router.patch(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateUpdateCategory),
   categoryController.updateCategory
@@ -34,7 +34,7 @@ router.patch(
 router.delete(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN),
   validateObjectIdParam("id"),
   categoryController.deleteCategory
 );

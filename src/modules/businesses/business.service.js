@@ -46,7 +46,7 @@ export const businessService = {
     const andConditions = [];
 
     // Allow Active or unset status for public users
-    if (!user || ![ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN].includes(user.role)) {
+    if (!user || ![ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user.role)) {
       andConditions.push({ status: { $ne: "Suspended" } });
     }
 

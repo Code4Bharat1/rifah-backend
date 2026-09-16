@@ -498,7 +498,7 @@ export const enquiryService = {
     await enquiry.save();
 
     try {
-      const headOfficeUsers = await User.find({ role: { $in: [ROLES.SUPER_ADMIN, ROLES.SECRETARIAT] } }).select("_id");
+      const headOfficeUsers = await User.find({ role: ROLES.SUPER_ADMIN }).select("_id");
       await Promise.all(
         headOfficeUsers.map((admin) =>
           notificationService.createNotification({

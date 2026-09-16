@@ -29,7 +29,7 @@ export const chapterController = {
   }),
 
   createChapter: asyncHandler(async (req, res) => {
-    const created = await chapterService.createChapter(req.body);
+    const created = await chapterService.createChapter(req.body, req.user);
     await auditService.logAction({
       actor: req.user,
       action: "CREATE",
@@ -43,7 +43,7 @@ export const chapterController = {
 
   updateChapter: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const updated = await chapterService.updateChapter(id, req.body);
+    const updated = await chapterService.updateChapter(id, req.body, req.user);
     await auditService.logAction({
       actor: req.user,
       action: "UPDATE",
@@ -85,16 +85,16 @@ export const chapterController = {
 
   assignAdmin: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const admin = await chapterService.assignAdmin(id, req.body);
+    const admin = await chapterService.assignAdmin(id, req.body, req.user);
     await auditService.logAction({
       actor: req.user,
       action: "CREATE",
       targetModel: "User",
       targetId: admin._id,
-      summary: `Assigned admin ${admin.name} to chapter ${id}`,
+      summary: `Assigned chapter admin ${admin.name} to chapter ${id}`,
       ipAddress: req.ip
     });
-    return ApiResponse.created(res, admin, "Chapter Admin created and invitation sent");
+    return ApiResponse.created(res, admin, "Chapter Admin assigned and invitation sent");
   }),
 
   updateChapterStatus: asyncHandler(async (req, res) => {

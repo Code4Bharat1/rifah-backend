@@ -11,7 +11,7 @@ router.post("/", queryController.create);
 
 // Protected routes for Chapter Admins, Secretariat, and Super Admin
 router.use(authMiddleware);
-router.use(requireRole(ROLES.CHAPTER_ADMIN, ROLES.SECRETARIAT, ROLES.SUPER_ADMIN));
+router.use(requireRole(ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.SUPER_ADMIN));
 
 router.get("/", queryController.list);
 router.patch("/:id/reply", queryController.reply);

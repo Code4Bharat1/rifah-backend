@@ -217,9 +217,16 @@ export const verificationService = {
 
     const business = await Business.findById(verification.business);
     
-    // RBAC: Chapter Admin Scope Enforcement
-    if (!reviewer || reviewer.role !== ROLES.CHAPTER_ADMIN) {
-      throw new ForbiddenError("Only Chapter Administrators are authorized to verify businesses.");
+    // RBAC: Geographic Scope Enforcement
+    if (!reviewer || ![ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(reviewer.role)) {
+      throw new ForbiddenError("You are not authorized to verify businesses.");
+    }
+
+    if (reviewer.role === ROLES.STATE_ADMIN && reviewer.state) {
+      const stateRegex = new RegExp(`^${reviewer.state.trim()}$`, "i");
+      if (business && (!stateRegex.test(business.state || "") && !stateRegex.test(business.chapter || ""))) {
+        throw new ForbiddenError("You are not authorized to review verifications outside your state.");
+      }
     }
     
     if (reviewer.role === ROLES.CHAPTER_ADMIN) {
@@ -357,7 +364,12 @@ export const verificationService = {
       if (!verification.business || !verification.business.chapter || !chapterRegex.test(verification.business.chapter)) {
         throw new ForbiddenError("You are not authorized to view documents for this chapter");
       }
-    } else if (requester.role !== ROLES.SUPER_ADMIN && requester.role !== ROLES.SECRETARIAT) {
+    } else if (requester.role === ROLES.STATE_ADMIN && requester.state) {
+      const stateRegex = new RegExp(`^${requester.state.trim()}$`, "i");
+      if (!verification.business || (!stateRegex.test(verification.business.state || "") && !stateRegex.test(verification.business.chapter || ""))) {
+        throw new ForbiddenError("You are not authorized to view documents outside your state");
+      }
+    } else if (requester.role !== ROLES.SUPER_ADMIN) {
       // If it's a business owner, they should only see their own
       // (This covers Business Owner panel access if they use this route)
       if (String(verification.submittedBy) !== String(requester.id)) {

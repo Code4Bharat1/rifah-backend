@@ -5,7 +5,7 @@ import { ROLES } from "../../shared/constants/roles.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
-import { NotFoundError, ConflictError } from "../../shared/errors/errors.js";
+import { NotFoundError, ConflictError, ForbiddenError } from "../../shared/errors/errors.js";
 import crypto from "crypto";
 
 export const chapterService = {
@@ -13,9 +13,11 @@ export const chapterService = {
     const query = {};
     if (filter.status) query.status = filter.status;
     
-    // RBAC: Chapter Admin Scope Enforcement
+    // RBAC: Chapter Admin & State Admin Scope Enforcement
     if (user && user.role === ROLES.CHAPTER_ADMIN) {
       query._id = user.chapterId || null;
+    } else if (user && user.role === ROLES.STATE_ADMIN && user.state) {
+      query.state = new RegExp(`^${user.state.trim()}$`, "i");
     }
 
     return Chapter.find(query).sort({ name: 1 });
@@ -60,7 +62,10 @@ export const chapterService = {
     return chapter;
   },
 
-  createChapter: async (data) => {
+  createChapter: async (data, user) => {
+    if (user && user.role === ROLES.STATE_ADMIN && user.state) {
+      data.state = user.state;
+    }
     const slug = generateSlug(data.name);
     const existing = await Chapter.findOne({ slug });
     if (existing) {
@@ -104,10 +109,22 @@ export const chapterService = {
     return chapter;
   },
 
-  assignAdmin: async (chapterId, { name, email }) => {
+  assignAdmin: async (chapterId, { name, email }, requester) => {
+    // STRICT DELEGATION: Super Admin cannot assign Chapter Admins directly
+    if (requester && requester.role === ROLES.SUPER_ADMIN) {
+      throw new ForbiddenError("Super Admin cannot assign Chapter Admins directly. Please allocate a State Admin for this state.");
+    }
+
     const chapter = await Chapter.findById(chapterId);
     if (!chapter) {
       throw new NotFoundError("Chapter not found");
+    }
+
+    // State Admin can only assign chapter admins within their state
+    if (requester && requester.role === ROLES.STATE_ADMIN) {
+      if ((chapter.state || "").trim().toLowerCase() !== (requester.state || "").trim().toLowerCase()) {
+        throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requester.state}`);
+      }
     }
 
     const existingUserWithEmail = await User.findOne({ email: email.toLowerCase() });
@@ -126,8 +143,8 @@ export const chapterService = {
     }
 
     if (existingUserWithEmail) {
-      if (existingUserWithEmail.role === ROLES.SUPER_ADMIN || existingUserWithEmail.role === ROLES.SECRETARIAT) {
-        throw new ConflictError("Cannot assign a Super Admin or Secretariat as a Chapter Admin");
+      if (existingUserWithEmail.role === ROLES.SUPER_ADMIN || existingUserWithEmail.role === ROLES.STATE_ADMIN) {
+        throw new ConflictError("Cannot assign a Super Admin or State Admin as a Chapter Admin");
       }
 
       // If user is already Chapter Admin of another chapter, or upgrading

@@ -1,6 +1,6 @@
 export const ROLES = Object.freeze({
   SUPER_ADMIN: "super_admin",
-  SECRETARIAT: "secretariat",
+  STATE_ADMIN: "state_admin",
   CHAPTER_ADMIN: "chapter_admin",
   BUSINESS_OWNER: "business_owner",
   CUSTOMER: "customer",
@@ -9,7 +9,7 @@ export const ROLES = Object.freeze({
 
 export const ROLE_HIERARCHY = Object.freeze({
   [ROLES.SUPER_ADMIN]: 100,
-  [ROLES.SECRETARIAT]: 80,
+  [ROLES.STATE_ADMIN]: 80,
   [ROLES.CHAPTER_ADMIN]: 60,
   [ROLES.BUSINESS_OWNER]: 40,
   [ROLES.CUSTOMER]: 20,

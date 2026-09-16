@@ -26,27 +26,27 @@ router.get("/invoice/:identifier", authMiddleware, paymentController.getInvoice)
 router.get(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   paymentController.listAllPayments
 );
 router.get(
   "/admin/all",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   paymentController.listAllPayments
 );
 
 router.post(
   "/:id/refund",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN),
   paymentController.processRefund
 );
 
 router.post(
   "/:id/verify-by-admin",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.SECRETARIAT),
+  requireRole(ROLES.SUPER_ADMIN),
   paymentController.verifyPaymentByAdmin
 );
 
