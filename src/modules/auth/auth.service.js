@@ -159,6 +159,8 @@ export const authService = {
     phone,
     chapter,
     businessName,
+    businessEmail,
+    contactPerson,
     industry,
     subCategory,
     businessType,
@@ -175,6 +177,7 @@ export const authService = {
     verifiedToken,
   }) => {
     const cleanEmail = email.toLowerCase().trim();
+    const cleanBusinessEmail = businessEmail ? businessEmail.toLowerCase().trim() : "";
     const cleanTaxId = taxId ? taxId.trim().toUpperCase() : "";
 
     // If verifiedToken was passed, ensure it is verified
@@ -250,6 +253,7 @@ export const authService = {
       name: (businessName || name).trim(),
       slug,
       owner: user._id,
+      contactPerson: (contactPerson || name || "").trim(),
       industry: industry || "General",
       categories,
       businessType: businessType || "Proprietorship",
@@ -266,7 +270,8 @@ export const authService = {
       region: region === "international" ? "international" : "national",
       currency: currency === "USD" || region === "international" ? "USD" : "INR",
       phone: phone || "",
-      email: cleanEmail,
+      email: cleanBusinessEmail || cleanEmail,
+      ownerEmail: cleanEmail,
       status: "Active",
       verification: "pending",
     });

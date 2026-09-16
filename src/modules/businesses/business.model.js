@@ -143,7 +143,18 @@ const businessSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    contactPerson: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     email: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      default: "",
+    },
+    ownerEmail: {
       type: String,
       lowercase: true,
       trim: true,

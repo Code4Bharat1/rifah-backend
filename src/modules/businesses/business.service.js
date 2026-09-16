@@ -156,6 +156,18 @@ export const businessService = {
       });
     }
 
+    // 5.5. State Filter
+    if (
+      queryParams.state &&
+      queryParams.state !== "undefined" &&
+      queryParams.state !== "null" &&
+      queryParams.state.toLowerCase() !== "all" &&
+      queryParams.state !== "All states"
+    ) {
+      const stateRegex = new RegExp(`^${escapeRegex(queryParams.state.trim())}$`, "i");
+      andConditions.push({ state: stateRegex });
+    }
+
     // 6. Membership Level Filter
     if (
       queryParams.membership &&
@@ -487,7 +499,8 @@ export const businessService = {
       membership: data.membershipTier || "Free",
       about: data.about || "",
       phone: data.phone || "",
-      email: cleanEmail,
+      email: (data.businessEmail || cleanEmail).toLowerCase().trim(),
+      ownerEmail: cleanEmail,
       verification: "Pending",
       status: "Active",
     });

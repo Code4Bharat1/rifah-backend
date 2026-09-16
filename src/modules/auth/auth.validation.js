@@ -31,6 +31,9 @@ export const validateRegisterBusiness = (data = {}) => {
   if (!data.businessName || typeof data.businessName !== "string" || data.businessName.trim().length < 2) {
     errors.push({ field: "businessName", message: "Business name is required" });
   }
+  if (data.businessEmail && !isValidEmail(data.businessEmail)) {
+    errors.push({ field: "businessEmail", message: "Please provide a valid official business email or leave it empty" });
+  }
   return { valid: errors.length === 0, errors };
 };
 

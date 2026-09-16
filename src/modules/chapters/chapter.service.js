@@ -204,6 +204,10 @@ export const chapterService = {
       }
     }
 
+    // Generate a secure random password for the Chapter Admin
+    const randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
+    const passwordHash = await hashPassword(randomPassword);
+
     if (existingUserWithEmail) {
       if (existingUserWithEmail.role === ROLES.SUPER_ADMIN || existingUserWithEmail.role === ROLES.STATE_ADMIN) {
         throw new ConflictError("Cannot assign a Super Admin or State Admin as a Chapter Admin");
@@ -220,16 +224,14 @@ export const chapterService = {
       existingUserWithEmail.city = chapter.city || existingUserWithEmail.city || "";
       existingUserWithEmail.state = chapter.state || existingUserWithEmail.state || "";
       existingUserWithEmail.name = name.trim();
+      existingUserWithEmail.passwordHash = passwordHash;
+      existingUserWithEmail.forcePasswordChange = true;
       await existingUserWithEmail.save();
 
-      // Send the upgrade email without resetting password
-      await emailService.sendChapterAdminUpgradeEmail(cleanEmail, null, chapter.name, name);
+      // Send email with generated credentials to the assigned chapter admin email
+      await emailService.sendChapterAdminInvite(cleanEmail, randomPassword, chapter.name, name.trim());
       return existingUserWithEmail;
     }
-
-    // Generate random password
-    const password = crypto.randomBytes(8).toString("hex");
-    const passwordHash = await hashPassword(password);
 
     const admin = await User.create({
       name: name.trim(),
@@ -243,8 +245,8 @@ export const chapterService = {
       forcePasswordChange: true,
     });
 
-    // Send email with credentials
-    await emailService.sendChapterAdminInvite(cleanEmail, password, chapter.name, name);
+    // Send email with generated credentials to the assigned chapter admin email
+    await emailService.sendChapterAdminInvite(cleanEmail, randomPassword, chapter.name, name.trim());
 
     return admin;
   },
