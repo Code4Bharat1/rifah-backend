@@ -366,6 +366,37 @@ export const enquiryService = {
           ]
         });
       }
+    } else if (requester && requester.role === ROLES.STATE_ADMIN) {
+      let stateName = requester.state;
+      if (!stateName && requester.id) {
+        const userDoc = await User.findById(requester.id).select("state");
+        stateName = userDoc?.state;
+      }
+      
+      const orConditions = [{ assignedTo: requester.id }];
+
+      if (stateName) {
+        const stateRegex = new RegExp(`^${stateName.trim()}$`, "i");
+        const stateChapters = await Chapter.find({ state: stateRegex }).select("_id name");
+        const chapterIds = stateChapters.map((c) => c._id);
+        const chapterNames = stateChapters.map((c) => c.name);
+        const businesses = await Business.find({
+          $or: [
+            { chapterId: { $in: chapterIds } },
+            { state: stateRegex }
+          ]
+        }).select("_id");
+        const businessIds = businesses.map((b) => b._id);
+
+        orConditions.push(
+          { chapterId: { $in: chapterIds } },
+          { chapter: { $in: chapterNames } },
+          { targetBusiness: { $in: businessIds } },
+          { location: stateRegex }
+        );
+      }
+
+      conditions.push({ $or: orConditions });
     }
 
     if (queryParams.status && queryParams.status.toLowerCase() !== "all") {
@@ -410,7 +441,7 @@ export const enquiryService = {
       Enquiry.find(filter)
         .populate("requester", "name email phone")
         .populate("targetBusiness", "name slug chapter")
-        .populate("assignedTo", "name email role")
+        .populate("assignedTo", "name email role state")
         .sort(sort)
         .skip(skip)
         .limit(limit),
@@ -434,6 +465,7 @@ export const enquiryService = {
     }
 
     const oldStatus = enquiry.status;
+    const oldAssignedTo = enquiry.assignedTo ? String(enquiry.assignedTo) : null;
     if (status) enquiry.status = status;
     if (assignedTo !== undefined) enquiry.assignedTo = assignedTo;
     if (resolutionNote !== undefined) enquiry.resolutionNote = resolutionNote;
@@ -442,6 +474,22 @@ export const enquiryService = {
       enquiry.timeline.push(timelineUpdate);
     }
     await enquiry.save();
+
+    // Notify assigned admin if newly assigned
+    if (assignedTo && String(assignedTo) !== oldAssignedTo) {
+      try {
+        await notificationService.createNotification({
+          recipientId: assignedTo,
+          type: "Enquiry",
+          title: "New Enquiry Assigned",
+          body: `You have been assigned an enquiry: "${enquiry.title}".`,
+          entityId: enquiry._id,
+          link: "/admin/enquiries",
+        });
+      } catch (err) {
+        console.error("Failed to notify assigned admin:", err);
+      }
+    }
 
     // Notify customer on status change
     if (oldStatus !== status && enquiry.requester) {

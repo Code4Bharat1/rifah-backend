@@ -58,7 +58,7 @@ export const getChapterFilter = async (user, entityType = "direct") => {
     };
   }
 
-  // Only Chapter Admins are restricted by city chapter filter logic
+  // Only Chapter Admins are restricted by chapter admin filter logic
   if (user.role !== ROLES.CHAPTER_ADMIN) {
     return {};
   }

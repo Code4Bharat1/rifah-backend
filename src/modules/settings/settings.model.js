@@ -37,7 +37,7 @@ const settingsSchema = new mongoose.Schema(
     },
     secretariatAddress: {
       type: String,
-      default: "Central Secretariat, Byculla, Mumbai 400 008",
+      default: "Central Admin Office, Byculla, Mumbai 400 008",
     },
     workingHours: {
       type: String,

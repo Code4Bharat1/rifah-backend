@@ -79,7 +79,7 @@ const eventSchema = new mongoose.Schema(
     },
     organizer: {
       type: String,
-      default: "RIFAH Chamber Secretariat",
+      default: "RIFAH Chamber Central Admin",
     },
     isPaid: {
       type: Boolean,

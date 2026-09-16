@@ -119,11 +119,11 @@ const run = async () => {
     { planId: "free", name: "Free", price: 0, priceUsd: 0, summary: "Get started on RIFAH Connect", features: ["Directory listing", "Basic search", "5 leads / mo"] },
     { planId: "basic", name: "Basic", price: 4999, priceUsd: 59, summary: "For growing businesses", features: ["Directory listing", "Verified badge", "15 leads / mo", "Direct buyer messaging"] },
     { planId: "premium", name: "Premium", price: 12999, priceUsd: 159, summary: "For established businesses", features: ["Featured listing", "Verified badge", "Unlimited leads", "Chamber event passes", "RFQ priority"] },
-    { planId: "enterprise", name: "Enterprise", price: 29999, priceUsd: 359, summary: "For market leaders", features: ["All Premium features", "Secretariat advisory", "Global chapter access", "Custom expo pavilion"] },
+    { planId: "enterprise", name: "Enterprise", price: 29999, priceUsd: 359, summary: "For market leaders", features: ["All Premium features", "Central Admin advisory", "Global chapter access", "Custom expo pavilion"] },
   ]);
 
   // ---------------------------------------------------------------------
-  // 5. Users: super admin, secretariat, chapter admins, business owners, customers
+  // 5. Users: super admin, central admin, chapter admins, business owners, customers
   // ---------------------------------------------------------------------
   console.log("Seeding Users...");
 
@@ -133,7 +133,7 @@ const run = async () => {
   });
 
   const secretariat = await User.create({
-    name: "RIFAH Secretariat", email: "secretariat@rifah.org", passwordHash: adminPwHash,
+    name: "RIFAH Central Admin", email: "secretariat@rifah.org", passwordHash: adminPwHash,
     phone: "+91 22 2345 6790", role: ROLES.SECRETARIAT, status: "Active",
   });
 
@@ -332,7 +332,7 @@ const run = async () => {
       city: chapter.city,
       chapter: chapter.name,
       mode: "In-person",
-      organizer: "RIFAH Central Secretariat",
+      organizer: "RIFAH Central Admin",
       fee: "Complimentary for Members",
       seats: 200,
       registeredCount: Math.floor(Math.random() * 100),
@@ -584,7 +584,7 @@ const run = async () => {
   console.log("\nALL SEEDING COMPLETE.");
   console.log("--------------------------------------------------------------");
   console.log("Super Admin:    admin@gmail.com / 12345678");
-  console.log("Secretariat:    secretariat@rifah.org / 12345678");
+  console.log("Central Admin:  secretariat@rifah.org / 12345678");
   console.log("Chapter Admins: admin.<chapter-slug>@rifah.org / User@123456");
   chapterAdmins.forEach((a, i) => console.log(`   - ${chapters[i].name}: ${a.email}`));
   console.log("Business Owners & Customers: <name.with.dots>@example.com / User@123456");

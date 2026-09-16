@@ -322,7 +322,7 @@ export const pdfService = {
       "(Security Status: Cryptographically Registered on RIFAH Connect) Tj",
       "ET",
 
-      // Secretariat Verification Box
+      // Central Admin Verification Box
       "0.95 0.97 0.99 rg",
       "55 405 485 65 re f",
       "0.75 0.82 0.92 RG",
@@ -332,7 +332,7 @@ export const pdfService = {
       "/F2 10 Tf",
       "0.05 0.3 0.6 rg",
       "70 450 Td",
-      "(CHAMBER SECRETARIAT DIGITAL VERIFICATION DESK) Tj",
+      "(CHAMBER CENTRAL ADMIN DIGITAL VERIFICATION DESK) Tj",
       "/F1 9 Tf",
       "0.3 0.35 0.4 rg",
       "0 -16 Td",
@@ -354,7 +354,7 @@ export const pdfService = {
       "/F1 8 Tf",
       "0.45 0.5 0.55 rg",
       "0 -14 Td",
-      "(Certified digital archive copy. For inquiries, contact secretariat@rifah.org) Tj",
+      "(Certified digital archive copy. For inquiries, contact admin@rifah.org) Tj",
       "ET",
     ];
 
