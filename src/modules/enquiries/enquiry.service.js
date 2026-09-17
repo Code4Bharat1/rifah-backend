@@ -32,9 +32,15 @@ export const enquiryService = {
     let targetBusiness = data.targetBusiness;
 
     if (isCustomerOrGuest) {
-      // Customer and guest sourcing requirements are always submitted for Chamber Admin review and routing
-      targetType = data.targetType === "chamber" ? "chamber" : "all";
-      targetBusiness = undefined;
+      // Allow direct business enquiries from the profile page for guests;
+      // all other guest/customer enquiries go through Chamber Admin routing.
+      if (data.targetType === "business" && data.targetBusiness) {
+        targetType = "business";
+        // targetBusiness already set above
+      } else {
+        targetType = data.targetType === "chamber" ? "chamber" : "all";
+        targetBusiness = undefined;
+      }
     }
 
     let userBusiness = null;
@@ -43,7 +49,7 @@ export const enquiryService = {
     }
 
     let requesterRole = "Guest Customer";
-    let requesterName = data.name || "Customer";
+    let requesterName = data.guestName || data.name || "Customer";
     if (user) {
       if (user.role === "business" || userBusiness) {
         requesterRole = "Business Member";
@@ -82,6 +88,9 @@ export const enquiryService = {
       requester: user ? user.id : null,
       requesterName,
       requesterRole,
+      guestName: !user ? (data.guestName || "") : "",
+      guestEmail: !user ? (data.guestEmail || "") : "",
+      guestPhone: !user ? (data.guestPhone || "") : "",
       timeline: initialTimeline,
       chapter: resolvedChapter,
       chapterId: resolvedChapterId,
