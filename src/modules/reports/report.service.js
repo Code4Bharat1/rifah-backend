@@ -7,6 +7,7 @@ import { Chapter } from "../chapters/chapter.model.js";
 import { Verification } from "../verification/verification.model.js";
 import { Catalogue } from "../catalogue/catalogue.model.js";
 import { Review } from "../reviews/review.model.js";
+import { Event } from "../events/event.model.js";
 
 export const reportService = {
   /**
@@ -288,17 +289,145 @@ export const reportService = {
     if (startDate && endDate) {
       query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
-    const leads = await Lead.find(query).populate("business", "name city chapter").populate("enquiry", "category requirement source status");
-    const headers = ["Business Name", "Chapter", "City", "Enquiry Category", "Enquiry Source", "Lead Status", "Date"];
-    const rows = leads.map(lead => [
-      lead.business?.name || '',
-      lead.business?.chapter || '',
-      lead.business?.city || '',
-      lead.enquiry?.category || '',
-      lead.enquiry?.source || '',
-      lead.status,
-      lead.createdAt.toISOString()
+    const leads = await Lead.find(query)
+      .populate("buyer", "name email phone")
+      .populate("business", "businessName")
+      .populate("enquiry", "productName quantity requiredBy");
+      
+    const headers = ["Business", "Buyer Name", "Buyer Email", "Buyer Phone", "Enquiry Product", "Enquiry Qty", "Enquiry Required By", "Lead Status", "Date"];
+    const rows = leads.map(l => [
+      l.business?.businessName || '',
+      l.buyer?.name || '',
+      l.buyer?.email || '',
+      l.buyer?.phone || '',
+      l.enquiry?.productName || '',
+      l.enquiry?.quantity || '',
+      l.enquiry?.requiredBy ? new Date(l.enquiry.requiredBy).toLocaleDateString() : '',
+      l.status,
+      new Date(l.createdAt).toLocaleDateString(),
     ]);
+
     return { headers, rows };
   },
+
+  /**
+   * Event Analytics Dashboard Data
+   */
+  getEventsAnalyticsData: async (user, queryFilters) => {
+    // 1. RBAC Filtering
+    const filter = {};
+    
+    // Admin RBAC constraints
+    if (user.role === "state_admin") {
+      filter.$or = [
+        { targetStates: user.state },
+        { targetStates: "All" },
+        { createdBy: user._id || user.id }
+      ];
+    } else if (user.role === "chapter_admin") {
+      filter.$or = [
+        { chapter: user.chapter },
+        { targetChapters: user.chapter },
+        { targetChapters: "All" },
+        { targetStates: user.state },
+        { targetStates: "All" },
+        { createdBy: user._id || user.id }
+      ];
+    }
+
+    // 2. Query Filters (State / Chapter)
+    if (queryFilters.state && queryFilters.state !== "All") {
+      // If filtering by state, match targetStates or specific state string
+      filter.targetStates = queryFilters.state;
+    }
+    if (queryFilters.chapter && queryFilters.chapter !== "All") {
+      filter.chapter = queryFilters.chapter;
+    }
+    if (queryFilters.status && queryFilters.status !== "All") {
+      filter.status = queryFilters.status;
+    }
+
+    const events = await Event.find(filter).lean().sort({ date: -1 });
+
+    let totalEvents = 0;
+    let totalRegisteredOverall = 0;
+    let totalAttendedOverall = 0;
+
+    const eventList = events.map(evt => {
+      const capacity = evt.seats || 0;
+      const registeredCount = evt.registeredUsers ? evt.registeredUsers.length : 0;
+      
+      let attendedCount = 0;
+      if (evt.registeredUsers) {
+        evt.registeredUsers.forEach(reg => {
+          if (reg.attendanceStatus === "Present") {
+            attendedCount++;
+          }
+        });
+      }
+
+      totalEvents++;
+      totalRegisteredOverall += registeredCount;
+      totalAttendedOverall += attendedCount;
+
+      let attendanceRate = 0;
+      if (registeredCount > 0) {
+        attendanceRate = Math.round((attendedCount / registeredCount) * 100);
+      }
+
+      let health = "Red"; // Default to Red (< 50%)
+      if (attendanceRate >= 75) {
+        health = "Green";
+      } else if (attendanceRate >= 50) {
+        health = "Yellow";
+      }
+
+      return {
+        _id: evt._id,
+        title: evt.title,
+        date: evt.date,
+        chapter: evt.chapter || "N/A",
+        status: evt.status,
+        capacity,
+        registeredCount,
+        attendedCount,
+        attendanceRate,
+        health
+      };
+    });
+
+    // Compute Leaderboard by Chapter
+    const chapterStats = {};
+    eventList.forEach(evt => {
+      if (evt.chapter === "N/A" || !evt.chapter) return;
+      if (!chapterStats[evt.chapter]) {
+        chapterStats[evt.chapter] = { name: evt.chapter, totalEvents: 0, totalAttended: 0, totalRegistered: 0 };
+      }
+      chapterStats[evt.chapter].totalEvents++;
+      chapterStats[evt.chapter].totalAttended += evt.attendedCount;
+      chapterStats[evt.chapter].totalRegistered += evt.registeredCount;
+    });
+
+    const leaderboard = Object.values(chapterStats).map(ch => ({
+      ...ch,
+      attendanceRate: ch.totalRegistered > 0 ? Math.round((ch.totalAttended / ch.totalRegistered) * 100) : 0
+    }))
+    .filter(ch => ch.totalEvents > 0)
+    .sort((a, b) => b.attendanceRate - a.attendanceRate || b.totalEvents - a.totalEvents)
+    .slice(0, 5); // Top 5 Chapters
+
+    const overallAttendanceRate = totalRegisteredOverall > 0 
+      ? Math.round((totalAttendedOverall / totalRegisteredOverall) * 100) 
+      : 0;
+
+    return {
+      kpis: {
+        totalEvents,
+        totalRegisteredOverall,
+        overallAttendanceRate
+      },
+      leaderboard,
+      events: eventList
+    };
+  }
 };
