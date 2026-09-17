@@ -81,4 +81,9 @@ export const reportController = {
     res.setHeader("Content-Disposition", 'attachment; filename="leads_report.csv"');
     return res.status(200).send(csvData);
   }),
+
+  getEventsAnalytics: asyncHandler(async (req, res) => {
+    const data = await reportService.getEventsAnalyticsData(req.user, req.query);
+    return ApiResponse.success(res, data, "Event analytics retrieved successfully");
+  }),
 };

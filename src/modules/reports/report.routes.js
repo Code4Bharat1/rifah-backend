@@ -56,5 +56,12 @@ router.get(
   reportController.exportLeads
 );
 
+router.get(
+  "/admin/events-analytics",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  reportController.getEventsAnalytics
+);
+
 export { router as reportRoutes };
 export default router;
