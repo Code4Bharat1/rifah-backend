@@ -143,6 +143,16 @@ const businessSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    whatsapp: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    whatsappNumber: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     contactPerson: {
       type: String,
       trim: true,

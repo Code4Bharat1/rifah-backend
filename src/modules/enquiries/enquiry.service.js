@@ -381,7 +381,7 @@ export const enquiryService = {
         const userDoc = await User.findById(requester.id).select("state");
         stateName = userDoc?.state;
       }
-      
+
       const orConditions = [{ assignedTo: requester.id }];
 
       if (stateName) {

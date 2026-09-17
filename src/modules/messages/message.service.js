@@ -105,8 +105,8 @@ export const messageService = {
     const messages = await Message.find({
       $or: [{ sender: currentUserId }, { recipient: currentUserId }],
     })
-      .populate("sender", "name email avatar")
-      .populate("recipient", "name email avatar")
+      .populate("sender", "name email phone avatar role whatsapp")
+      .populate("recipient", "name email phone avatar role whatsapp")
       .populate("enquiry", "referenceId title")
       .sort({ createdAt: -1 });
 
@@ -144,6 +144,64 @@ export const messageService = {
       }
     }
 
-    return Array.from(conversationMap.values());
+    const conversations = Array.from(conversationMap.values());
+    const otherUserIds = conversations.map((c) => String(c.otherUser?._id || c.otherUser)).filter(Boolean);
+
+    if (otherUserIds.length > 0) {
+      try {
+        const { Business } = await import("../businesses/business.model.js");
+        const businesses = await Business.find({ owner: { $in: otherUserIds } })
+          .select("name phone email whatsapp whatsappNumber owner")
+          .lean();
+        const bizMap = new Map(businesses.map((b) => [String(b.owner), b]));
+
+        conversations.forEach((c) => {
+          const uid = String(c.otherUser?._id || c.otherUser);
+          const biz = bizMap.get(uid);
+          const userObj = c.otherUser && typeof c.otherUser.toObject === "function"
+            ? c.otherUser.toObject()
+            : (c.otherUser || {});
+
+          c.otherUser = {
+            ...userObj,
+            businessName: biz?.name || userObj.name || "",
+            phone: biz?.phone || userObj.phone || "",
+            email: userObj.email || biz?.email || "",
+            whatsapp: biz?.whatsapp || biz?.whatsappNumber || userObj.whatsapp || userObj.phone || biz?.phone || "",
+          };
+        });
+      } catch (bizErr) {
+        console.warn("Failed to enrich conversations with business contact info:", bizErr);
+      }
+    }
+
+    return conversations;
+  },
+
+  /**
+   * Get direct contact info (Email, Phone, WhatsApp) for a specific user and their business
+   */
+  getUserContact: async (userId) => {
+    const { User } = await import("../users/user.model.js");
+    const { Business } = await import("../businesses/business.model.js");
+
+    const [user, business] = await Promise.all([
+      User.findById(userId).select("name email phone whatsapp avatar role").lean(),
+      Business.findOne({ owner: userId }).select("name phone email whatsapp whatsappNumber").lean(),
+    ]);
+
+    const resolvedEmail = user?.email || business?.email || "";
+    const resolvedPhone = business?.phone || user?.phone || "";
+    const resolvedWhatsapp = business?.whatsapp || business?.whatsappNumber || user?.whatsapp || business?.phone || user?.phone || "";
+
+    return {
+      _id: userId,
+      name: user?.name || business?.name || "Member",
+      businessName: business?.name || "",
+      email: resolvedEmail,
+      phone: resolvedPhone,
+      whatsapp: resolvedWhatsapp,
+      role: user?.role || "member",
+    };
   },
 };

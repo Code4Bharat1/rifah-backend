@@ -346,7 +346,7 @@ export const businessService = {
     const ALLOWED_CREATE_FIELDS = [
       "name", "tagline", "about", "industry", "categories", "businessType",
       "city", "state", "address", "pincode", "chapter", "chapterId", "employees",
-      "founded", "website", "taxId", "phone", "email", "hours",
+      "founded", "website", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
       "accent", "logo", "coverImage", "gallery", "productsSummary",
       "servicesSummary", "certifications"
     ];
@@ -356,6 +356,11 @@ export const businessService = {
       if (data[key] !== undefined) {
         sanitizedData[key] = data[key];
       }
+    }
+    if (sanitizedData.whatsapp && !sanitizedData.whatsappNumber) {
+      sanitizedData.whatsappNumber = sanitizedData.whatsapp;
+    } else if (sanitizedData.whatsappNumber && !sanitizedData.whatsapp) {
+      sanitizedData.whatsapp = sanitizedData.whatsappNumber;
     }
 
     const chapterFields = await resolveChapterFields(sanitizedData);
@@ -407,7 +412,7 @@ export const businessService = {
       const ALLOWED_OWNER_FIELDS = [
         "name", "tagline", "about", "industry", "categories", "businessType",
         "city", "state", "address", "pincode", "chapter", "employees",
-        "founded", "website", "taxId", "phone", "email", "hours",
+        "founded", "website", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
         "accent", "logo", "coverImage", "gallery", "productsSummary",
         "servicesSummary", "certifications"
       ];
@@ -417,6 +422,11 @@ export const businessService = {
           sanitizedData[key] = updateData[key];
         }
       }
+    }
+    if (sanitizedData.whatsapp && !sanitizedData.whatsappNumber) {
+      sanitizedData.whatsappNumber = sanitizedData.whatsapp;
+    } else if (sanitizedData.whatsappNumber && !sanitizedData.whatsapp) {
+      sanitizedData.whatsapp = sanitizedData.whatsappNumber;
     }
 
     if (sanitizedData.chapter || sanitizedData.chapterId) {

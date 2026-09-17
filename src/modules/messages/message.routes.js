@@ -10,6 +10,7 @@ import { upload } from "../../middleware/upload.middleware.js";
 const router = Router();
 
 router.get("/conversations", authMiddleware, messageController.listConversations);
+router.get("/contact-info/:userId", authMiddleware, validateObjectIdParam("userId"), messageController.getUserContact);
 router.get("/conversation/:otherUserId", authMiddleware, validateObjectIdParam("otherUserId"), messageController.getConversation);
 router.get("/user/:otherUserId", authMiddleware, validateObjectIdParam("otherUserId"), messageController.getConversation);
 router.post("/upload", authMiddleware, upload.single("attachment"), messageController.uploadAttachment);

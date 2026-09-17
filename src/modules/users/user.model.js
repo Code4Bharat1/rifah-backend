@@ -49,6 +49,11 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    whatsapp: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     role: {
       type: String,
       enum: Object.values(ROLES),

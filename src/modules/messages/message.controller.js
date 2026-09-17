@@ -41,5 +41,11 @@ export const messageController = {
       "Attachment uploaded successfully"
     );
   }),
+
+  getUserContact: asyncHandler(async (req, res) => {
+    const { userId } = req.params;
+    const contact = await messageService.getUserContact(userId);
+    return ApiResponse.success(res, contact, "User contact details retrieved");
+  }),
 };
 
