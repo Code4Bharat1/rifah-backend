@@ -335,7 +335,10 @@ export const eventService = {
     }
 
     const regIndex = event.registeredUsers.findIndex(
-      (reg) => String(reg.user || reg) === String(userId)
+      (reg) => {
+        const id = reg.user?._id || reg.user || reg._id || reg;
+        return String(id) === String(userId);
+      }
     );
 
     if (regIndex === -1) {
@@ -397,6 +400,7 @@ export const eventService = {
         user: userData || { name: "Deleted User", email: "N/A" },
         registeredAt,
         status,
+        attendanceStatus: entry.attendanceStatus || "Pending",
       });
     }
 

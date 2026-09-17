@@ -110,7 +110,7 @@ export const eventController = {
 
   markAttendance: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const userId = req.user._id;
+    const userId = req.user.id || req.user._id;
     const event = await eventService.markAttendance(id, userId);
     return ApiResponse.success(res, event, "Attendance marked successfully");
   }),
