@@ -288,3 +288,13 @@
 [2026-09-16T09:49:42.695Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/32AABCB2115P1ZY with key gak_a52d...
 
 [2026-09-16T09:49:43.417Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"32AABCB2115P1ZY","data":{"gstin":"32AABCB2115P1ZY","legal_name":"BUSINESS STANDARD PRIVATE LIMITED","trade_name":"BUSINESS STANDARD PRIVATE LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"32","state_jurisdiction":null,"address":"3627, M/S S.T. REDDIAR PRINTERS, Veekshanam Road, Kochi","city":"Kochi","address_details":{"building_number":"3627","building_name":"M/S S.T
+
+[2026-09-16T12:33:10.174Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27ABCDE1234F1Z5 with key gak_a52d...
+
+[2026-09-16T12:33:10.435Z] [GSTIN Portal] Response (Status 404): {"success":false,"error":"GSTIN not found in GST database","fix":"The format is valid but GSTN has no record of it. Check for a typo; a newly issued GSTIN can take a day to appear. Not-found calls are never charged."}
+
+[2026-09-16T12:33:10.436Z] GSTIN Portal lookup failed: GSTIN not found in GST database
+
+[2026-09-16T12:34:46.221Z] [GSTIN Portal] Querying https://www.gstinapi.in/v1/gstin/27AAACT2727Q1ZW with key gak_a52d...
+
+[2026-09-16T12:34:46.364Z] [GSTIN Portal] Response (Status 200): {"success":true,"gstin":"27AAACT2727Q1ZW","data":{"gstin":"27AAACT2727Q1ZW","legal_name":"TATA MOTORS PASSENGER VEHICLES LIMITED","trade_name":"TATA MOTORS PASSENGER VEHICLES LIMITED","status":"Active","taxpayer_type":"Regular","business_constitution":null,"registration_date":"2017-07-01","cancellation_date":null,"state_code":"27","state_jurisdiction":null,"address":"K Block, Sector No. 15 and 15A PCNTDA, Chikhali Road, Pimpri Chinchwad Chikhali","city":"Pimpri Chinchwad Chikhali","address_detai
