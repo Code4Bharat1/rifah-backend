@@ -21,6 +21,8 @@ import { auditRoutes } from "../modules/audit/audit.routes.js";
 import { settingsRoutes } from "../modules/settings/settings.routes.js";
 import { queryRoutes } from "../modules/queries/query.routes.js";
 import { stateRoutes } from "../modules/states/state.routes.js";
+import { oneToOneRoutes } from "../modules/networking/one-to-one.routes.js";
+import { thankYouNoteRoutes } from "../modules/networking/thank-you-note.routes.js";
 
 const apiRouter = Router();
 
@@ -49,6 +51,8 @@ apiRouter.use("/audit", auditRoutes);
 apiRouter.use("/settings", settingsRoutes);
 apiRouter.use("/queries", queryRoutes);
 apiRouter.use("/states", stateRoutes);
+apiRouter.use("/one-to-ones", oneToOneRoutes);
+apiRouter.use("/thank-you-notes", thankYouNoteRoutes);
 
 export { apiRouter };
 export default apiRouter;
