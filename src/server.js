@@ -5,6 +5,7 @@ import { logger } from "./infrastructure/logger/logger.js";
 import { initSocket } from "./infrastructure/socket/socket.js";
 import { eventService } from "./modules/events/event.service.js";
 import { announcementService } from "./modules/announcements/announcement.service.js";
+import { seedInitialCategories } from "./modules/categories/categories.data.js";
 import dns from "dns";
 dns.setDefaultResultOrder("ipv4first");
 dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
@@ -14,6 +15,9 @@ const startServer = async () => {
   try {
     // 1. Connect to MongoDB
     await connectDatabase();
+
+    // 1.1 Ensure Categories & Subcategories are populated (500+ items)
+    await seedInitialCategories();
 
     // 2. Start Scheduled Background Tasks
     eventService.startEventScheduler();
@@ -60,4 +64,3 @@ process.on("uncaughtException", (error) => {
 });
 
 startServer();
-// Active reload trigger: 2026-09-06T13:31:00

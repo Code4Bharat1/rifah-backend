@@ -99,6 +99,7 @@ export const businessService = {
           { about: searchRegex },
           { categories: { $in: [searchRegex] } },
           { industry: searchRegex },
+          { subCategory: searchRegex },
           { city: searchRegex },
           { state: searchRegex },
           { chapter: searchRegex },
@@ -118,6 +119,7 @@ export const businessService = {
         $or: [
           { categories: { $in: [catRegex] } },
           { industry: catRegex },
+          { subCategory: catRegex },
         ],
       });
     }
@@ -135,6 +137,23 @@ export const businessService = {
         $or: [
           { industry: indRegex },
           { categories: { $in: [indRegex] } },
+        ],
+      });
+    }
+
+    // 4.1 Sub-Category Filter
+    if (
+      queryParams.subCategory &&
+      queryParams.subCategory !== "undefined" &&
+      queryParams.subCategory !== "null" &&
+      queryParams.subCategory.toLowerCase() !== "all" &&
+      queryParams.subCategory !== "All sub-categories"
+    ) {
+      const subRegex = new RegExp(escapeRegex(queryParams.subCategory.trim()), "i");
+      andConditions.push({
+        $or: [
+          { categories: { $in: [subRegex] } },
+          { subCategory: subRegex },
         ],
       });
     }
