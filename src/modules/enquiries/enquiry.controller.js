@@ -7,11 +7,11 @@ import { auditService } from "../audit/audit.service.js";
 
 export const enquiryController = {
   createEnquiry: asyncHandler(async (req, res) => {
-    // Direct business enquiries from the profile page are always allowed for guests.
-    // General/chamber enquiries still require the allowPublicEnquiryPosting setting.
+    // Direct business enquiries from the profile page and public RFQs from the home page are allowed for guests.
     const isDirectBusinessEnquiry = req.body.targetType === "business" && req.body.targetBusiness;
+    const isPublicRfq = req.body.targetType === "all" && req.body.guestName && (req.body.guestEmail || req.body.guestPhone);
 
-    if (!req.user && !isDirectBusinessEnquiry) {
+    if (!req.user && !isDirectBusinessEnquiry && !isPublicRfq) {
       const { Settings } = await import("../settings/settings.model.js");
       const settings = await Settings.findOne({ isSingleton: "global" });
       if (!settings || !settings.allowPublicEnquiryPosting) {
