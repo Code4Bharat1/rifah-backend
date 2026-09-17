@@ -32,7 +32,7 @@ const enquirySchema = new mongoose.Schema(
     requester: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      default: null,
       index: true,
     },
     requesterName: {
@@ -42,6 +42,18 @@ const enquirySchema = new mongoose.Schema(
     requesterRole: {
       type: String,
       default: "Buyer",
+    },
+    guestName: {
+      type: String,
+      default: "",
+    },
+    guestEmail: {
+      type: String,
+      default: "",
+    },
+    guestPhone: {
+      type: String,
+      default: "",
     },
     targetType: {
       type: String,

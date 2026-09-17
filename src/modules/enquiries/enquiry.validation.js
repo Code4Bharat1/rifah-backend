@@ -27,6 +27,15 @@ export const validateCreateEnquiry = (data = {}) => {
   if (data.targetType === "business" && (!data.targetBusiness || !/^[0-9a-fA-F]{24}$/.test(String(data.targetBusiness)))) {
     errors.push({ field: "targetBusiness", message: "Valid target business ID is required when targeting a specific business" });
   }
+  // Guest contact validation — when targeting a business without auth, guest must provide name + email
+  if (data.targetType === "business" && data.targetBusiness) {
+    if (!data.guestName || typeof data.guestName !== "string" || !data.guestName.trim()) {
+      errors.push({ field: "guestName", message: "Your name is required for direct business enquiries" });
+    }
+    if (!data.guestEmail || typeof data.guestEmail !== "string" || !data.guestEmail.trim()) {
+      errors.push({ field: "guestEmail", message: "Your email is required for direct business enquiries" });
+    }
+  }
   return { valid: errors.length === 0, errors };
 };
 
