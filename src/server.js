@@ -21,7 +21,6 @@ const startServer = async () => {
 
     // 2. Start Scheduled Background Tasks
     eventService.startEventScheduler();
-    announcementService.startAnnouncementScheduler();
 
     // 3. Start HTTP Server
     server = app.listen(env.PORT, () => {
