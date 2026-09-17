@@ -1,6 +1,10 @@
 import { User } from "../users/user.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
 import { Business } from "../businesses/business.model.js";
+import { Event } from "../events/event.model.js";
+import { Referral } from "../networking/referral.model.js";
+import { OneToOne } from "../networking/one-to-one.model.js";
+import { ThankYouNote } from "../networking/thank-you-note.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -238,6 +242,85 @@ export const stateService = {
     await admin.save();
 
     return admin;
+  },
+
+  /**
+   * Edit a state globally across all collections
+   */
+  updateState: async (oldStateName, newStateName) => {
+    const oldRegex = new RegExp(`^${oldStateName.trim()}$`, "i");
+    const newName = newStateName.trim();
+
+    if (!newName) {
+      throw new BadRequestError("New state name cannot be empty");
+    }
+
+    // Update Users
+    await User.updateMany({ state: oldRegex }, { $set: { state: newName } });
+    
+    // Update Chapters
+    await Chapter.updateMany({ state: oldRegex }, { $set: { state: newName } });
+    
+    // Update Businesses
+    await Business.updateMany({ state: oldRegex }, { $set: { state: newName } });
+
+    // Update Events (targetStates array)
+    await Event.updateMany(
+      { targetStates: oldRegex },
+      { $set: { "targetStates.$": newName } }
+    );
+
+    // Update Networking Modules
+    await Referral.updateMany({ referrerState: oldRegex }, { $set: { referrerState: newName } });
+    await Referral.updateMany({ referredState: oldRegex }, { $set: { referredState: newName } });
+    await OneToOne.updateMany({ initiatorState: oldRegex }, { $set: { initiatorState: newName } });
+    await OneToOne.updateMany({ memberState: oldRegex }, { $set: { memberState: newName } });
+    await ThankYouNote.updateMany({ giverState: oldRegex }, { $set: { giverState: newName } });
+    await ThankYouNote.updateMany({ receiverState: oldRegex }, { $set: { receiverState: newName } });
+
+    return { message: "State renamed successfully", state: newName };
+  },
+
+  /**
+   * Delete a state (Safe Detachment: set to Unassigned)
+   */
+  deleteState: async (stateName) => {
+    const stateRegex = new RegExp(`^${stateName.trim()}$`, "i");
+
+    // 1. Revoke State Admin if exists
+    const admin = await User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex });
+    if (admin) {
+      admin.role = admin.previousRole || ROLES.CUSTOMER;
+      admin.previousRole = "";
+      admin.state = "Unassigned";
+      await admin.save();
+    }
+
+    // 2. Set all related users' state to Unassigned (including chapter admins, members, etc.)
+    await User.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
+
+    // 3. Set all Chapters' state to Unassigned
+    await Chapter.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
+
+    // 4. Set all Businesses' state to Unassigned
+    await Business.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
+
+    // (TargetStates in events could also be handled, or left as is, removing it from targetStates might be safer)
+    await Event.updateMany(
+      { targetStates: stateRegex },
+      { $pull: { targetStates: stateRegex } }
+    );
+
+    // Update Networking Modules to Unassigned
+    const unassigned = "Unassigned";
+    await Referral.updateMany({ referrerState: stateRegex }, { $set: { referrerState: unassigned } });
+    await Referral.updateMany({ referredState: stateRegex }, { $set: { referredState: unassigned } });
+    await OneToOne.updateMany({ initiatorState: stateRegex }, { $set: { initiatorState: unassigned } });
+    await OneToOne.updateMany({ memberState: stateRegex }, { $set: { memberState: unassigned } });
+    await ThankYouNote.updateMany({ giverState: stateRegex }, { $set: { giverState: unassigned } });
+    await ThankYouNote.updateMany({ receiverState: stateRegex }, { $set: { receiverState: unassigned } });
+
+    return { message: "State deleted (detached) successfully" };
   },
 };
 

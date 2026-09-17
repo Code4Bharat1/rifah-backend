@@ -33,6 +33,13 @@ router.post(
   eventController.registerPaidForEvent
 );
 
+router.post(
+  "/:id/attend",
+  authMiddleware,
+  validateObjectIdParam("id"),
+  eventController.markAttendance
+);
+
 // Admin Event Management
 router.post(
   "/",

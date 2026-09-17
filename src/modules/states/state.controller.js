@@ -42,6 +42,39 @@ export const stateController = {
     });
     return ApiResponse.success(res, removedAdmin, "State Admin revoked successfully");
   }),
+
+  updateState: asyncHandler(async (req, res) => {
+    const { stateName } = req.params;
+    const { newStateName } = req.body;
+    const decodedState = decodeURIComponent(stateName);
+    const result = await stateService.updateState(decodedState, newStateName);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "UPDATE",
+      targetModel: "State",
+      targetId: null,
+      summary: `Renamed state ${decodedState} to ${newStateName}`,
+      ipAddress: req.ip,
+    });
+    return ApiResponse.success(res, result, "State renamed successfully across all records");
+  }),
+
+  deleteState: asyncHandler(async (req, res) => {
+    const { stateName } = req.params;
+    const decodedState = decodeURIComponent(stateName);
+    const result = await stateService.deleteState(decodedState);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "DELETE",
+      targetModel: "State",
+      targetId: null,
+      summary: `Deleted state ${decodedState} (Detached all related records to Unassigned)`,
+      ipAddress: req.ip,
+    });
+    return ApiResponse.success(res, result, "State deleted and detached from all related records");
+  }),
 };
 
 export default stateController;

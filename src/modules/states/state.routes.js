@@ -37,5 +37,21 @@ router.delete(
   stateController.removeStateAdmin
 );
 
+// Edit State (Rename globally)
+router.put(
+  "/:stateName",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN),
+  stateController.updateState
+);
+
+// Delete State (Safe Detachment)
+router.delete(
+  "/:stateName",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN),
+  stateController.deleteState
+);
+
 export { router as stateRoutes };
 export default router;

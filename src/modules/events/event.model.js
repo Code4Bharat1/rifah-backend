@@ -44,6 +44,10 @@ const eventSchema = new mongoose.Schema(
       enum: ["Consumers", "Businesses", "Chapter Admins", "All"],
       default: ["All"],
     },
+    targetStates: {
+      type: [String],
+      default: ["All"],
+    },
     targetChapters: {
       type: [String],
       default: ["All"],
@@ -128,6 +132,11 @@ const eventSchema = new mongoose.Schema(
           enum: ["Confirmed", "Cancelled", "Attended"],
           default: "Confirmed",
         },
+        attendanceStatus: {
+          type: String,
+          enum: ["Pending", "Present", "Absent"],
+          default: "Pending",
+        },
         paymentStatus: {
           type: String,
           enum: ["Free", "Pending", "Paid"],
@@ -144,6 +153,10 @@ const eventSchema = new mongoose.Schema(
     coverImage: {
       type: String,
       default: "",
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
     },
   },
   {

@@ -107,4 +107,11 @@ export const eventController = {
     });
     return ApiResponse.success(res, null, "Event deleted successfully");
   }),
+
+  markAttendance: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user._id;
+    const event = await eventService.markAttendance(id, userId);
+    return ApiResponse.success(res, event, "Attendance marked successfully");
+  }),
 };
