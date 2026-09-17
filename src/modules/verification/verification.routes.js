@@ -51,7 +51,7 @@ router.get(
 );
 
 router.patch(
-  "/:id/review",
+  "/:id/status",
   authMiddleware,
   requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
