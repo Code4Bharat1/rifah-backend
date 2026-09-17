@@ -37,7 +37,7 @@ export const thankYouNoteService = {
    * business, and the selected counterpart (who is being thanked) is the GIVER.
    */
   create: async (userId, data) => {
-    const { counterpartBusinessId, amount, note } = data;
+    const { counterpartBusinessId, amount, note, referralId } = data;
 
     if (!counterpartBusinessId) {
       throw new BadRequestError("Please select the member you're thanking.");
@@ -68,6 +68,8 @@ export const thankYouNoteService = {
 
       amount: numericAmount,
       note: (note || "").trim(),
+      source: referralId ? "referral" : "direct",
+      referral: referralId || null,
     });
 
     return withPopulate(ThankYouNote.findById(record._id));

@@ -23,6 +23,8 @@ import { queryRoutes } from "../modules/queries/query.routes.js";
 import { stateRoutes } from "../modules/states/state.routes.js";
 import { oneToOneRoutes } from "../modules/networking/one-to-one.routes.js";
 import { thankYouNoteRoutes } from "../modules/networking/thank-you-note.routes.js";
+import { referralRoutes } from "../modules/networking/referral.routes.js";
+import { networkingAnalyticsRoutes } from "../modules/networking/analytics.routes.js";
 
 const apiRouter = Router();
 
@@ -53,6 +55,8 @@ apiRouter.use("/queries", queryRoutes);
 apiRouter.use("/states", stateRoutes);
 apiRouter.use("/one-to-ones", oneToOneRoutes);
 apiRouter.use("/thank-you-notes", thankYouNoteRoutes);
+apiRouter.use("/referrals", referralRoutes);
+apiRouter.use("/networking/analytics", networkingAnalyticsRoutes);
 
 export { apiRouter };
 export default apiRouter;
