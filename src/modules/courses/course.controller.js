@@ -1,6 +1,7 @@
 import { createCourse, updateCourse, getCourses, getCourseById, deleteCourse } from "./course.service.js";
 import { markContentWatched, getCourseProgress } from "./watchProgress.service.js";
 import { getBusinessCertificates } from "./certificate.service.js";
+import { Certificate } from "./certificate.model.js";
 import { Business } from "../businesses/business.model.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
@@ -46,14 +47,16 @@ export const courseController = {
     const course = await getCourseById(id, req.user);
     
     let progress = null;
+    let certificate = null;
     if (req.user.role === ROLES.BUSINESS_OWNER) {
       const businessId = await resolveBusinessId(req.user);
       if (businessId) {
         progress = await getCourseProgress(businessId, id);
+        certificate = await Certificate.findOne({ businessId, courseId: id }).lean();
       }
     }
 
-    return ApiResponse.success(res, { course, progress }, "Course details retrieved");
+    return ApiResponse.success(res, { course, progress, certificate }, "Course details retrieved");
   }),
 
   uploadContent: asyncHandler(async (req, res) => {

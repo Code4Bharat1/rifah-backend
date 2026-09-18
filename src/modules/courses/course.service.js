@@ -98,7 +98,34 @@ export const getCourses = async (user, query = {}) => {
      return [];
   }
 
-  return await Course.find(filter).sort({ createdAt: -1 }).populate('createdBy', 'firstName lastName');
+  const courses = await Course.find(filter).sort({ createdAt: -1 }).populate('createdBy', 'firstName lastName').lean();
+
+  if (user.role === ROLES.BUSINESS_OWNER) {
+    let businessId = user.business?._id || user.businessId;
+    if (!businessId && user.id) {
+      const biz = await Business.findOne({ owner: user.id }).select('_id');
+      businessId = biz?._id;
+    }
+
+    if (businessId && courses.length > 0) {
+      const courseIds = courses.map(c => c._id);
+      const [progressDocs, certDocs] = await Promise.all([
+        CourseProgress.find({ businessId, courseId: { $in: courseIds } }).lean(),
+        Certificate.find({ businessId, courseId: { $in: courseIds } }).lean(),
+      ]);
+
+      const progressMap = new Map(progressDocs.map(p => [String(p.courseId), p]));
+      const certMap = new Map(certDocs.map(c => [String(c.courseId), c]));
+
+      return courses.map(c => ({
+        ...c,
+        progress: progressMap.get(String(c._id)) || null,
+        certificate: certMap.get(String(c._id)) || null,
+      }));
+    }
+  }
+
+  return courses;
 };
 
 /**
