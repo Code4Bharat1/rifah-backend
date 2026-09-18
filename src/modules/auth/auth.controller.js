@@ -1,8 +1,17 @@
 import { authService } from "./auth.service.js";
+import { storageService } from "../../infrastructure/storage/storage.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 
 export const authController = {
+  uploadRegistrationPhoto: asyncHandler(async (req, res) => {
+    if (!req.file) {
+      return ApiResponse.error(res, "No image file uploaded", 400);
+    }
+    const fileUrl = await storageService.uploadFile(req.file, "logos");
+    return ApiResponse.success(res, { url: fileUrl, fileUrl }, "Photo uploaded successfully");
+  }),
+
   register: asyncHandler(async (req, res) => {
     const result = await authService.register(req.body);
     return ApiResponse.created(res, result, "Account registered successfully");

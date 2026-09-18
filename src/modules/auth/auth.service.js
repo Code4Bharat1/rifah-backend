@@ -171,7 +171,6 @@ export const authService = {
     pincode,
     founded,
     membership,
-    about,
     taxId,
     dob,
     joiningDate,
@@ -179,10 +178,16 @@ export const authService = {
     region = "national",
     currency = "INR",
     verifiedToken,
+    logo,
+    avatar,
+    ownerPhoto,
+    photo,
   }) => {
     const cleanEmail = email.toLowerCase().trim();
     const cleanBusinessEmail = businessEmail ? businessEmail.toLowerCase().trim() : "";
     const cleanTaxId = taxId ? taxId.trim().toUpperCase() : "";
+    const cleanLogo = (logo || "").trim();
+    const cleanAvatar = (avatar || ownerPhoto || photo || "").trim();
     const parsedDob = dob ? new Date(dob) : null;
     const parsedJoiningDate = joiningDate ? new Date(joiningDate) : new Date();
     const cleanTimezone = timezone && typeof timezone === "string" ? timezone.trim() : "Asia/Kolkata";
@@ -216,6 +221,8 @@ export const authService = {
       user.chapter = chapter || "";
       user.chapterId = chapterId;
       user.taxId = cleanTaxId;
+      if (cleanAvatar) user.avatar = cleanAvatar;
+      else if (cleanLogo && !user.avatar) user.avatar = cleanLogo;
       if (parsedDob && !isNaN(parsedDob.getTime())) user.dob = parsedDob;
       if (parsedJoiningDate && !isNaN(parsedJoiningDate.getTime())) user.joiningDate = parsedJoiningDate;
       if (cleanTimezone) user.timezone = cleanTimezone;
@@ -227,6 +234,7 @@ export const authService = {
         email: cleanEmail,
         passwordHash,
         phone: phone || "",
+        avatar: cleanAvatar || cleanLogo || "",
         chapter: chapter || "",
         chapterId,
         taxId: cleanTaxId,
@@ -270,6 +278,7 @@ export const authService = {
       name: (businessName || name).trim(),
       slug,
       owner: user._id,
+      logo: cleanLogo,
       contactPerson: (contactPerson || name || "").trim(),
       industry: industry || "General",
       categories,
