@@ -25,6 +25,7 @@ import { oneToOneRoutes } from "../modules/networking/one-to-one.routes.js";
 import { thankYouNoteRoutes } from "../modules/networking/thank-you-note.routes.js";
 import { referralRoutes } from "../modules/networking/referral.routes.js";
 import { networkingAnalyticsRoutes } from "../modules/networking/analytics.routes.js";
+import { courseRoutes } from "../modules/courses/course.routes.js";
 import birthdayRoutes from "../modules/birthdays/birthday.routes.js";
 import anniversaryRoutes from "../modules/anniversaries/anniversary.routes.js";
 
@@ -59,6 +60,7 @@ apiRouter.use("/one-to-ones", oneToOneRoutes);
 apiRouter.use("/thank-you-notes", thankYouNoteRoutes);
 apiRouter.use("/referrals", referralRoutes);
 apiRouter.use("/networking/analytics", networkingAnalyticsRoutes);
+apiRouter.use("/courses", courseRoutes);
 apiRouter.use("/birthdays", birthdayRoutes);
 apiRouter.use("/anniversaries", anniversaryRoutes);
 
