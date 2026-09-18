@@ -74,6 +74,13 @@ const followupSchema = new mongoose.Schema(
     scheduledAt: {
       type: Date,
     },
+    nextFollowUpAt: {
+      type: Date,
+    },
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
     notes: [
       {
         content: { type: String, required: true },
@@ -87,6 +94,20 @@ const followupSchema = new mongoose.Schema(
         message: { type: String },
         sentAt: { type: Date, default: Date.now },
         status: { type: String, default: "sent" },
+      },
+    ],
+    history: [
+      {
+        contactedAt: { type: Date, default: Date.now },
+        contactedBy: { type: String, default: "Admin" },
+        method: {
+          type: String,
+          enum: ["call", "whatsapp", "email", "in_person", "sms", "note"],
+          default: "call",
+        },
+        message: { type: String, default: "" },
+        notes: { type: String, default: "" },
+        status: { type: String },
       },
     ],
   },

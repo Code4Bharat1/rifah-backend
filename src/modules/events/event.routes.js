@@ -116,5 +116,13 @@ router.patch(
   eventController.toggleCheckin
 );
 
+router.post(
+  "/:id/finance",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.addFinance
+);
+
 export { router as eventRoutes };
 export default router;

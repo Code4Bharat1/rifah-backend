@@ -13,5 +13,7 @@ router.post("/sync-event/:eventId", followupController.syncEvent);
 router.patch("/:id/status", followupController.updateStatus);
 router.post("/:id/note", followupController.addNote);
 router.post("/:id/message", followupController.logMessage);
+router.post("/:id/history", followupController.addHistory);
+router.delete("/:id", followupController.deleteFollowup);
 
 export { router as followupRoutes };

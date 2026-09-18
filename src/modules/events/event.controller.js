@@ -133,4 +133,10 @@ export const eventController = {
     const result = await eventService.toggleCheckin(id, attendeeId, attendanceStatus || "Present");
     return ApiResponse.success(res, result, "Attendee check-in status updated");
   }),
+
+  addFinance: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const result = await eventService.addFinanceTransaction(id, req.body, req.user);
+    return ApiResponse.success(res, result, "Financial transaction saved");
+  }),
 };

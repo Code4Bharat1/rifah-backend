@@ -87,4 +87,33 @@ export const followupController = {
       next(err);
     }
   },
+
+  async addHistory(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { method, message, notes, status, nextFollowUpAt } = req.body;
+      const contactedBy = req.user?.name || "Admin";
+      const updated = await followupService.addHistory(id, {
+        contactedBy,
+        method,
+        message,
+        notes,
+        status,
+        nextFollowUpAt,
+      });
+      res.json({ success: true, data: updated });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async deleteFollowup(req, res, next) {
+    try {
+      const { id } = req.params;
+      const deleted = await followupService.deleteFollowup(id);
+      res.json({ success: true, message: "Followup deleted successfully", data: deleted });
+    } catch (err) {
+      next(err);
+    }
+  },
 };
