@@ -11,6 +11,7 @@ import { getChapterFilter, resolveChapterIdByName } from "../../shared/utils/cha
 import { User } from "../users/user.model.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { notificationService } from "../notifications/notification.service.js";
 import { categoryService } from "../categories/category.service.js";
 
 /**
@@ -597,6 +598,34 @@ export const businessService = {
       } catch (err) {
         console.error("Failed to send role upgrade email:", err);
       }
+    }
+
+    // Notify chapter members to welcome the new business
+    try {
+      if (chapter || chapterId) {
+        const chapterBizFilter = {
+          role: ROLES.BUSINESS_OWNER,
+          _id: { $ne: user._id },
+          status: "Active",
+          $or: [
+            ...(chapterId ? [{ chapterId }] : []),
+            ...(chapter ? [{ chapter: new RegExp(chapter.replace(/\b(chapter|chamber)\b/gi, "").trim(), "i") }] : []),
+          ],
+        };
+        const chapterUsers = await User.find(chapterBizFilter).select("_id name");
+        for (const chapUser of chapterUsers) {
+          await notificationService.createNotification({
+            recipientId: chapUser._id,
+            type: "System",
+            title: `👋 Welcome New Member: ${business.name}!`,
+            body: `${business.name} (${business.industry || "Business"}) has joined our ${chapter || "RIFAH"} Chapter. Connect and say welcome!`,
+            entityId: business._id,
+            link: `/biz/messages?recipient=${user._id}`,
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error("Failed to notify chapter members on admin business creation:", notifErr);
     }
 
     return business;
