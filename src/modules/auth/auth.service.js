@@ -8,6 +8,7 @@ import crypto from "crypto";
 import { hashPassword, comparePassword } from "../../infrastructure/auth/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../infrastructure/auth/jwt.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { logger } from "../../infrastructure/logger/logger.js";
 import { notificationService } from "../notifications/notification.service.js";
 import {
   ConflictError,
@@ -312,9 +313,20 @@ export const authService = {
       await OtpVerification.deleteMany({ email: cleanEmail });
     }
 
+    // Send Rich Welcome Email to newly joined member
     try {
-      await emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role });
-    } catch (err) {}
+      await emailService.sendWelcomeEmail({
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        businessName: business.name,
+        chapter: business.chapter,
+        industry: business.industry,
+        membership: business.membership,
+      });
+    } catch (err) {
+      logger.warn("[AUTH] Failed to send welcome email:", err);
+    }
 
     // 1. Notify the Chapter Admin(s) of the chapter selected during registration
     try {
@@ -327,6 +339,7 @@ export const authService = {
       };
       const chapterAdmins = await User.find(chapterAdminFilter);
       for (const admin of chapterAdmins) {
+        // In-app notification
         await notificationService.createNotification({
           recipientId: admin._id,
           type: "Verification",
@@ -335,6 +348,24 @@ export const authService = {
           entityId: verification._id,
           link: `/biz/messages?recipient=${user._id}`,
         });
+
+        // Email Alert to Chapter Admin
+        if (admin.email) {
+          try {
+            await emailService.sendNewMemberChapterAlertEmail({
+              adminEmail: admin.email,
+              adminName: admin.name,
+              memberName: user.name,
+              businessName: business.name,
+              chapter: business.chapter,
+              industry: business.industry,
+              phone: user.phone,
+              email: user.email,
+            });
+          } catch (adminMailErr) {
+            logger.warn("[AUTH] Failed to send new member chapter alert email to admin:", adminMailErr);
+          }
+        }
       }
 
       // 2. Notify all active business owners under this chapter so they can welcome the new member

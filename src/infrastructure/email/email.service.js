@@ -838,36 +838,149 @@ RIFAH Chamber of Commerce & Industry
   },
 
   /**
-   * Sends a Welcome Email on user registration
+   * Sends a Welcome Email on user/business registration
    */
-  sendWelcomeEmail: async ({ email, name, role }) => {
+  sendWelcomeEmail: async ({ email, name, role, businessName, chapter, industry, membership }) => {
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
-    const subject = `Welcome to RIFAH Chamber of Commerce & Industry! 🎉`;
+    const subject = businessName
+      ? `🎉 Welcome to RIFAH Chamber of Commerce & Industry, ${businessName}!`
+      : `Welcome to RIFAH Chamber of Commerce & Industry! 🎉`;
+    const portalUrl = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+
     const html = `
-      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
-        <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
-        <div style="padding: 32px;">
-          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 48px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 24px;">RIFAH CONNECT</h1>`}
-          <h2 style="color: #0f172a; font-size: 20px; margin-top: 0;">Welcome to RIFAH Connect!</h2>
-          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${name || "Member"}</strong>,</p>
-          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Thank you for registering on <strong>RIFAH Connect</strong> - India's premier Chamber of Commerce & Business Network.</p>
-          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
-            <p style="margin: 0 0 8px 0; font-size: 13px; color: #0f172a;"><strong>Account Email:</strong> ${email}</p>
-            <p style="margin: 0; font-size: 13px; color: #0f172a;"><strong>Account Type:</strong> ${role === "business_owner" ? "Business Member" : "Buyer Account"}</p>
+      <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; background-color: #ffffff; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+        <!-- Top Gradient Bar -->
+        <div style="height: 6px; background: linear-gradient(90deg, #10b981 0%, #0284c7 50%, #6366f1 100%);"></div>
+
+        <div style="padding: 36px 32px 32px 32px;">
+          <!-- Header Branding -->
+          <div style="text-align: center; margin-bottom: 28px;">
+            ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH Chamber" style="height: 52px; width: auto; margin-bottom: 12px;" />` : `<h1 style="color: #0f172a; font-size: 26px; margin: 0; font-weight: 800;">RIFAH CONNECT</h1>`}
+            <p style="color: #64748b; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin: 4px 0 0 0;">
+              Chamber of Commerce & Industry
+            </p>
           </div>
-          <p style="color: #475569; font-size: 14px; line-height: 1.6;">You can now explore verified member businesses, post procurement requirements (RFQs), and participate in exclusive chamber networking events.</p>
-          <div style="margin-top: 24px;">
-            <a href="http://localhost:3000/login" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Go to My Dashboard →</a>
+
+          <!-- Hero Greeting Card -->
+          <div style="background: linear-gradient(135deg, #f0fdf4 0%, #f0f9ff 100%); border: 1px solid #bae6fd; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 28px;">
+            <span style="font-size: 32px; display: inline-block; margin-bottom: 8px;">👋 🎉</span>
+            <h2 style="color: #0f172a; font-size: 22px; font-weight: 800; margin: 0 0 8px 0;">
+              Welcome to the RIFAH Family!
+            </h2>
+            <p style="color: #334155; font-size: 14px; line-height: 1.6; margin: 0;">
+              Dear <strong>${name || "Esteemed Member"}</strong>, congratulations on successfully registering <strong>${businessName || "your business"}</strong> with the RIFAH Chamber of Commerce.
+            </p>
           </div>
+
+          <!-- Membership & Business Details -->
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
+            <h3 style="font-size: 14px; font-weight: 700; color: #0f172a; margin: 0 0 14px 0; text-transform: uppercase; letter-spacing: 0.5px;">
+              📋 Your Registered Profile Details
+            </h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              ${businessName ? `<tr><td style="padding: 6px 0; color: #64748b;"><strong>Business Name:</strong></td><td style="text-align: right; font-weight: 700; color: #0f172a;">${businessName}</td></tr>` : ""}
+              ${chapter ? `<tr><td style="padding: 6px 0; color: #64748b;"><strong>Assigned Chapter:</strong></td><td style="text-align: right; font-weight: 700; color: #0284c7;">${chapter} Chapter</td></tr>` : ""}
+              ${industry ? `<tr><td style="padding: 6px 0; color: #64748b;"><strong>Industry / Category:</strong></td><td style="text-align: right; color: #0f172a;">${industry}</td></tr>` : ""}
+              ${membership ? `<tr><td style="padding: 6px 0; color: #64748b;"><strong>Membership Tier:</strong></td><td style="text-align: right; font-weight: 700; color: #16a34a;">${membership}</td></tr>` : ""}
+              <tr><td style="padding: 6px 0; color: #64748b;"><strong>Registered Email:</strong></td><td style="text-align: right; color: #0f172a;">${email}</td></tr>
+            </table>
+          </div>
+
+          <!-- Next Steps / Opportunities -->
+          <div style="margin-bottom: 28px;">
+            <h4 style="font-size: 14px; font-weight: 700; color: #0f172a; margin: 0 0 12px 0;">
+              ✨ What you can do next on RIFAH Connect:
+            </h4>
+            <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 13px; line-height: 1.7;">
+              <li><strong>Complete Your Business Showcase:</strong> Add your catalogue, products, brochures, and certificates.</li>
+              <li><strong>Connect with Chapter Members:</strong> Network 1-to-1 with fellow entrepreneurs in your city.</li>
+              <li><strong>Access Verified Business Leads:</strong> Receive targeted RFQs and buyer requirements directly.</li>
+              <li><strong>Attend Chamber Events:</strong> Participate in high-impact state and national networking conclaves.</li>
+            </ul>
+          </div>
+
+          <!-- CTA Button -->
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${portalUrl}/login" style="background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%); color: #ffffff; padding: 14px 34px; border-radius: 12px; font-weight: 700; font-size: 14px; text-decoration: none; display: inline-block; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);">
+              Log in to My Business Dashboard →
+            </a>
+          </div>
+
+          <!-- Chamber Quote -->
+          <div style="background: #f8fafc; border-left: 4px solid #0284c7; padding: 14px 18px; border-radius: 0 10px 10px 0; margin: 24px 0 20px 0;">
+            <p style="color: #334155; font-size: 13px; font-style: italic; margin: 0; line-height: 1.5;">
+              "Building ethical, empowered, and prosperous businesses across India and beyond."
+            </p>
+          </div>
+
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
-          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Central Admin</p>
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0; line-height: 1.5;">
+            RIFAH Chamber of Commerce & Industry · Central Administration<br />
+            For support or queries, contact your Chapter Admin or reply to this email.
+          </p>
         </div>
       </div>
     `;
 
     const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
     return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
+
+  /**
+   * Sends an Alert Email to the Chapter Admin when a new business joins their chapter
+   */
+  sendNewMemberChapterAlertEmail: async ({ adminEmail, adminName, memberName, businessName, chapter, industry, phone, email: memberEmail }) => {
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+    const subject = `👋 New Member Alert: "${businessName}" has joined ${chapter || "your chapter"}!`;
+    const portalUrl = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+
+    const html = `
+      <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 18px; overflow: hidden; background-color: #ffffff; box-shadow: 0 8px 20px rgba(0,0,0,0.04);">
+        <div style="height: 6px; background: linear-gradient(90deg, #6366f1 0%, #0284c7 100%);"></div>
+        <div style="padding: 32px;">
+          <div style="text-align: center; margin-bottom: 24px;">
+            ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 46px; width: auto; margin-bottom: 8px;" />` : `<h1 style="color: #0f172a; font-size: 22px;">RIFAH CONNECT</h1>`}
+            <span style="background-color: #e0e7ff; color: #4338ca; font-size: 11px; font-weight: 800; padding: 4px 14px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px;">
+              CHAPTER ADMIN NOTIFICATION
+            </span>
+          </div>
+
+          <h2 style="color: #0f172a; font-size: 19px; font-weight: 800; margin: 0 0 8px 0; text-align: center;">
+            New Business Joined Your Chapter! 👋
+          </h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6; text-align: center; margin: 0 0 20px 0;">
+            Dear Chapter Admin <strong>${adminName || "Leader"}</strong>, a new business has registered in <strong>${chapter || "your chapter"}</strong>:
+          </p>
+
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #334155;">
+              <tr><td style="padding: 5px 0; color: #64748b;"><strong>Business Name:</strong></td><td style="text-align: right; font-weight: 700; color: #0f172a;">${businessName}</td></tr>
+              <tr><td style="padding: 5px 0; color: #64748b;"><strong>Owner / Contact:</strong></td><td style="text-align: right; font-weight: 600; color: #0f172a;">${memberName}</td></tr>
+              <tr><td style="padding: 5px 0; color: #64748b;"><strong>Industry / Category:</strong></td><td style="text-align: right; color: #0f172a;">${industry || "General"}</td></tr>
+              ${phone ? `<tr><td style="padding: 5px 0; color: #64748b;"><strong>Phone:</strong></td><td style="text-align: right; color: #0f172a;">${phone}</td></tr>` : ""}
+              <tr><td style="padding: 5px 0; color: #64748b;"><strong>Email:</strong></td><td style="text-align: right; color: #0f172a;">${memberEmail}</td></tr>
+              <tr><td style="padding: 5px 0; color: #64748b;"><strong>Chapter:</strong></td><td style="text-align: right; font-weight: 700; color: #0284c7;">${chapter} Chapter</td></tr>
+            </table>
+          </div>
+
+          <div style="text-align: center; margin-top: 24px;">
+            <a href="${portalUrl}/chapter-admin" style="background: #4f46e5; color: #ffffff; padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 13px; text-decoration: none; display: inline-block;">
+              Open Chapter Dashboard & Welcome Member →
+            </a>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 16px 0;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">
+            RIFAH Chamber of Commerce & Industry · Chapter Operations
+          </p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: adminEmail, subject, html, attachments });
   },
 
   /**
