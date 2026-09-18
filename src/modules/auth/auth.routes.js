@@ -14,7 +14,15 @@ import {
   validateCompleteOnboarding,
 } from "./auth.validation.js";
 
+import { upload } from "../../middleware/upload.middleware.js";
+
 const router = Router();
+
+router.post(
+  "/upload-photo",
+  upload.single("photo"),
+  authController.uploadRegistrationPhoto
+);
 
 router.post(
   "/register",
