@@ -28,22 +28,38 @@ export const categoryService = {
     if (!cleanName) return null;
 
     const slug = generateSlug(cleanName);
-    const existing = await Category.findOne({ slug });
-    if (existing) return existing;
+    const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+    // 1. Try finding by slug OR by case-insensitive name
     try {
+      const existing = await Category.findOne({
+        $or: [
+          { slug },
+          { name: new RegExp(`^${escapedName}$`, "i") },
+        ],
+      });
+      if (existing) return existing;
+
       return await Category.create({
         name: cleanName,
         slug,
         parent: (parent || "").trim(),
       });
     } catch (err) {
-      // Handle race on the unique slug/name index by returning the winner
+      // 2. Handle race condition or duplicate key on name/slug
       if (err.code === 11000) {
-        const winner = await Category.findOne({ slug });
-        if (winner) return winner;
+        try {
+          const winner = await Category.findOne({
+            $or: [
+              { slug },
+              { name: new RegExp(`^${escapedName}$`, "i") },
+            ],
+          });
+          if (winner) return winner;
+        } catch {}
       }
-      throw err;
+      // Never crash caller during auxiliary category creation
+      return null;
     }
   },
 

@@ -1260,4 +1260,117 @@ RIFAH Chamber of Commerce & Industry
     const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
     return emailService.sendEmail({ to: email, subject, html, attachments });
   },
+
+  /**
+   * Sends an automated, celebratory Birthday Wish Email to a business owner / member
+   */
+  sendBirthdayWishEmail: async ({ email, name, businessName, chapter }) => {
+    const subject = `🎉 Happy Birthday from RIFAH Chamber of Commerce! 🎂`;
+    const logoPath = path.join(process.cwd(), "public", "rifah1-logo.png");
+    const hasLogo = fs.existsSync(logoPath);
+    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/biz`;
+
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+        <!-- Gold & Royal Blue Header Gradient -->
+        <div style="height: 8px; background: linear-gradient(90deg, #f59e0b, #eab308, #0284c7, #0f172a);"></div>
+        
+        <div style="padding: 36px 32px; text-align: center;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 48px; width: auto; margin-bottom: 24px;" />` : `<h1 style="color: #0b192c; font-size: 22px; margin-bottom: 20px;">RIFAH CONNECT</h1>`}
+          
+          <div style="display: inline-block; background-color: #fef3c7; border: 1px solid #fde68a; border-radius: 9999px; padding: 6px 18px; margin-bottom: 16px;">
+            <span style="color: #b45309; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">✨ Birthday Greetings ✨</span>
+          </div>
+
+          <h1 style="color: #0f172a; font-size: 26px; font-weight: 800; margin: 0 0 12px 0; line-height: 1.3;">
+            Happy Birthday, ${name || "Esteemed Member"}! 🎂🎉
+          </h1>
+
+          <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+            The entire <strong>RIFAH Chamber of Commerce & Industry</strong> family${chapter ? ` and the <strong>${chapter} Chapter</strong>` : ""} wishes you a joyful, prosperous, and blessed birthday!
+          </p>
+
+          <div style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: left;">
+            <p style="color: #1e293b; font-size: 14px; line-height: 1.6; margin: 0 0 12px 0; font-style: italic;">
+              "May this year bring immense expansion, fruitful partnerships, and thriving success to you and <strong>${businessName || "your business"}</strong>."
+            </p>
+            <p style="color: #64748b; font-size: 13px; margin: 0;">
+              — President & Central Leadership, RIFAH Chamber of Commerce
+            </p>
+          </div>
+
+          <div style="margin-top: 30px;">
+            <a href="${portalUrl}" style="background: linear-gradient(135deg, #0284c7, #0369a1); color: #ffffff; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; display: inline-block; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);">
+              Visit Business Dashboard
+            </a>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 36px 0 20px 0;" />
+          <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+            RIFAH Chamber of Commerce & Industry · Together for a Sustainable Future
+          </p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
+
+  /**
+   * Sends an automated, celebratory Membership Anniversary Wish Email
+   */
+  sendAnniversaryWishEmail: async ({ email, name, businessName, chapter, yearsCompleted = 1 }) => {
+    const ordinal = yearsCompleted === 1 ? "1st" : yearsCompleted === 2 ? "2nd" : yearsCompleted === 3 ? "3rd" : `${yearsCompleted}th`;
+    const subject = `🎉 Happy ${ordinal} Anniversary with RIFAH Chamber of Commerce! 🎊`;
+    const logoPath = path.join(process.cwd(), "public", "rifah1-logo.png");
+    const hasLogo = fs.existsSync(logoPath);
+    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/biz`;
+
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+        <!-- Emerald & Royal Blue Header Gradient -->
+        <div style="height: 8px; background: linear-gradient(90deg, #10b981, #0284c7, #6366f1, #0f172a);"></div>
+        
+        <div style="padding: 36px 32px; text-align: center;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 48px; width: auto; margin-bottom: 24px;" />` : `<h1 style="color: #0b192c; font-size: 22px; margin-bottom: 20px;">RIFAH CONNECT</h1>`}
+          
+          <div style="display: inline-block; background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 9999px; padding: 6px 18px; margin-bottom: 16px;">
+            <span style="color: #047857; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">🌟 ${ordinal} Membership Milestone 🌟</span>
+          </div>
+
+          <h1 style="color: #0f172a; font-size: 26px; font-weight: 800; margin: 0 0 12px 0; line-height: 1.3;">
+            Happy ${ordinal} Anniversary with RIFAH! 🎊🌟
+          </h1>
+
+          <p style="color: #475569; font-size: 15px; line-height: 1.6; margin: 0 0 20px 0;">
+            Congratulations to <strong>${name || "Esteemed Member"}</strong> and <strong>${businessName || "your business"}</strong> on completing <strong>${yearsCompleted} successful year${yearsCompleted > 1 ? "s" : ""}</strong> of partnership with the <strong>RIFAH Chamber of Commerce & Industry</strong>${chapter ? ` (${chapter} Chapter)` : ""}.
+          </p>
+
+          <div style="background: linear-gradient(135deg, #f0fdf4, #f8fafc); border: 1px solid #bbf7d0; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: left;">
+            <p style="color: #166534; font-size: 14px; line-height: 1.6; margin: 0 0 12px 0; font-style: italic;">
+              "Thank you for being an indispensable part of the RIFAH business ecosystem. Together, we continue building stronger businesses and a brighter tomorrow."
+            </p>
+            <p style="color: #64748b; font-size: 13px; margin: 0;">
+              — Central Leadership & Chapter Administration, RIFAH Chamber
+            </p>
+          </div>
+
+          <div style="margin-top: 30px;">
+            <a href="${portalUrl}" style="background: linear-gradient(135deg, #059669, #0284c7); color: #ffffff; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; display: inline-block; box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);">
+              View Chamber Network & Dashboard
+            </a>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 36px 0 20px 0;" />
+          <p style="color: #94a3b8; font-size: 12px; margin: 0;">
+            RIFAH Chamber of Commerce & Industry · Together for a Sustainable Future
+          </p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
 };

@@ -87,6 +87,16 @@ const businessSchema = new mongoose.Schema(
       enum: ["INR", "USD"],
       default: "INR",
     },
+    dob: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    timezone: {
+      type: String,
+      trim: true,
+      default: "Asia/Kolkata",
+    },
     membership: {
       type: String,
       default: "Free",
@@ -186,6 +196,28 @@ const businessSchema = new mongoose.Schema(
     logo: {
       type: String,
       default: "",
+    },
+    dob: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    joiningDate: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+    timezone: {
+      type: String,
+      default: "Asia/Kolkata",
+    },
+    lastBirthdayWishYear: {
+      type: Number,
+      default: 0,
+    },
+    lastAnniversaryWishYear: {
+      type: Number,
+      default: 0,
     },
     coverImage: {
       type: String,

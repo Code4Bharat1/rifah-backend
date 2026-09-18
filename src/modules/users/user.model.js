@@ -54,6 +54,29 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    dob: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    timezone: {
+      type: String,
+      trim: true,
+      default: "Asia/Kolkata",
+    },
+    lastBirthdayWishYear: {
+      type: Number,
+      default: 0,
+    },
+    joiningDate: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+    lastAnniversaryWishYear: {
+      type: Number,
+      default: 0,
+    },
     role: {
       type: String,
       enum: Object.values(ROLES),

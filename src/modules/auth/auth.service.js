@@ -172,6 +172,9 @@ export const authService = {
     membership,
     about,
     taxId,
+    dob,
+    joiningDate,
+    timezone = "Asia/Kolkata",
     region = "national",
     currency = "INR",
     verifiedToken,
@@ -179,6 +182,9 @@ export const authService = {
     const cleanEmail = email.toLowerCase().trim();
     const cleanBusinessEmail = businessEmail ? businessEmail.toLowerCase().trim() : "";
     const cleanTaxId = taxId ? taxId.trim().toUpperCase() : "";
+    const parsedDob = dob ? new Date(dob) : null;
+    const parsedJoiningDate = joiningDate ? new Date(joiningDate) : new Date();
+    const cleanTimezone = timezone && typeof timezone === "string" ? timezone.trim() : "Asia/Kolkata";
 
     // If verifiedToken was passed, ensure it is verified
     if (verifiedToken) {
@@ -209,6 +215,9 @@ export const authService = {
       user.chapter = chapter || "";
       user.chapterId = chapterId;
       user.taxId = cleanTaxId;
+      if (parsedDob && !isNaN(parsedDob.getTime())) user.dob = parsedDob;
+      if (parsedJoiningDate && !isNaN(parsedJoiningDate.getTime())) user.joiningDate = parsedJoiningDate;
+      if (cleanTimezone) user.timezone = cleanTimezone;
       await user.save();
     } else {
       const passwordHash = await hashPassword(password);
@@ -220,6 +229,9 @@ export const authService = {
         chapter: chapter || "",
         chapterId,
         taxId: cleanTaxId,
+        dob: parsedDob && !isNaN(parsedDob.getTime()) ? parsedDob : null,
+        joiningDate: parsedJoiningDate && !isNaN(parsedJoiningDate.getTime()) ? parsedJoiningDate : new Date(),
+        timezone: cleanTimezone,
         role: ROLES.BUSINESS_OWNER,
         isProfileComplete: true,
       });
@@ -241,11 +253,15 @@ export const authService = {
     // is saved to the shared Category list so it appears for future businesses.
     const cleanCategory = (industry || "").trim();
     const cleanSubCategory = (subCategory || "").trim();
-    if (cleanCategory) {
-      await categoryService.ensureCategory(cleanCategory);
-    }
-    if (cleanSubCategory) {
-      await categoryService.ensureCategory(cleanSubCategory, cleanCategory);
+    try {
+      if (cleanCategory) {
+        await categoryService.ensureCategory(cleanCategory);
+      }
+      if (cleanSubCategory) {
+        await categoryService.ensureCategory(cleanSubCategory, cleanCategory);
+      }
+    } catch (catErr) {
+      logger.warn("[AUTH] Category ensure warning:", catErr);
     }
     const categories = [cleanCategory, cleanSubCategory].filter(Boolean);
 
@@ -267,6 +283,9 @@ export const authService = {
       membership: cleanMembership,
       about: about || "",
       taxId: cleanTaxId,
+      dob: parsedDob && !isNaN(parsedDob.getTime()) ? parsedDob : null,
+      joiningDate: parsedJoiningDate && !isNaN(parsedJoiningDate.getTime()) ? parsedJoiningDate : new Date(),
+      timezone: cleanTimezone,
       region: region === "international" ? "international" : "national",
       currency: currency === "USD" || region === "international" ? "USD" : "INR",
       phone: phone || "",
@@ -297,7 +316,7 @@ export const authService = {
       await emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role });
     } catch (err) {}
 
-    // Notify the Chapter Admin(s) of the chapter selected during registration
+    // 1. Notify the Chapter Admin(s) of the chapter selected during registration
     try {
       const chapterAdminFilter = {
         role: ROLES.CHAPTER_ADMIN,
@@ -311,14 +330,38 @@ export const authService = {
         await notificationService.createNotification({
           recipientId: admin._id,
           type: "Verification",
-          title: "New Business Pending Verification",
-          body: `New business "${business.name}" has registered under your chapter (${chapter || "your chapter"}) and is waiting for your review in the Verify queue.`,
+          title: `👋 New Member Joined: ${business.name}`,
+          body: `New business "${business.name}" (${business.industry || "Business"}) has joined your chapter (${chapter || "your chapter"}). Say hello and welcome them to RIFAH!`,
           entityId: verification._id,
-          link: "/chapter-admin/verification",
+          link: `/biz/messages?recipient=${user._id}`,
         });
       }
+
+      // 2. Notify all active business owners under this chapter so they can welcome the new member
+      if (chapter || chapterId) {
+        const chapterBizFilter = {
+          role: ROLES.BUSINESS_OWNER,
+          _id: { $ne: user._id },
+          status: "Active",
+          $or: [
+            ...(chapterId ? [{ chapterId }] : []),
+            ...(chapter ? [{ chapter: new RegExp(chapter.replace(/\b(chapter|chamber)\b/gi, "").trim(), "i") }] : []),
+          ],
+        };
+        const chapterUsers = await User.find(chapterBizFilter).select("_id name");
+        for (const chapUser of chapterUsers) {
+          await notificationService.createNotification({
+            recipientId: chapUser._id,
+            type: "System",
+            title: `👋 Welcome New Member: ${business.name}!`,
+            body: `${business.name} (${business.industry || "Business"}) has joined our ${chapter || "RIFAH"} Chapter. Connect and say welcome!`,
+            entityId: business._id,
+            link: `/biz/messages?recipient=${user._id}`,
+          });
+        }
+      }
     } catch (notifErr) {
-      console.error("Failed to notify chapter admins on new registration:", notifErr);
+      console.error("Failed to notify chapter members on new registration:", notifErr);
     }
 
     const tokenPayload = {

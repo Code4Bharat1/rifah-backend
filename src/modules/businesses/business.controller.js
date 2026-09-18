@@ -22,6 +22,11 @@ export const businessController = {
     return ApiResponse.success(res, business, "My business profile retrieved");
   }),
 
+  getNewChapterMembers: asyncHandler(async (req, res) => {
+    const members = await businessService.getNewChapterMembers(req.user);
+    return ApiResponse.success(res, members, "New chapter members retrieved");
+  }),
+
   createBusiness: asyncHandler(async (req, res) => {
     const business = await businessService.createBusiness(req.body, req.user.id);
     return ApiResponse.created(res, business, "Business profile created successfully");
@@ -131,5 +136,10 @@ export const businessController = {
     const { gstin } = req.body;
     const result = await gstService.fetchDetails(gstin);
     return ApiResponse.success(res, result, "Company details retrieved from GSTIN");
+  }),
+
+  getNewChapterMembers: asyncHandler(async (req, res) => {
+    const newMembers = await businessService.getNewChapterMembers(req.user);
+    return ApiResponse.success(res, { newMembers }, "New chapter members fetched successfully");
   }),
 };

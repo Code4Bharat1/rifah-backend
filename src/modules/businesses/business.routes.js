@@ -22,6 +22,7 @@ router.post("/gst/details", gstRateLimitMiddleware, businessController.getGstDet
 
 // Authenticated Business Owner routes
 router.get("/me", authMiddleware, businessController.getMyBusiness);
+router.get("/new-members", authMiddleware, businessController.getNewChapterMembers);
 router.get("/:identifier", businessController.getBusinessByIdOrSlug);
 router.post(
   "/",

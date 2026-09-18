@@ -20,12 +20,14 @@ import { categoryService } from "../categories/category.service.js";
 const ensureCategoriesExist = async (category, subCategory) => {
   const cleanCategory = (category || "").trim();
   const cleanSubCategory = (subCategory || "").trim();
-  if (cleanCategory) {
-    await categoryService.ensureCategory(cleanCategory);
-  }
-  if (cleanSubCategory) {
-    await categoryService.ensureCategory(cleanSubCategory, cleanCategory);
-  }
+  try {
+    if (cleanCategory) {
+      await categoryService.ensureCategory(cleanCategory);
+    }
+    if (cleanSubCategory) {
+      await categoryService.ensureCategory(cleanSubCategory, cleanCategory);
+    }
+  } catch {}
   return [cleanCategory, cleanSubCategory].filter(Boolean);
 };
 
@@ -348,7 +350,7 @@ export const businessService = {
       "city", "state", "address", "pincode", "chapter", "chapterId", "employees",
       "founded", "website", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
       "accent", "logo", "coverImage", "gallery", "productsSummary",
-      "servicesSummary", "certifications"
+      "servicesSummary", "certifications", "dob", "timezone"
     ];
 
     const sanitizedData = {};
@@ -414,7 +416,7 @@ export const businessService = {
         "city", "state", "address", "pincode", "chapter", "employees",
         "founded", "website", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
         "accent", "logo", "coverImage", "gallery", "productsSummary",
-        "servicesSummary", "certifications"
+        "servicesSummary", "certifications", "dob", "timezone"
       ];
       sanitizedData = {};
       for (const key of ALLOWED_OWNER_FIELDS) {
@@ -455,6 +457,16 @@ export const businessService = {
       new: true,
       runValidators: true,
     });
+
+    if (business.owner && (sanitizedData.dob !== undefined || sanitizedData.joiningDate !== undefined || sanitizedData.timezone !== undefined || sanitizedData.phone !== undefined || sanitizedData.whatsapp !== undefined)) {
+      const userUpdate = {};
+      if (sanitizedData.dob !== undefined) userUpdate.dob = sanitizedData.dob ? new Date(sanitizedData.dob) : null;
+      if (sanitizedData.joiningDate !== undefined) userUpdate.joiningDate = sanitizedData.joiningDate ? new Date(sanitizedData.joiningDate) : new Date();
+      if (sanitizedData.timezone !== undefined) userUpdate.timezone = sanitizedData.timezone;
+      if (sanitizedData.phone !== undefined) userUpdate.phone = sanitizedData.phone;
+      if (sanitizedData.whatsapp !== undefined) userUpdate.whatsapp = sanitizedData.whatsapp;
+      await User.findByIdAndUpdate(business.owner, userUpdate);
+    }
 
     return updated;
   },
@@ -609,4 +621,62 @@ export const businessService = {
     const updated = await Business.findByIdAndUpdate(id, updates, { new: true });
     return updated;
   },
+
+  /**
+   * Get new chapter members joined in the last 7 days
+   */
+  getNewChapterMembers: async (currentUser) => {
+    if (!currentUser) return [];
+
+    const currentUserId = currentUser.id || currentUser._id;
+    const userDoc = await User.findById(currentUserId).select("role chapter state");
+    const myBiz = await Business.findOne({ owner: currentUserId }).select("chapter");
+
+    const effectiveRole = userDoc?.role || currentUser.role;
+    const effectiveChapter = userDoc?.chapter || myBiz?.chapter || currentUser.chapter;
+    const isAdmin = ["super_admin", "secretariat"].includes(effectiveRole);
+    const isStateAdmin = effectiveRole === "state_admin";
+
+    // 7 days window for recent new members
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const query = {
+      createdAt: { $gte: sevenDaysAgo },
+      owner: { $ne: currentUserId },
+      status: { $in: ["Active", "active", "Live", "Pending Verification", "pending"] },
+    };
+
+    if (isStateAdmin && (userDoc?.state || currentUser.state)) {
+      query.state = userDoc?.state || currentUser.state;
+    } else if (!isAdmin && effectiveChapter) {
+      query.chapter = effectiveChapter;
+    }
+
+    const businesses = await Business.find(query)
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .populate("owner", "name email phone whatsapp avatar")
+      .lean();
+
+    return businesses.map((b) => {
+      const owner = b.owner || {};
+      return {
+        businessId: b._id,
+        businessName: b.name,
+        businessSlug: b.slug,
+        industry: b.industry || b.categories?.[0] || "Business",
+        city: b.city || "",
+        chapter: b.chapter || "",
+        userId: owner._id || b.owner,
+        userName: owner.name || b.contactPerson || b.name,
+        userAvatar: owner.avatar || "",
+        phone: b.phone || owner.phone || "",
+        whatsapp: b.whatsapp || owner.whatsapp || b.phone || owner.phone || "",
+        email: owner.email || b.email || "",
+        joinedAt: b.createdAt,
+      };
+    });
+  },
 };
+
