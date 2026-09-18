@@ -492,6 +492,126 @@ export const eventService = {
   },
 
   /**
+   * RIFAH Operations Center: Get full operations state for an event
+   */
+  getOperations: async (eventId, user) => {
+    const event = await Event.findById(eventId).populate("registeredUsers.user", "name email phone mobile company city membershipStatus");
+    if (!event) throw new NotFoundError("Event not found");
+
+    const registeredUsers = event.registeredUsers || [];
+    const totalRegistered = registeredUsers.length;
+    const checkedIn = registeredUsers.filter((r) => r.attendanceStatus === "Present").length;
+    const membersCount = registeredUsers.filter((r) => {
+      const u = r.user;
+      return u?.membershipStatus && u.membershipStatus !== "None" && u.membershipStatus !== "Expired";
+    }).length;
+
+    let totalFees = 0;
+    if (event.isPaid && event.ticketPrice) {
+      totalFees = totalRegistered * event.ticketPrice;
+    } else if (event.finance?.moneyIn?.length) {
+      totalFees = event.finance.moneyIn.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    }
+
+    return {
+      event: {
+        _id: event._id,
+        title: event.title,
+        slug: event.slug,
+        date: event.date,
+        time: event.time,
+        venue: event.venue,
+        city: event.city,
+        chapter: event.chapter,
+        seats: event.seats,
+        isPaid: event.isPaid,
+        ticketPrice: event.ticketPrice,
+        fee: event.fee,
+        stageStatus: event.stageStatus || "IDLE",
+        currentSlideIndex: event.currentSlideIndex || 0,
+        speakers: event.speakers || [],
+        finance: event.finance || { moneyIn: [], moneyOut: [], treasurerNotes: "" },
+        teamAssignments: event.teamAssignments || [],
+        signatories: event.signatories || { signatory1: "Chapter President", signatory2: "Chapter Secretary" },
+        agenda: event.agenda || [],
+      },
+      kpi: {
+        registered: totalRegistered,
+        approved: totalRegistered,
+        members: membersCount,
+        checkedIn: checkedIn,
+        fees: totalFees,
+      },
+      attendees: registeredUsers.map((reg, idx) => ({
+        id: reg._id || `att-${idx}`,
+        userId: reg.user?._id || reg.user,
+        name: reg.user?.name || "Attendee " + (idx + 1),
+        email: reg.user?.email || "",
+        mobile: reg.user?.phone || reg.user?.mobile || "Not provided",
+        company: reg.user?.company || "Enterprise",
+        city: reg.user?.city || event.city || "Mumbai",
+        membership: reg.user?.membershipStatus || "Member",
+        status: reg.paymentStatus || (event.isPaid ? "Paid" : "Free"),
+        attendanceStatus: reg.attendanceStatus || "Pending",
+        time: reg.registeredAt ? new Date(reg.registeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "10:00 AM",
+      })),
+    };
+  },
+
+  /**
+   * RIFAH Operations Center: Update operations data for an event
+   */
+  updateOperations: async (eventId, data, user) => {
+    const allowedFields = [
+      "stageStatus",
+      "currentSlideIndex",
+      "speakers",
+      "finance",
+      "teamAssignments",
+      "signatories",
+      "agenda",
+      "seats",
+      "date",
+      "time",
+      "venue",
+      "city",
+    ];
+
+    const updateObj = {};
+    for (const key of allowedFields) {
+      if (data[key] !== undefined) {
+        updateObj[key] = data[key];
+      }
+    }
+
+    const updated = await Event.findByIdAndUpdate(eventId, { $set: updateObj }, { new: true });
+    if (!updated) throw new NotFoundError("Event not found");
+    return updated;
+  },
+
+  /**
+   * RIFAH Operations Center: Toggle attendee check-in
+   */
+  toggleCheckin: async (eventId, attendeeIdOrUserId, attendanceStatus = "Present") => {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const regIndex = event.registeredUsers.findIndex(
+      (reg) =>
+        String(reg._id) === String(attendeeIdOrUserId) ||
+        String(reg.user?._id || reg.user) === String(attendeeIdOrUserId)
+    );
+
+    if (regIndex === -1) {
+      throw new BadRequestError("Attendee not registered for this event");
+    }
+
+    event.registeredUsers[regIndex].attendanceStatus = attendanceStatus;
+    await event.save();
+    return event.registeredUsers[regIndex];
+  },
+
+  /**
    * Start the scheduler to publish scheduled events automatically
    */
   startEventScheduler: () => {

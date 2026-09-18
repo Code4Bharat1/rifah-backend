@@ -158,6 +158,64 @@ const eventSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    // RIFAH Operations Center Fields
+    stageStatus: {
+      type: String,
+      enum: ["LIVE", "PAUSED", "IDLE", "ENDED"],
+      default: "IDLE",
+    },
+    currentSlideIndex: {
+      type: Number,
+      default: 0,
+    },
+    speakers: [
+      {
+        id: { type: String },
+        name: { type: String, required: true },
+        mobile: { type: String, default: "" },
+        email: { type: String, default: "" },
+        type: { type: String, default: "Guest Speaker" },
+        organization: { type: String, default: "" },
+        designation: { type: String, default: "" },
+        topic: { type: String, default: "" },
+      },
+    ],
+    finance: {
+      moneyIn: [
+        {
+          id: { type: String },
+          desc: { type: String },
+          amount: { type: Number, default: 0 },
+          from: { type: String },
+          method: { type: String, default: "Online" },
+          date: { type: String },
+        },
+      ],
+      moneyOut: [
+        {
+          id: { type: String },
+          desc: { type: String },
+          amount: { type: Number, default: 0 },
+          to: { type: String },
+          invoice: { type: String },
+          date: { type: String },
+        },
+      ],
+      treasurerNotes: { type: String, default: "" },
+    },
+    teamAssignments: [
+      {
+        role: { type: String },
+        name: { type: String },
+        mobile: { type: String },
+        email: { type: String },
+        assignedAt: { type: Date, default: Date.now },
+      },
+    ],
+    signatories: {
+      signatory1: { type: String, default: "Chapter President" },
+      signatory2: { type: String, default: "Chapter Secretary" },
+    },
   },
   {
     timestamps: true,

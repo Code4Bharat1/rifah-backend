@@ -91,5 +91,30 @@ router.delete(
   eventController.deleteEvent
 );
 
+// RIFAH Operations Center Routes
+router.get(
+  "/:id/operations",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.getOperations
+);
+
+router.patch(
+  "/:id/operations",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.updateOperations
+);
+
+router.patch(
+  "/:id/attendees/:attendeeId/checkin",
+  authMiddleware,
+  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.toggleCheckin
+);
+
 export { router as eventRoutes };
 export default router;

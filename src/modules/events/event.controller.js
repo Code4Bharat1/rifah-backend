@@ -114,4 +114,23 @@ export const eventController = {
     const event = await eventService.markAttendance(id, userId);
     return ApiResponse.success(res, event, "Attendance marked successfully");
   }),
+
+  getOperations: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const ops = await eventService.getOperations(id, req.user);
+    return ApiResponse.success(res, ops, "Operations data retrieved");
+  }),
+
+  updateOperations: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updated = await eventService.updateOperations(id, req.body, req.user);
+    return ApiResponse.success(res, updated, "Operations updated successfully");
+  }),
+
+  toggleCheckin: asyncHandler(async (req, res) => {
+    const { id, attendeeId } = req.params;
+    const { attendanceStatus } = req.body;
+    const result = await eventService.toggleCheckin(id, attendeeId, attendanceStatus || "Present");
+    return ApiResponse.success(res, result, "Attendee check-in status updated");
+  }),
 };
