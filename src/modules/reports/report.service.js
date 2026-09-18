@@ -347,21 +347,87 @@ export const reportService = {
       filter.status = queryFilters.status;
     }
 
-    const events = await Event.find(filter).lean().sort({ date: -1 });
+    const events = await Event.find(filter).populate("registeredUsers.user", "role").lean().sort({ date: -1 });
 
     let totalEvents = 0;
     let totalRegisteredOverall = 0;
     let totalAttendedOverall = 0;
 
-    const eventList = events.map(evt => {
-      const capacity = evt.seats || 0;
+    const eventList = await Promise.all(events.map(async evt => {
+      let dynamicCapacity = 0;
+      let breakdownCapacity = { businesses: 0, consumers: 0, admins: 0, other: 0 };
+      try {
+        const uQuery = {};
+        const bQuery = {};
+        
+        if (evt.targetStates && evt.targetStates.length > 0 && !evt.targetStates.includes("All")) {
+          uQuery.state = { $in: evt.targetStates };
+          bQuery.state = { $in: evt.targetStates };
+        }
+        if (evt.targetChapters && evt.targetChapters.length > 0 && !evt.targetChapters.includes("All")) {
+          uQuery.chapter = { $in: evt.targetChapters };
+          bQuery.chapter = { $in: evt.targetChapters };
+        }
+        
+        let targetList = evt.targetAudience || ["All"];
+        
+        if (targetList.includes("All")) {
+          breakdownCapacity.consumers = await User.countDocuments({ ...uQuery, role: "customer" });
+          breakdownCapacity.businesses = await Business.countDocuments(bQuery);
+          breakdownCapacity.admins = await User.countDocuments({ ...uQuery, role: "chapter_admin" });
+          const otherUsers = await User.countDocuments({ ...uQuery, role: { $nin: ["customer", "chapter_admin", "business"] } });
+          breakdownCapacity.other = otherUsers;
+          dynamicCapacity = breakdownCapacity.consumers + breakdownCapacity.businesses + breakdownCapacity.admins + breakdownCapacity.other;
+        } else {
+          let total = 0;
+          if (targetList.includes("Businesses")) {
+            breakdownCapacity.businesses = await Business.countDocuments(bQuery);
+            total += breakdownCapacity.businesses;
+          }
+          if (targetList.includes("Consumers")) {
+            breakdownCapacity.consumers = await User.countDocuments({ ...uQuery, role: "customer" });
+            total += breakdownCapacity.consumers;
+          }
+          if (targetList.includes("Chapter Admins")) {
+            breakdownCapacity.admins = await User.countDocuments({ ...uQuery, role: "chapter_admin" });
+            total += breakdownCapacity.admins;
+          }
+          dynamicCapacity = total;
+        }
+        
+        // If it's 0, fallback to evt.seats
+        if (dynamicCapacity === 0 && evt.seats) {
+            dynamicCapacity = evt.seats;
+        }
+      } catch (err) {
+        dynamicCapacity = evt.seats || 0;
+      }
+
+      const capacity = dynamicCapacity;
       const registeredCount = evt.registeredUsers ? evt.registeredUsers.length : 0;
       
       let attendedCount = 0;
+      let breakdownRegistered = { businesses: 0, consumers: 0, admins: 0, other: 0 };
+
       if (evt.registeredUsers) {
         evt.registeredUsers.forEach(reg => {
           if (reg.attendanceStatus === "Present") {
             attendedCount++;
+          }
+          
+          if (reg.user && reg.user.role) {
+            const r = reg.user.role;
+            if (r === "business" || r === "business_owner") {
+              breakdownRegistered.businesses++;
+            } else if (r === "customer") {
+              breakdownRegistered.consumers++;
+            } else if (r === "chapter_admin" || r === "state_admin" || r === "super_admin") {
+              breakdownRegistered.admins++;
+            } else {
+              breakdownRegistered.other++;
+            }
+          } else {
+            breakdownRegistered.other++;
           }
         });
       }
@@ -389,12 +455,15 @@ export const reportService = {
         chapter: evt.chapter || "N/A",
         status: evt.status,
         capacity,
+        breakdownCapacity,
         registeredCount,
+        breakdownRegistered,
         attendedCount,
         attendanceRate,
-        health
+        health,
+        targetAudience: evt.targetAudience
       };
-    });
+    }));
 
     // Compute Leaderboard by Chapter
     const chapterStats = {};
