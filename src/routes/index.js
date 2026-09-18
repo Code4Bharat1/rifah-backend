@@ -29,6 +29,7 @@ import { courseRoutes } from "../modules/courses/course.routes.js";
 import birthdayRoutes from "../modules/birthdays/birthday.routes.js";
 import anniversaryRoutes from "../modules/anniversaries/anniversary.routes.js";
 import { powerNetworkingRoutes } from "../modules/power-networking/power-networking.routes.js";
+import { followupRoutes } from "../modules/followups/followup.routes.js";
 
 const apiRouter = Router();
 
@@ -51,6 +52,7 @@ apiRouter.use("/messages", messageRoutes);
 apiRouter.use("/notifications", notificationRoutes);
 apiRouter.use("/announcements", announcementRoutes);
 apiRouter.use("/events", eventRoutes);
+apiRouter.use("/followups", followupRoutes);
 apiRouter.use("/reviews", reviewRoutes);
 apiRouter.use("/reports", reportRoutes);
 apiRouter.use("/audit", auditRoutes);
