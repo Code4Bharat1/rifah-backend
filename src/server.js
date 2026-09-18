@@ -77,14 +77,14 @@ const ensureUserAccount = async () => {
         email: email,
         ownerEmail: email,
         status: "Active",
-        verification: "verified",
-        verificationStatus: "verified",
+        verification: "pending",
+        verificationStatus: "pending",
       });
       logger.info(`[BUSINESS SETUP] Created business for ${email}`);
     } else {
       business.status = "Active";
-      business.verification = "verified";
-      business.verificationStatus = "verified";
+      business.verification = "pending";
+      business.verificationStatus = "pending";
       business.dob = new Date("2026-09-18");
       business.timezone = "Asia/Kolkata";
       await business.save();
