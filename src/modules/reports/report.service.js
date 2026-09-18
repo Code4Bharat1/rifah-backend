@@ -192,7 +192,17 @@ export const reportService = {
       { $sort: { members: -1 } },
       { $limit: 6 }
     ]);
-    const chaptersDistribution = chaptersAgg.map(c => ({ name: c._id, members: c.members }));
+    let chaptersDistribution = chaptersAgg.map(c => ({ name: c._id, members: c.members }));
+
+    if (requester && requester.role === "state_admin" && requester.state) {
+      const stateRegex = new RegExp(`^${requester.state.trim()}$`, "i");
+      const stateChapters = await Chapter.find({ state: stateRegex }).sort({ name: 1 });
+      const countsMap = new Map(chaptersDistribution.map(c => [c.name?.toLowerCase(), c.members]));
+      chaptersDistribution = stateChapters.map(ch => ({
+        name: ch.name,
+        members: countsMap.get(ch.name?.toLowerCase()) ?? (ch.businessesCount || ch.membersCount || 0),
+      })).sort((a, b) => b.members - a.members).slice(0, 6);
+    }
 
     // Membership Growth (last 6 months cumulative businesses)
     const growth = [];

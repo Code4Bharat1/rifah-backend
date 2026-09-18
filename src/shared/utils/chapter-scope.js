@@ -30,16 +30,18 @@ export const getChapterFilter = async (user, entityType = "direct") => {
       return {
         $or: [
           { chapterId: { $in: chapterIds } },
+          ...(chapterNames.length > 0 ? [{ chapter: { $in: chapterNames } }] : []),
           { state: stateRegex },
         ],
       };
     }
 
     if (entityType === "business_ref") {
-      if (chapterIds.length === 0) return { _id: null };
+      if (chapterIds.length === 0 && !user.state) return { _id: null };
       const businesses = await Business.find({
         $or: [
           { chapterId: { $in: chapterIds } },
+          ...(chapterNames.length > 0 ? [{ chapter: { $in: chapterNames } }] : []),
           { state: stateRegex },
         ],
       }).select("_id");

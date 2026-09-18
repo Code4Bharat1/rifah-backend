@@ -22,3 +22,7 @@ uploads/documents/*
 uploads/gallery/*
 uploads/logos/*
 !uploads/**/.gitkeep
+
+
+#Lock files
+package-lock.json
