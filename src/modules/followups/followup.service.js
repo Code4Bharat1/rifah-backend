@@ -146,4 +146,42 @@ export const followupService = {
     await doc.save();
     return doc;
   },
+
+  async addHistory(id, { contactedBy = "Admin", method = "call", message = "", notes = "", status, nextFollowUpAt }) {
+    const doc = await Followup.findById(id);
+    if (!doc) throw new Error("Followup record not found");
+
+    const newEntry = {
+      contactedAt: new Date(),
+      contactedBy,
+      method,
+      message,
+      notes,
+      status: status || doc.status,
+    };
+
+    if (!doc.history) doc.history = [];
+    doc.history.push(newEntry);
+
+    if (notes) {
+      doc.notes.push({ content: notes, author: contactedBy, createdAt: new Date() });
+    }
+    if (message) {
+      const channel = ["whatsapp", "sms", "email", "call"].includes(method) ? method : "whatsapp";
+      doc.messageHistory.push({ channel, message, sentAt: new Date(), status: "sent" });
+    }
+
+    if (status) doc.status = status;
+    doc.lastContactedAt = new Date();
+    if (nextFollowUpAt) doc.nextFollowUpAt = new Date(nextFollowUpAt);
+
+    await doc.save();
+    return doc;
+  },
+
+  async deleteFollowup(id) {
+    const doc = await Followup.findByIdAndDelete(id);
+    if (!doc) throw new Error("Followup record not found");
+    return doc;
+  },
 };

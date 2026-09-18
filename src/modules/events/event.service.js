@@ -534,8 +534,29 @@ export const eventService = {
         teamAssignments: event.teamAssignments || [],
         signatories: event.signatories || { signatory1: "Chapter President", signatory2: "Chapter Secretary" },
         agenda: event.agenda || [],
+        slogan: event.slogan || "",
+        theme: event.theme || "",
+        scriptLanguage: event.scriptLanguage || "English",
+        certificateSettings: event.certificateSettings || { theme: "classic-gold", language: "English", enabled: true },
+        membershipRules: event.membershipRules || "Members enter free with valid Chamber ID.",
+        visitorSignIn: event.visitorSignIn !== false,
+        memberFee: event.memberFee !== undefined ? event.memberFee : 0,
+        nonMemberFee: event.nonMemberFee !== undefined ? event.nonMemberFee : 500,
+        paymentCodes: event.paymentCodes || [],
+        staffCodes: event.staffCodes || [],
+        sponsors: event.sponsors || [],
+        upcomingEvents: event.upcomingEvents || [],
+        appearance: event.appearance || { primaryColor: "#06b6d4", darkBg: true },
+        projectorUrl: event.projectorUrl || "",
       },
       kpi: {
+        registered: totalRegistered,
+        approved: totalRegistered,
+        members: membersCount,
+        checkedIn: checkedIn,
+        fees: totalFees,
+      },
+      kpis: {
         registered: totalRegistered,
         approved: totalRegistered,
         members: membersCount,
@@ -575,6 +596,23 @@ export const eventService = {
       "time",
       "venue",
       "city",
+      "isPaid",
+      "ticketPrice",
+      "fee",
+      "slogan",
+      "theme",
+      "scriptLanguage",
+      "certificateSettings",
+      "membershipRules",
+      "visitorSignIn",
+      "memberFee",
+      "nonMemberFee",
+      "paymentCodes",
+      "staffCodes",
+      "sponsors",
+      "upcomingEvents",
+      "appearance",
+      "projectorUrl",
     ];
 
     const updateObj = {};
@@ -587,6 +625,55 @@ export const eventService = {
     const updated = await Event.findByIdAndUpdate(eventId, { $set: updateObj }, { new: true });
     if (!updated) throw new NotFoundError("Event not found");
     return updated;
+  },
+
+  /**
+   * RIFAH Operations Center: Append financial transaction (Money In / Money Out)
+   */
+  addFinanceTransaction: async (eventId, transactionData, user) => {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    if (!event.finance) {
+      event.finance = { moneyIn: [], moneyOut: [], treasurerNotes: "" };
+    }
+
+    const { type, amount, desc, from, to, method, invoice, date, notes } = transactionData;
+    const numAmount = Number(amount) || 0;
+    const record = {
+      id: `txn-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      desc: desc || "Finance entry",
+      amount: numAmount,
+      date: date || new Date().toISOString().split("T")[0],
+    };
+
+    if (type === "moneyIn" || type === "in") {
+      record.from = from || "Contributor";
+      record.method = method || "Online";
+      event.finance.moneyIn.push(record);
+    } else {
+      record.to = to || "Vendor";
+      record.invoice = invoice || `INV-${Date.now().toString().slice(-4)}`;
+      event.finance.moneyOut.push(record);
+    }
+
+    if (notes) {
+      event.finance.treasurerNotes = notes;
+    }
+
+    await event.save();
+
+    const totalIn = event.finance.moneyIn.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const totalOut = event.finance.moneyOut.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const balance = totalIn - totalOut;
+
+    return {
+      finance: event.finance,
+      summary: { totalIn, totalOut, balance },
+      balance,
+      totalIn,
+      totalOut,
+    };
   },
 
   /**
