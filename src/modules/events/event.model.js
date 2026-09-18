@@ -168,6 +168,33 @@ const eventSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    projectorMode: {
+      type: String,
+      enum: ["slides", "qr", "sponsors", "break"],
+      default: "slides",
+    },
+    activeAnnouncement: {
+      type: String,
+      default: "",
+    },
+    stageTimer: {
+      duration: { type: Number, default: 600 },
+      remaining: { type: Number, default: 600 },
+      isRunning: { type: Boolean, default: false },
+    },
+    agenda: [
+      {
+        id: { type: Number },
+        title: { type: String },
+        duration: { type: String },
+        speaker: { type: String },
+        notes: { type: String, default: "" },
+      },
+    ],
+    moderatorNotes: {
+      type: String,
+      default: "",
+    },
     speakers: [
       {
         id: { type: String },

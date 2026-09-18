@@ -586,6 +586,10 @@ export const eventService = {
     const allowedFields = [
       "stageStatus",
       "currentSlideIndex",
+      "projectorMode",
+      "activeAnnouncement",
+      "stageTimer",
+      "moderatorNotes",
       "speakers",
       "finance",
       "teamAssignments",
