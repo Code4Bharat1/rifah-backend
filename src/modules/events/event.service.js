@@ -88,26 +88,31 @@ export const eventService = {
           visibilityConditions.push({ targetStates: { $in: ["All", new RegExp(`^${user.state.trim()}$`, "i")] } });
         }
       } else if ([ROLES.BUSINESS_OWNER, ROLES.CUSTOMER].includes(user.role)) {
-        // Regular users must match audience, state, and chapter
-        const userRoleDisplay = user.role === ROLES.BUSINESS_OWNER ? "Businesses" : "Consumers";
-        const audienceMatch = { targetAudience: { $in: ["All", userRoleDisplay] } };
-        
-        const locConditions = [{ targetStates: "All", targetChapters: "All" }]; // Fully public
-        
-        if (user.state) {
-          locConditions.push({ targetStates: new RegExp(`^${user.state.trim()}$`, "i") });
+        if (queryParams.all === "true" || queryParams.scope === "all" || queryParams.showAll === "true") {
+          // Allow viewing all published chamber events across all chapters and locations
+          visibilityConditions.push({});
+        } else {
+          // Regular users must match audience, state, and chapter
+          const userRoleDisplay = user.role === ROLES.BUSINESS_OWNER ? "Businesses" : "Consumers";
+          const audienceMatch = { targetAudience: { $in: ["All", userRoleDisplay] } };
+          
+          const locConditions = [{ targetStates: "All", targetChapters: "All" }]; // Fully public
+          
+          if (user.state) {
+            locConditions.push({ targetStates: new RegExp(`^${user.state.trim()}$`, "i") });
+          }
+          if (user.chapter) {
+            locConditions.push({ targetChapters: new RegExp(`^${user.chapter.trim()}$`, "i") });
+            locConditions.push({ chapter: new RegExp(`^${user.chapter.trim()}$`, "i") }); // Legacy
+          }
+          
+          visibilityConditions.push({
+             $and: [
+               audienceMatch,
+               { $or: locConditions }
+             ]
+          });
         }
-        if (user.chapter) {
-          locConditions.push({ targetChapters: new RegExp(`^${user.chapter.trim()}$`, "i") });
-          locConditions.push({ chapter: new RegExp(`^${user.chapter.trim()}$`, "i") }); // Legacy
-        }
-        
-        visibilityConditions.push({
-           $and: [
-             audienceMatch,
-             { $or: locConditions }
-           ]
-        });
       }
     } else {
       // Unauthenticated users see fully public events
