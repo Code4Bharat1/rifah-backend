@@ -1,5 +1,6 @@
 import { Role } from "./role.model.js";
 import { User } from "../users/user.model.js";
+import { Business } from "../businesses/business.model.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import { auditService } from "../audit/audit.service.js";
@@ -66,13 +67,25 @@ export const roleService = {
     const roles = await Role.find(filter)
       .populate({
         path: "userId",
-        select: "name avatar organization city state email phone chapterId",
+        select: "name avatar organization city state email phone chapterId designation",
         populate: { path: "chapterId", select: "name slug city state" }
       })
-      .populate("businessId", "name slug logo industry city state")
+      .populate("businessId", "name slug logo industry city state instagram linkedin website contactPerson roleInBusiness phone")
       .populate("chapterId", "name slug city state")
-      .sort({ displayOrder: 1, createdAt: 1 });
-      
+      .sort({ displayOrder: 1, createdAt: 1 })
+      .lean();
+
+    // For roles without a linked businessId, try to find user's business by owner
+    const selectFields = "name slug logo industry city state instagram linkedin website contactPerson roleInBusiness phone";
+    for (const role of roles) {
+      if (!role.businessId && role.userId?._id) {
+        const business = await Business.findOne({ owner: role.userId._id })
+          .select(selectFields)
+          .lean();
+        if (business) role.businessId = business;
+      }
+    }
+
     return roles;
   },
 
