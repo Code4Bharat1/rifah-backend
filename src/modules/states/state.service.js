@@ -6,6 +6,7 @@ import { Referral } from "../networking/referral.model.js";
 import { OneToOne } from "../networking/one-to-one.model.js";
 import { ThankYouNote } from "../networking/thank-you-note.model.js";
 import { StateProfile } from "./state-profile.model.js";
+import { Role } from "../roles/role.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { NotFoundError, ConflictError, BadRequestError } from "../../shared/errors/errors.js";
@@ -186,13 +187,40 @@ export const stateService = {
    * itself is derived from the business, not free-typed, so it can't drift.
    * Upserts the StateProfile with image and address.
    */
-  assignStateAdmin: async ({ businessId, image, address }) => {
-    const business = await resolveEligibleAdminBusiness(businessId);
-    const nominee = business.owner;
+  assignStateAdmin: async ({ businessId, image, address, explicitStateName, contactEmail, contactPhone, name, email, phone }) => {
+    let nominee;
+    let cleanState = explicitStateName;
+    
+    if (businessId) {
+      const business = await resolveEligibleAdminBusiness(businessId);
+      nominee = business.owner;
+      if (!cleanState) {
+        cleanState = (business.state || "").trim();
+      }
+    } else if (email && name) {
+      // Manual entry: find user by email or create new user
+      const User = (await import("../../modules/users/user.model.js")).User;
+      nominee = await User.findOne({ email: email.toLowerCase().trim() });
+      if (!nominee) {
+        const crypto = await import("crypto");
+        const { hashPassword } = await import("../../infrastructure/auth/password.js");
+        const passwordHash = await hashPassword(crypto.randomBytes(8).toString("hex"));
+        nominee = await User.create({
+          name: name.trim(),
+          email: email.toLowerCase().trim(),
+          phone: phone ? phone.trim() : "",
+          passwordHash,
+          role: ROLES.CUSTOMER,
+          isProfileComplete: true
+        });
+      }
+    } else {
+      throw new BadRequestError("Please select a business owner or provide name and email to allocate an admin.");
+    }
 
-    const cleanState = (business.state || "").trim();
+    cleanState = (cleanState || "").trim();
     if (!cleanState) {
-      throw new BadRequestError("This business does not have a state on file.");
+      throw new BadRequestError("This business does not have a state on file, and no explicit state was provided.");
     }
     const stateRegex = new RegExp(`^${cleanState}$`, "i");
 
@@ -217,8 +245,8 @@ export const stateService = {
           name: cleanState,
           ...(image && { image }),
           ...(address && { address }),
-          email: nominee.email,
-          ...(nominee.phone && { phone: nominee.phone }),
+          email: contactEmail !== undefined ? contactEmail : nominee.email,
+          phone: contactPhone !== undefined ? contactPhone : (nominee.phone || ""),
         },
         { upsert: true, new: true, runValidators: true }
       );
@@ -235,6 +263,36 @@ export const stateService = {
     await upsertStateProfile();
 
     return nominee;
+  },
+
+  /**
+   * Create a State Profile (optionally assigning an admin)
+   */
+  createState: async ({ name, businessId, image, address, contactEmail, contactPhone }) => {
+    if (!name || typeof name !== "string" || !name.trim()) {
+      throw new BadRequestError("State name is required");
+    }
+    const cleanState = name.trim();
+    
+    // Create/update state profile
+    const profile = await StateProfile.findOneAndUpdate(
+      { name: new RegExp(`^${cleanState}$`, "i") },
+      {
+        name: cleanState,
+        ...(image && { image }),
+        ...(address && { address }),
+        ...(contactEmail !== undefined && { email: contactEmail }),
+        ...(contactPhone !== undefined && { phone: contactPhone }),
+      },
+      { upsert: true, new: true, runValidators: true }
+    );
+
+    // If businessId is provided, also allocate the admin
+    if (businessId) {
+      await stateService.assignStateAdmin({ businessId, image, address, explicitStateName: cleanState, contactEmail, contactPhone });
+    }
+
+    return profile;
   },
 
   /**
@@ -307,6 +365,9 @@ export const stateService = {
 
     // 2. Set all related users' state to Unassigned (including chapter admins, members, etc.)
     await User.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
+    
+    // 2.5 Set all related roles' state to Unassigned
+    await Role.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
 
     // 3. Set all Chapters' state to Unassigned
     await Chapter.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
@@ -328,6 +389,9 @@ export const stateService = {
     await OneToOne.updateMany({ memberState: stateRegex }, { $set: { memberState: unassigned } });
     await ThankYouNote.updateMany({ giverState: stateRegex }, { $set: { giverState: unassigned } });
     await ThankYouNote.updateMany({ receiverState: stateRegex }, { $set: { receiverState: unassigned } });
+
+    // Delete the state profile
+    await StateProfile.deleteMany({ name: stateRegex });
 
     return { message: "State deleted (detached) successfully" };
   },

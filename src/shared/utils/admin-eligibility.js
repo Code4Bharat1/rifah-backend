@@ -23,15 +23,5 @@ export const resolveEligibleAdminBusiness = async (businessId) => {
     throw new ForbiddenError("This business has no owner account and cannot be assigned as admin.");
   }
 
-  const isPaid = business.isPaid === true && business.membership && business.membership !== "Free";
-  if (!isPaid) {
-    throw new ForbiddenError("Only businesses with an active paid membership can be assigned as an admin.");
-  }
-
-  const isVerified = VERIFIED_VALUES.includes(business.verification);
-  if (!isVerified) {
-    throw new ForbiddenError("Only verified businesses can be assigned as an admin.");
-  }
-
   return business;
 };

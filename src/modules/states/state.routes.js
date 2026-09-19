@@ -23,6 +23,14 @@ router.get(
   stateController.listStates
 );
 
+// Create State manually
+router.post(
+  "/",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN),
+  stateController.createState
+);
+
 router.get(
   "/:stateName",
   optionalAuthMiddleware,

@@ -24,6 +24,19 @@ export const stateController = {
     return ApiResponse.success(res, stateData, "State details retrieved successfully");
   }),
 
+  createState: asyncHandler(async (req, res) => {
+    const stateProfile = await stateService.createState(req.body);
+    await auditService.logAction({
+      actor: req.user,
+      action: "CREATE",
+      targetModel: "StateProfile",
+      targetId: stateProfile._id,
+      summary: `Created state profile for ${stateProfile.name}`,
+      ipAddress: req.ip,
+    });
+    return ApiResponse.created(res, stateProfile, "State created successfully.");
+  }),
+
   assignStateAdmin: asyncHandler(async (req, res) => {
     const admin = await stateService.assignStateAdmin(req.body);
     await auditService.logAction({
