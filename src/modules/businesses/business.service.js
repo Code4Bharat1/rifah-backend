@@ -1,5 +1,6 @@
 import { Business } from "./business.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
+import { Catalogue } from "../catalogue/catalogue.model.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError, ConflictError } from "../../shared/errors/errors.js";
@@ -58,9 +59,6 @@ export const businessService = {
   /**
    * Public directory search & filtering
    */
-  /**
-   * Public directory search & filtering
-   */
   searchDirectory: async (queryParams = {}, user = null) => {
     const { page, limit, skip } = parsePagination(queryParams);
     const andConditions = [];
@@ -95,6 +93,20 @@ export const businessService = {
     const searchTerm = queryParams.search || queryParams.q;
     if (searchTerm && searchTerm !== "undefined" && searchTerm.trim()) {
       const searchRegex = new RegExp(escapeRegex(searchTerm.trim()), "i");
+
+      // Also check if any catalogue items match keyword
+      let catalogueBizIds = [];
+      try {
+        const catItems = await Catalogue.find({
+          $or: [
+            { name: searchRegex },
+            { description: searchRegex },
+            { category: searchRegex },
+          ],
+        }).select("business");
+        catalogueBizIds = catItems.map((c) => c.business).filter(Boolean);
+      } catch {}
+
       andConditions.push({
         $or: [
           { name: searchRegex },
@@ -106,6 +118,7 @@ export const businessService = {
           { city: searchRegex },
           { state: searchRegex },
           { chapter: searchRegex },
+          ...(catalogueBizIds.length > 0 ? [{ _id: { $in: catalogueBizIds } }] : []),
         ],
       });
     }
@@ -662,8 +675,13 @@ export const businessService = {
     const myBiz = await Business.findOne({ owner: currentUserId }).select("chapter");
 
     const effectiveRole = userDoc?.role || currentUser.role;
+
+    // Admin / Super Admin should NOT receive chapter new member banners or alerts
+    if (["super_admin", "admin", "secretariat"].includes(effectiveRole)) {
+      return [];
+    }
+
     const effectiveChapter = userDoc?.chapter || myBiz?.chapter || currentUser.chapter;
-    const isAdmin = ["super_admin", "secretariat"].includes(effectiveRole);
     const isStateAdmin = effectiveRole === "state_admin";
 
     // 7 days window for recent new members

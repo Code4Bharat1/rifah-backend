@@ -138,6 +138,20 @@ export const anniversaryService = {
       "name joiningDate timezone chapter createdAt"
     );
 
+    const effectiveRole = userDoc?.role || currentUser.role;
+
+    // Admin / Super Admin should NOT receive chapter celebration alerts or notifications
+    if (["super_admin", "admin", "secretariat"].includes(effectiveRole)) {
+      return {
+        isSelfAnniversary: false,
+        selfName: "",
+        selfBusinessName: "",
+        selfYearsCompleted: 0,
+        todayAnniversaries: [],
+        totalCount: 0,
+      };
+    }
+
     const effectiveJoiningDate = myBiz?.joiningDate || userDoc?.joiningDate || myBiz?.createdAt || userDoc?.createdAt || null;
     const effectiveTimezone = userDoc?.timezone || myBiz?.timezone || "Asia/Kolkata";
     const effectiveChapter = userDoc?.chapter || myBiz?.chapter || currentUser.chapter || "";

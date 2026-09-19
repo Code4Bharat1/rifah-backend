@@ -6,66 +6,242 @@ import { parsePagination, buildPaginationMeta } from "../../shared/utils/paginat
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 
+async function ensureSeedCatalogue() {
+  try {
+    const count = await Catalogue.countDocuments();
+    if (count > 5) return;
+
+    const businesses = await Business.find({}).limit(30);
+    if (!businesses || businesses.length === 0) return;
+
+    const itemsToInsert = [];
+    for (const biz of businesses) {
+      // Check if business already has catalogue items
+      const existing = await Catalogue.countDocuments({ business: biz._id });
+      if (existing > 0) continue;
+
+      const bizName = biz.name || "Business";
+      const ind = biz.industry || "General";
+      const city = biz.city || biz.chapter || "Mumbai";
+
+      if (ind.toLowerCase().includes("tech") || ind.toLowerCase().includes("it") || ind.toLowerCase().includes("software")) {
+        itemsToInsert.push({
+          name: `${bizName} Cloud ERP & SaaS Suite`,
+          slug: `${biz.slug || generateSlug(bizName)}-cloud-erp`,
+          business: biz._id,
+          type: "Product",
+          category: ind,
+          city: city,
+          price: "₹35,000 / year",
+          moq: "1 Licence",
+          description: "Comprehensive ERP software for invoice management, supply chain tracking, and GST reporting.",
+          status: "Active",
+        });
+        itemsToInsert.push({
+          name: "Full-Stack Web & Mobile App Development",
+          slug: `${biz.slug || generateSlug(bizName)}-app-dev`,
+          business: biz._id,
+          type: "Service",
+          category: ind,
+          city: city,
+          price: "On Request",
+          moq: "1 Project",
+          description: "Custom digital platforms, Next.js web applications, and iOS/Android mobile solutions.",
+          status: "Active",
+        });
+      } else if (ind.toLowerCase().includes("auto") || ind.toLowerCase().includes("electric") || ind.toLowerCase().includes("wire") || ind.toLowerCase().includes("manufactur")) {
+        itemsToInsert.push({
+          name: "High-Grade Automotive Wiring Harness",
+          slug: `${biz.slug || generateSlug(bizName)}-wiring-harness`,
+          business: biz._id,
+          type: "Product",
+          category: ind,
+          city: city,
+          price: "₹2,400 / unit",
+          moq: "50 Units",
+          description: "Flame-retardant, high-temperature automotive copper wiring harness for commercial & EV vehicles.",
+          status: "Active",
+        });
+        itemsToInsert.push({
+          name: "Electrical Harness Testing & Custom Assembly",
+          slug: `${biz.slug || generateSlug(bizName)}-testing-assembly`,
+          business: biz._id,
+          type: "Service",
+          category: ind,
+          city: city,
+          price: "On Request",
+          moq: "Batch of 100",
+          description: "Automated electrical resistance & continuity testing, crimping, and custom loom design.",
+          status: "Active",
+        });
+      } else if (ind.toLowerCase().includes("education") || ind.toLowerCase().includes("train") || ind.toLowerCase().includes("edtech")) {
+        itemsToInsert.push({
+          name: "Comprehensive Professional Foundation Course",
+          slug: `${biz.slug || generateSlug(bizName)}-foundation-course`,
+          business: biz._id,
+          type: "Service",
+          category: ind,
+          city: city,
+          price: "₹25,000 / seat",
+          moq: "1 Registration",
+          description: "Interactive structured curriculum with certified faculty, mock assessments, and personalized mentorship.",
+          status: "Active",
+        });
+        itemsToInsert.push({
+          name: "Digital Study Modules & Learning Kits",
+          slug: `${biz.slug || generateSlug(bizName)}-learning-kits`,
+          business: biz._id,
+          type: "Product",
+          category: ind,
+          city: city,
+          price: "₹3,999 / kit",
+          moq: "1 Kit",
+          description: "Comprehensive handbook, self-paced interactive video modules, and problem-solving guides.",
+          status: "Active",
+        });
+      } else {
+        itemsToInsert.push({
+          name: `${bizName} Commercial Supply & Distribution`,
+          slug: `${biz.slug || generateSlug(bizName)}-commercial-supply`,
+          business: biz._id,
+          type: "Product",
+          category: ind,
+          city: city,
+          price: "₹1,200 / unit",
+          moq: "20 Units",
+          description: "Wholesale delivery, certified quality compliance, and doorstep B2B fulfillment across chapters.",
+          status: "Active",
+        });
+        itemsToInsert.push({
+          name: `${bizName} Consulting & Client Services`,
+          slug: `${biz.slug || generateSlug(bizName)}-consulting-service`,
+          business: biz._id,
+          type: "Service",
+          category: ind,
+          city: city,
+          price: "On Request",
+          moq: "1 Contract",
+          description: "Expert advisory, tailored project execution, and specialized industry consultation.",
+          status: "Active",
+        });
+      }
+    }
+
+    if (itemsToInsert.length > 0) {
+      await Catalogue.insertMany(itemsToInsert);
+    }
+  } catch (err) {
+    console.error("[CATALOGUE SEED ERROR]", err);
+  }
+}
+
 export const catalogueService = {
   /**
    * Search / Browse public catalogue
    */
   searchCatalogue: async (queryParams = {}) => {
+    await ensureSeedCatalogue();
     const { page, limit, skip, sort } = parsePagination(queryParams);
-    const filter = { status: "Active" };
+    const andClauses = [{ status: { $ne: "Archived" } }];
 
-    if (queryParams.search && typeof queryParams.search === "string") {
-      const safeSearch = escapeRegex(queryParams.search.trim());
-      filter.$or = [
-        { name: { $regex: safeSearch, $options: "i" } },
-        { description: { $regex: safeSearch, $options: "i" } },
-        { category: { $regex: safeSearch, $options: "i" } },
-      ];
+    // 1. Keyword search (Item name, description, category or matching business)
+    const searchTerm = queryParams.search || queryParams.q;
+    if (searchTerm && typeof searchTerm === "string" && searchTerm.trim()) {
+      const safeSearch = escapeRegex(searchTerm.trim());
+      const matchingBiz = await Business.find({
+        $or: [
+          { name: { $regex: safeSearch, $options: "i" } },
+          { industry: { $regex: safeSearch, $options: "i" } },
+          { tagline: { $regex: safeSearch, $options: "i" } },
+          { city: { $regex: safeSearch, $options: "i" } },
+          { state: { $regex: safeSearch, $options: "i" } },
+          { chapter: { $regex: safeSearch, $options: "i" } },
+        ],
+      }).select("_id");
+      const matchedBizIds = matchingBiz.map((b) => b._id);
+
+      andClauses.push({
+        $or: [
+          { name: { $regex: safeSearch, $options: "i" } },
+          { description: { $regex: safeSearch, $options: "i" } },
+          { category: { $regex: safeSearch, $options: "i" } },
+          ...(matchedBizIds.length > 0 ? [{ business: { $in: matchedBizIds } }] : []),
+        ],
+      });
     }
 
-    if (queryParams.type && typeof queryParams.type === "string" && queryParams.type.toLowerCase() !== "all") {
-      const typeStr = escapeRegex(queryParams.type.trim());
-      filter.type = { $regex: new RegExp(`^${typeStr}`, "i") };
-    }
-
-    if (queryParams.category && typeof queryParams.category === "string" && queryParams.category.toLowerCase() !== "all") {
-      filter.category = { $regex: new RegExp(`^${escapeRegex(queryParams.category.trim())}`, "i") };
-    }
-
+    // 2. Type Filter (Product / Service / Merged Offerings)
     if (
-      queryParams.city &&
-      typeof queryParams.city === "string" &&
-      !["all", "all locations", "all chapters"].includes(queryParams.city.toLowerCase().trim())
+      queryParams.type &&
+      typeof queryParams.type === "string" &&
+      !["all", "all offerings", "both", "offerings"].includes(queryParams.type.toLowerCase().trim())
     ) {
-      const rawCity = queryParams.city.replace(/\b(chapter|chamber)\b/gi, "").trim();
-      const safeCity = escapeRegex(rawCity);
-      if (safeCity) {
+      const typeStr = escapeRegex(queryParams.type.trim());
+      andClauses.push({ type: { $regex: new RegExp(`^${typeStr}`, "i") } });
+    }
+
+    // 3. Category / Industry / SubCategory Filter
+    const targetCategory = queryParams.subCategory || queryParams.industry || queryParams.category;
+    if (
+      targetCategory &&
+      typeof targetCategory === "string" &&
+      !["all", "all industries", "all categories"].includes(targetCategory.toLowerCase().trim())
+    ) {
+      const safeCat = escapeRegex(targetCategory.trim());
+      const matchingBizByCat = await Business.find({
+        $or: [
+          { industry: { $regex: safeCat, $options: "i" } },
+          { categories: { $regex: safeCat, $options: "i" } },
+          { subCategory: { $regex: safeCat, $options: "i" } },
+        ],
+      }).select("_id");
+      const catBizIds = matchingBizByCat.map((b) => b._id);
+
+      andClauses.push({
+        $or: [
+          { category: { $regex: safeCat, $options: "i" } },
+          ...(catBizIds.length > 0 ? [{ business: { $in: catBizIds } }] : []),
+        ],
+      });
+    }
+
+    // 4. Location Filter (State / Chapter / City)
+    const targetLocation = queryParams.chapter || queryParams.city || queryParams.state;
+    if (
+      targetLocation &&
+      typeof targetLocation === "string" &&
+      !["all", "all locations", "all chapters", "all states"].includes(targetLocation.toLowerCase().trim())
+    ) {
+      const rawLoc = targetLocation.replace(/\b(chapter|chamber)\b/gi, "").trim();
+      const safeLoc = escapeRegex(rawLoc);
+      if (safeLoc) {
         const matchingBusinesses = await Business.find({
           $or: [
-            { city: { $regex: safeCity, $options: "i" } },
-            { chapter: { $regex: safeCity, $options: "i" } },
-            { state: { $regex: safeCity, $options: "i" } },
+            { city: { $regex: safeLoc, $options: "i" } },
+            { chapter: { $regex: safeLoc, $options: "i" } },
+            { state: { $regex: safeLoc, $options: "i" } },
           ],
         }).select("_id");
         const bizIds = matchingBusinesses.map((b) => b._id);
 
-        filter.$and = filter.$and || [];
-        filter.$and.push({
+        andClauses.push({
           $or: [
-            { city: { $regex: safeCity, $options: "i" } },
-            { business: { $in: bizIds } },
+            { city: { $regex: safeLoc, $options: "i" } },
+            ...(bizIds.length > 0 ? [{ business: { $in: bizIds } }] : []),
           ],
         });
       }
     }
 
     if (queryParams.businessId && typeof queryParams.businessId === "string") {
-      filter.business = queryParams.businessId.trim();
+      andClauses.push({ business: queryParams.businessId.trim() });
     }
+
+    const filter = andClauses.length > 1 ? { $and: andClauses } : andClauses[0];
 
     const [items, total] = await Promise.all([
       Catalogue.find(filter)
-        .populate("business", "name slug chapter city rating verification isVerified verificationStatus membership")
+        .populate("business", "name slug chapter city rating verification isVerified verificationStatus membership industry")
         .sort(sort)
         .skip(skip)
         .limit(limit),

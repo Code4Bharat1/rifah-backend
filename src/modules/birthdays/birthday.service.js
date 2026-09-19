@@ -108,6 +108,13 @@ export const birthdayService = {
     const userDoc = await User.findById(currentUserId).select("name email phone whatsapp avatar role chapter state city dob timezone lastBirthdayWishYear");
     const myBiz = await Business.findOne({ owner: currentUserId }).select("name dob timezone chapter");
 
+    const effectiveRole = userDoc?.role || currentUser.role;
+
+    // Admin / Super Admin should NOT receive chapter celebration alerts or notifications
+    if (["super_admin", "admin", "secretariat"].includes(effectiveRole)) {
+      return { isSelfBirthday: false, selfName: "", todayBirthdays: [], totalCount: 0 };
+    }
+
     const effectiveDob = userDoc?.dob || myBiz?.dob || null;
     const effectiveTimezone = userDoc?.timezone || myBiz?.timezone || "Asia/Kolkata";
     const effectiveChapter = userDoc?.chapter || myBiz?.chapter || currentUser.chapter || "";
