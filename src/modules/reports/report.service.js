@@ -300,17 +300,23 @@ export const reportService = {
       query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
     const leads = await Lead.find(query)
-      .populate("buyer", "name email phone")
       .populate("business", "businessName")
-      .populate("enquiry", "productName quantity requiredBy");
+      .populate({
+        path: "enquiry",
+        select: "title quantity requiredBy requester guestName guestEmail guestPhone",
+        populate: {
+          path: "requester",
+          select: "name email phone",
+        }
+      });
       
     const headers = ["Business", "Buyer Name", "Buyer Email", "Buyer Phone", "Enquiry Product", "Enquiry Qty", "Enquiry Required By", "Lead Status", "Date"];
     const rows = leads.map(l => [
       l.business?.businessName || '',
-      l.buyer?.name || '',
-      l.buyer?.email || '',
-      l.buyer?.phone || '',
-      l.enquiry?.productName || '',
+      l.enquiry?.requester?.name || l.enquiry?.guestName || '',
+      l.enquiry?.requester?.email || l.enquiry?.guestEmail || '',
+      l.enquiry?.requester?.phone || l.enquiry?.guestPhone || '',
+      l.enquiry?.title || '',
       l.enquiry?.quantity || '',
       l.enquiry?.requiredBy ? new Date(l.enquiry.requiredBy).toLocaleDateString() : '',
       l.status,
