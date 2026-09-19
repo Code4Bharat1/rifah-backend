@@ -163,7 +163,17 @@ const eventSchema = new mongoose.Schema(
         },
         transactionId: {
           type: String,
-        }
+        },
+        // Ask & Give networking fields
+        asks: [{ type: String }],
+        gives: [{ type: String }],
+        // Entrance Desk gate management
+        gateStatus: {
+          type: String,
+          enum: ["waiting", "approved", "rejected"],
+          default: "waiting",
+        },
+        gateApprovedAt: { type: Date },
       },
     ],
     coverImage: {
@@ -273,15 +283,28 @@ const eventSchema = new mongoose.Schema(
       ],
       treasurerNotes: { type: String, default: "" },
     },
-    teamAssignments: [
-      {
-        role: { type: String },
-        name: { type: String },
-        mobile: { type: String },
-        email: { type: String },
-        assignedAt: { type: Date, default: Date.now },
-      },
-    ],
+    teamAssignments: {
+      chapterAdmin: { type: String, default: "" },
+      entranceIncharge: { type: String, default: "" },
+      followupCoordinator: { type: String, default: "" },
+      treasurer: { type: String, default: "" },
+      guestManager: { type: String, default: "" },
+      // New Stage Roles & Operations
+      photosVideo: { type: String, default: "" },
+      tilawatEquran: { type: String, default: "" },
+      presidentWelcome: { type: String, default: "" },
+      secretaryIntro: { type: String, default: "" },
+      eventCoordinator: { type: String, default: "" },
+      keynote1: { type: String, default: "" },
+      keynote1Topic: { type: String, default: "" },
+      keynote2: { type: String, default: "" },
+      keynote2Topic: { type: String, default: "" },
+      heroOfEvent: { type: String, default: "" },
+      best60SecPitch: { type: String, default: "" },
+      closingRemarks: { type: String, default: "" },
+      voteOfThanks: { type: String, default: "" },
+      eventEnd: { type: String, default: "" },
+    },
     signatories: {
       signatory1: { type: String, default: "Chapter President" },
       signatory2: { type: String, default: "Chapter Secretary" },
@@ -341,6 +364,17 @@ const eventSchema = new mongoose.Schema(
       darkBg: { type: Boolean, default: true },
     },
     projectorUrl: { type: String, default: "" },
+    // Event Scripts (Stage Prompter)
+    scripts: [
+      {
+        segmentId: { type: String, required: true },
+        customText: { type: String, default: "" },
+        language: { type: String, default: "English" },
+      },
+    ],
+    // AI usage tracking
+    aiUsageToday: { type: Number, default: 0 },
+    aiUsageDate: { type: String, default: "" },
   },
   {
     timestamps: true,

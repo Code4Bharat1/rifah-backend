@@ -124,5 +124,57 @@ router.post(
   eventController.addFinance
 );
 
+// ─── Ask & Give Routes ───────────────────────────────────────────────────
+router.get(
+  "/:id/ask-give-board",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.getAskGiveBoard
+);
+
+router.patch(
+  "/:id/attendees/:attendeeId/ask-give",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.updateAttendeeAskGive
+);
+
+// ─── Entrance Desk Routes ────────────────────────────────────────────────
+router.patch(
+  "/:id/attendees/:attendeeId/gate-action",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.gateAction
+);
+
+// ─── Event Scripts Routes ────────────────────────────────────────────────
+router.get(
+  "/:id/scripts",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.getScripts
+);
+
+router.patch(
+  "/:id/scripts/:segmentId",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.updateScript
+);
+
+// ─── Certificates Routes ──────────────────────────────────────────────────
+router.get(
+  "/:id/certificates/:attendeeId",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.generateCertificate
+);
+
 export { router as eventRoutes };
 export default router;

@@ -147,4 +147,83 @@ export const eventController = {
     const result = await eventService.addFinanceTransaction(id, req.body, req.user);
     return ApiResponse.success(res, result, "Financial transaction saved");
   }),
+
+  // ─── Ask & Give Board ──────────────────────────────────────────────────────
+  getAskGiveBoard: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const board = await eventService.getAskGiveBoard(id);
+    return ApiResponse.success(res, board, "Ask & Give board retrieved");
+  }),
+
+  updateAttendeeAskGive: asyncHandler(async (req, res) => {
+    const { id, attendeeId } = req.params;
+    const { asks, gives } = req.body;
+    const result = await eventService.updateAttendeeAskGive(id, attendeeId, { asks, gives });
+    return ApiResponse.success(res, result, "Ask & Give updated");
+  }),
+
+  // ─── Entrance Desk Gate Action ─────────────────────────────────────────────
+  gateAction: asyncHandler(async (req, res) => {
+    const { id, attendeeId } = req.params;
+    const { action } = req.body; // "approved" or "rejected"
+    const result = await eventService.gateAction(id, attendeeId, action);
+    return ApiResponse.success(res, result, `Attendee ${action}`);
+  }),
+
+  // ─── Event Scripts ─────────────────────────────────────────────────────────
+  getScripts: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const scripts = await eventService.getScripts(id);
+    return ApiResponse.success(res, scripts, "Event scripts retrieved");
+  }),
+
+  updateScript: asyncHandler(async (req, res) => {
+    const { id, segmentId } = req.params;
+    const { customText, language } = req.body;
+    const result = await eventService.updateScript(id, segmentId, { customText, language });
+    return ApiResponse.success(res, result, "Script updated");
+  }),
+
+  // ─── Certificate Generation ────────────────────────────────────────────────
+  generateCertificate: asyncHandler(async (req, res) => {
+    const { id, attendeeId } = req.params;
+    const { style, accentColor } = req.query;
+    
+    // Check if event and attendee exist and get details
+    const event = await eventService.getEventBySlugOrId(id, req.user);
+    if (!event) return ApiResponse.error(res, "Event not found", 404);
+    
+    // We import this dynamically so it doesn't break if pdfkit has issues
+    const { generateCertificate } = await import("./certificate.util.js");
+    
+    let attendeeName = "Attendee Name";
+    let actualAttendeeId = attendeeId;
+    
+    if (attendeeId !== "preview") {
+      const registrations = await eventService.getEventRegistrations(id, req.user);
+      const attendee = registrations.find(r => r._id.toString() === attendeeId);
+      if (!attendee) return ApiResponse.error(res, "Attendee not found", 404);
+      attendeeName = attendee.user?.name || "Participant";
+    }
+
+    const pdfBuffer = await generateCertificate(
+      { name: attendeeName, id: actualAttendeeId },
+      {
+        title: event.title,
+        date: event.date,
+        chapter: event.chapter,
+        signatory1Role: event.signatory1Role,
+        signatory2Role: event.signatory2Role
+      },
+      { style, accentColor }
+    );
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="Certificate-${attendeeName.replace(/\s+/g, '_')}.pdf"`,
+      "Content-Length": pdfBuffer.length
+    });
+    
+    res.end(pdfBuffer);
+  }),
 };
