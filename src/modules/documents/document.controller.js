@@ -5,7 +5,7 @@ export const documentController = {
     try {
       const { chapter } = req.query;
       const role = req.user?.role;
-      const data = await documentService.getDocuments({ chapter, role });
+      const data = await documentService.getDocuments({ chapter, role, user: req.user });
       res.json({ success: true, data });
     } catch (err) {
       next(err);

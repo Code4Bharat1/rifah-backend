@@ -281,6 +281,8 @@ const eventSchema = new mongoose.Schema(
           date: { type: String },
         },
       ],
+      notes: { type: String, default: "" },
+      isClosed: { type: Boolean, default: false },
       treasurerNotes: { type: String, default: "" },
     },
     teamAssignments: {

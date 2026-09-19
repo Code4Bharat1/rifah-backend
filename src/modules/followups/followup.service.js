@@ -1,10 +1,15 @@
 import { Followup } from "./followup.model.js";
 import { Event } from "../events/event.model.js";
 import { User } from "../users/user.model.js";
+import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const followupService = {
   async getFollowups(filter = {}) {
     const query = {};
+    if (filter.user) {
+      const scopeFilter = await getChapterFilter(filter.user, 'direct');
+      Object.assign(query, scopeFilter);
+    }
     if (filter.type) query.type = filter.type;
     if (filter.status && filter.status !== "all") query.status = filter.status;
     if (filter.eventId) query.event = filter.eventId;
@@ -20,8 +25,12 @@ export const followupService = {
     return await Followup.find(query).sort(sort).populate("event", "title date chapter venue").limit(200);
   },
 
-  async getStats(chapter, eventId) {
+  async getStats(chapter, eventId, user) {
     const baseQuery = {};
+    if (user) {
+      const scopeFilter = await getChapterFilter(user, 'direct');
+      Object.assign(baseQuery, scopeFilter);
+    }
     if (chapter) {
       baseQuery.chapter = { $regex: new RegExp(chapter.replace(/\s*[Cc]hapter\s*/g, ""), "i") };
     }

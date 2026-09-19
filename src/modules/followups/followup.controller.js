@@ -12,6 +12,7 @@ export const followupController = {
         eventId,
         chapter: effectiveChapter,
         search,
+        user: req.user,
       });
       res.json({ success: true, data });
     } catch (err) {
@@ -23,7 +24,7 @@ export const followupController = {
     try {
       const { chapter, eventId } = req.query;
       const effectiveChapter = chapter || req.user?.chapter;
-      const stats = await followupService.getStats(effectiveChapter, eventId);
+      const stats = await followupService.getStats(effectiveChapter, eventId, req.user);
       res.json({ success: true, data: stats });
     } catch (err) {
       next(err);

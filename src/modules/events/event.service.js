@@ -85,7 +85,9 @@ export const eventService = {
         //   a. Global events (created by central_admin)
         //   b. State-scope events in their own state
         //   c. Chapter-scope events within their state
-        visibilityConditions.push({ visibilityScope: "global" });
+        if (queryParams.strictAdminScope !== "true" && queryParams.strictAdminScope !== true) {
+          visibilityConditions.push({ visibilityScope: "global" });
+        }
         if (userState) {
           const stateRx = new RegExp(`^${userState}$`, "i");
           visibilityConditions.push({
@@ -103,12 +105,14 @@ export const eventService = {
         //   a. Global events
         //   b. State-scope events in their state
         //   c. Chapter-scope events in their own chapter
-        visibilityConditions.push({ visibilityScope: "global" });
-        if (userState) {
-          visibilityConditions.push({
-            visibilityScope: "state",
-            creatorState: new RegExp(`^${userState}$`, "i"),
-          });
+        if (queryParams.strictAdminScope !== "true" && queryParams.strictAdminScope !== true) {
+          visibilityConditions.push({ visibilityScope: "global" });
+          if (userState) {
+            visibilityConditions.push({
+              visibilityScope: "state",
+              creatorState: new RegExp(`^${userState}$`, "i"),
+            });
+          }
         }
         if (userChapter) {
           visibilityConditions.push({
