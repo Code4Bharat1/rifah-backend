@@ -180,6 +180,10 @@ const eventSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    posterImage: {
+      type: String,
+      default: "",
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

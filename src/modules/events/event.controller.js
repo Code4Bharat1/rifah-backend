@@ -100,6 +100,16 @@ export const eventController = {
     return ApiResponse.success(res, { coverImage: coverUrl, event: updated }, "Event cover uploaded successfully");
   }),
 
+  uploadPoster: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!req.file) {
+      return ApiResponse.error(res, "No image uploaded", 400);
+    }
+    const posterUrl = await storageService.uploadFile(req.file, "covers"); // Re-using covers folder
+    const updated = await eventService.updateEvent(id, { posterImage: posterUrl }, req.user);
+    return ApiResponse.success(res, { posterImage: posterUrl, event: updated }, "Event poster uploaded successfully");
+  }),
+
   deleteEvent: asyncHandler(async (req, res) => {
     const { id } = req.params;
     // For delete, we might want to fetch the event name before deleting or just log the ID

@@ -83,6 +83,15 @@ router.post(
   eventController.uploadCover
 );
 
+router.post(
+  "/:id/poster",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  upload.single("poster"),
+  eventController.uploadPoster
+);
+
 router.delete(
   "/:id",
   authMiddleware,
