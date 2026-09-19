@@ -25,9 +25,13 @@ export const validateUpdateStatus = (data = {}) => {
   }
 
   if (data.role) {
-    const allowedRoles = ["customer", "business_owner", "chapter_admin", "state_admin", "central_admin"];
+    // Admin tiers (chapter_admin/state_admin/central_admin) can only be granted through
+    // their dedicated, eligibility-checked assignment endpoints — never through this
+    // generic status endpoint, which would otherwise let any state/central admin
+    // promote an arbitrary user with zero paid/verified checks.
+    const allowedRoles = ["customer", "business_owner"];
     if (!allowedRoles.includes(data.role)) {
-      errors.push({ field: "role", message: `Role must be one of: ${allowedRoles.join(", ")}` });
+      errors.push({ field: "role", message: `This endpoint can only set role to one of: ${allowedRoles.join(", ")}. Use the dedicated admin-assignment endpoints to grant admin roles.` });
     }
   }
 

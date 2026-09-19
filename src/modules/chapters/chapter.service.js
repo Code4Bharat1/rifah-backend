@@ -5,6 +5,7 @@ import { ROLES } from "../../shared/constants/roles.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
+import { resolveEligibleAdminBusiness } from "../../shared/utils/admin-eligibility.js";
 import { NotFoundError, ConflictError, ForbiddenError } from "../../shared/errors/errors.js";
 import crypto from "crypto";
 
@@ -137,7 +138,7 @@ export const chapterService = {
     return chapter;
   },
 
-  assignAdmin: async (chapterId, { name, email }, requester) => {
+  assignAdmin: async (chapterId, { businessId }, requester) => {
     // STRICT DELEGATION: Super Admin cannot assign Chapter Admins directly
     if (requester && requester.role === ROLES.CENTRAL_ADMIN) {
       throw new ForbiddenError("Super Admin cannot assign Chapter Admins directly. Only the State Admin for this state can assign Chapter Admins.");
@@ -188,11 +189,19 @@ export const chapterService = {
       throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requesterState}`);
     }
 
-    const cleanEmail = email.toLowerCase().trim();
-    const existingUserWithEmail = await User.findOne({ email: cleanEmail });
+    // SECURITY: only a business with an active paid membership and verified
+    // status may be assigned as an admin — closes the loophole where a fresh,
+    // unpaid, unverified account could become a Chapter Admin.
+    const business = await resolveEligibleAdminBusiness(businessId);
+    const nominee = business.owner;
+
+    if (nominee.role === ROLES.CENTRAL_ADMIN || nominee.role === ROLES.STATE_ADMIN) {
+      throw new ConflictError("Cannot assign a Central Admin or State Admin as a Chapter Admin");
+    }
+
     // Check if an admin already exists for this chapter
     const oldAdmin = await User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN });
-    if (oldAdmin && oldAdmin.email !== cleanEmail) {
+    if (oldAdmin && String(oldAdmin._id) !== String(nominee._id)) {
       // Downgrade old admin to their previous role, or customer
       oldAdmin.role = oldAdmin.previousRole || ROLES.CUSTOMER;
       oldAdmin.previousRole = "";
@@ -208,47 +217,22 @@ export const chapterService = {
     const randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
     const passwordHash = await hashPassword(randomPassword);
 
-    if (existingUserWithEmail) {
-      if (existingUserWithEmail.role === ROLES.CENTRAL_ADMIN || existingUserWithEmail.role === ROLES.STATE_ADMIN) {
-        throw new ConflictError("Cannot assign a Super Admin or State Admin as a Chapter Admin");
-      }
-
-      // If user is already Chapter Admin of another chapter, or upgrading
-      if (existingUserWithEmail.role !== ROLES.CHAPTER_ADMIN) {
-        existingUserWithEmail.previousRole = existingUserWithEmail.role;
-      }
-      
-      existingUserWithEmail.role = ROLES.CHAPTER_ADMIN;
-      existingUserWithEmail.chapter = chapter.name;
-      existingUserWithEmail.chapterId = chapter._id;
-      existingUserWithEmail.city = chapter.city || existingUserWithEmail.city || "";
-      existingUserWithEmail.state = chapter.state || existingUserWithEmail.state || "";
-      existingUserWithEmail.name = name.trim();
-      existingUserWithEmail.passwordHash = passwordHash;
-      existingUserWithEmail.forcePasswordChange = true;
-      await existingUserWithEmail.save();
-
-      // Send email with generated credentials to the assigned chapter admin email
-      await emailService.sendChapterAdminInvite(cleanEmail, randomPassword, chapter.name, name.trim());
-      return existingUserWithEmail;
+    if (nominee.role !== ROLES.CHAPTER_ADMIN) {
+      nominee.previousRole = nominee.role;
     }
 
-    const admin = await User.create({
-      name: name.trim(),
-      email: cleanEmail,
-      passwordHash,
-      role: ROLES.CHAPTER_ADMIN,
-      chapter: chapter.name,
-      chapterId: chapter._id,
-      city: chapter.city || "",
-      state: chapter.state || "",
-      forcePasswordChange: true,
-    });
+    nominee.role = ROLES.CHAPTER_ADMIN;
+    nominee.chapter = chapter.name;
+    nominee.chapterId = chapter._id;
+    nominee.city = chapter.city || nominee.city || "";
+    nominee.state = chapter.state || nominee.state || "";
+    nominee.passwordHash = passwordHash;
+    nominee.forcePasswordChange = true;
+    await nominee.save();
 
     // Send email with generated credentials to the assigned chapter admin email
-    await emailService.sendChapterAdminInvite(cleanEmail, randomPassword, chapter.name, name.trim());
-
-    return admin;
+    await emailService.sendChapterAdminInvite(nominee.email, randomPassword, chapter.name, nominee.name);
+    return nominee;
   },
 
   updateChapterStatus: async (id, status) => {

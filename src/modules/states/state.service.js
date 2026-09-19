@@ -7,10 +7,9 @@ import { OneToOne } from "../networking/one-to-one.model.js";
 import { ThankYouNote } from "../networking/thank-you-note.model.js";
 import { StateProfile } from "./state-profile.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
-import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { NotFoundError, ConflictError, BadRequestError } from "../../shared/errors/errors.js";
-import crypto from "crypto";
+import { resolveEligibleAdminBusiness } from "../../shared/utils/admin-eligibility.js";
 
 export const stateService = {
   /**
@@ -180,22 +179,29 @@ export const stateService = {
   },
 
   /**
-   * Super Admin allocates a state to a State Admin.
-   * Creates new user or upgrades existing user to ROLES.STATE_ADMIN.
+   * Central Admin allocates a state to a State Admin. The nominee must
+   * already own a paid, verified business — closes the loophole where a
+   * fresh, unpaid, unverified account could become a State Admin. The state
+   * itself is derived from the business, not free-typed, so it can't drift.
    * Upserts the StateProfile with image and address.
    */
-  assignStateAdmin: async ({ state, name, email, phone, image, address }) => {
-    if (!state || !email || !name) {
-      throw new BadRequestError("State, Name, and Email are required");
-    }
+  assignStateAdmin: async ({ businessId, image, address }) => {
+    const business = await resolveEligibleAdminBusiness(businessId);
+    const nominee = business.owner;
 
-    const cleanState = state.trim();
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanState = (business.state || "").trim();
+    if (!cleanState) {
+      throw new BadRequestError("This business does not have a state on file.");
+    }
     const stateRegex = new RegExp(`^${cleanState}$`, "i");
+
+    if (nominee.role === ROLES.CENTRAL_ADMIN) {
+      throw new ConflictError("Cannot reassign a Central Admin as a State Admin");
+    }
 
     // Check if an admin already exists for this state
     const currentAdmin = await User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex });
-    if (currentAdmin && currentAdmin.email !== cleanEmail) {
+    if (currentAdmin && String(currentAdmin._id) !== String(nominee._id)) {
       // Demote current admin
       currentAdmin.role = currentAdmin.previousRole || ROLES.CUSTOMER;
       currentAdmin.previousRole = "";
@@ -203,62 +209,31 @@ export const stateService = {
       await currentAdmin.save();
     }
 
-    const existingUser = await User.findOne({ email: cleanEmail });
-
     const upsertStateProfile = async () => {
       await StateProfile.findOneAndUpdate(
         { name: cleanState },
-        { 
-          name: cleanState, 
+        {
+          name: cleanState,
           ...(image && { image }),
           ...(address && { address }),
-          email: cleanEmail, 
-          ...(phone && { phone: phone.trim() }) 
+          email: nominee.email,
+          ...(nominee.phone && { phone: nominee.phone }),
         },
         { upsert: true, new: true, runValidators: true }
       );
     };
 
-    if (existingUser) {
-      if (existingUser.role === ROLES.CENTRAL_ADMIN) {
-        throw new ConflictError("Cannot reassign a Super Admin as a State Admin");
-      }
-
-      if (existingUser.role !== ROLES.STATE_ADMIN) {
-        existingUser.previousRole = existingUser.role;
-      }
-
-      existingUser.role = ROLES.STATE_ADMIN;
-      existingUser.state = cleanState;
-      existingUser.name = name.trim();
-      if (phone) existingUser.phone = phone.trim();
-      await existingUser.save();
-
-      await emailService.sendStateAdminUpgradeEmail(cleanEmail, cleanState, existingUser.name);
-      await upsertStateProfile();
-
-      return existingUser;
+    if (nominee.role !== ROLES.STATE_ADMIN) {
+      nominee.previousRole = nominee.role;
     }
+    nominee.role = ROLES.STATE_ADMIN;
+    nominee.state = cleanState;
+    await nominee.save();
 
-    // New user creation
-    const password = crypto.randomBytes(8).toString("hex");
-    const passwordHash = await hashPassword(password);
-
-    const newAdmin = await User.create({
-      name: name.trim(),
-      email: cleanEmail,
-      phone: phone ? phone.trim() : "",
-      passwordHash,
-      role: ROLES.STATE_ADMIN,
-      state: cleanState,
-      forcePasswordChange: true,
-    });
-
-    // Send invitation email with credentials
-    await emailService.sendStateAdminInvite(cleanEmail, password, cleanState, newAdmin.name);
+    await emailService.sendStateAdminUpgradeEmail(nominee.email, cleanState, nominee.name);
     await upsertStateProfile();
 
-    return newAdmin;
+    return nominee;
   },
 
   /**

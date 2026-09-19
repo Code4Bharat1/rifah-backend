@@ -32,6 +32,7 @@ import { powerNetworkingRoutes } from "../modules/power-networking/power-network
 import { followupRoutes } from "../modules/followups/followup.routes.js";
 import { roleRoutes } from "../modules/roles/role.routes.js";
 import { documentRoutes } from "../modules/documents/document.routes.js";
+import { centralAdminRoutes } from "../modules/central-admin/central-admin.routes.js";
 
 const apiRouter = Router();
 
@@ -71,6 +72,7 @@ apiRouter.use("/birthdays", birthdayRoutes);
 apiRouter.use("/anniversaries", anniversaryRoutes);
 apiRouter.use("/roles", roleRoutes);
 apiRouter.use("/documents", documentRoutes);
+apiRouter.use("/central-admin", centralAdminRoutes);
 
 export { apiRouter };
 export default apiRouter;

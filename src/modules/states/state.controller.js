@@ -31,7 +31,7 @@ export const stateController = {
       action: "CREATE",
       targetModel: "User",
       targetId: admin._id,
-      summary: `Allocated state ${req.body.state} to State Admin: ${admin.name} (${admin.email})`,
+      summary: `Allocated state ${admin.state} to State Admin: ${admin.name} (${admin.email})`,
       ipAddress: req.ip,
     });
     return ApiResponse.created(res, admin, "State Admin allocated successfully. Email invitation sent.");
