@@ -27,27 +27,27 @@ router.get("/:id", authMiddleware, enquiryController.getEnquiryById);
 router.get(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   enquiryController.listAllEnquiries
 );
 router.get(
   "/admin/all",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   enquiryController.listAllEnquiries
 );
 
 router.get(
   "/admin/export/csv",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   enquiryController.exportCsv
 );
 
 router.patch(
   "/:id/status",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateRequest(validateUpdateEnquiryStatus),
   enquiryController.updateEnquiryStatus
 );

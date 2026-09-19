@@ -203,7 +203,7 @@ export const enquiryService = {
     if (user) {
       const isRequester = String(enquiry.requester?._id || enquiry.requester || "") === String(user.id);
       const isTargetOwner = String(enquiry.targetBusiness?.owner || "") === String(user.id);
-      const isAdmin = ["super_admin", "secretariat", "chapter_admin"].includes(user.role);
+      const isAdmin = ["central_admin", "state_admin", "chapter_admin"].includes(user.role);
 
       let hasRoutedLead = false;
       if (!isRequester && !isTargetOwner && !isAdmin) {
@@ -555,7 +555,7 @@ export const enquiryService = {
     await enquiry.save();
 
     try {
-      const headOfficeUsers = await User.find({ role: ROLES.SUPER_ADMIN }).select("_id");
+      const headOfficeUsers = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id");
       await Promise.all(
         headOfficeUsers.map((admin) =>
           notificationService.createNotification({

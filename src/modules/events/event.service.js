@@ -58,7 +58,7 @@ export const eventService = {
    * Browse events — creator-scope RBAC:
    *   chapter_admin created  → visible only to that chapter's members & admins
    *   state_admin created    → visible only to that state's members & admins
-   *   super_admin created    → visible to everyone (global)
+   *   central_admin created  → visible to everyone (global)
    */
   listEvents: async (queryParams = {}, user) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
@@ -76,13 +76,13 @@ export const eventService = {
       // 1. Creator always sees their own events regardless of scope
       visibilityConditions.push({ createdBy: userId });
 
-      if (userRole === ROLES.SUPER_ADMIN) {
-        // Super admin sees ALL events — no filter
+      if (userRole === ROLES.CENTRAL_ADMIN) {
+        // Central admin sees ALL events — no filter
         visibilityConditions.push({});
 
       } else if (userRole === ROLES.STATE_ADMIN) {
         // State admin sees:
-        //   a. Global events (created by super_admin)
+        //   a. Global events (created by central_admin)
         //   b. State-scope events in their own state
         //   c. Chapter-scope events within their state
         visibilityConditions.push({ visibilityScope: "global" });
@@ -231,7 +231,7 @@ export const eventService = {
     if (String(event.createdBy) === userId) return event;
 
     // Super admin sees all
-    if (userRole === ROLES.SUPER_ADMIN) return event;
+    if (userRole === ROLES.CENTRAL_ADMIN) return event;
 
     if (event.visibilityScope === "state") {
       // State admin, chapter admin, or regular user within the same state
@@ -272,7 +272,7 @@ export const eventService = {
     // ── Stamp creator-scope fields ────────────────────────────────────────────
     if (user) {
       data.createdBy     = user.id || user._id;
-      data.creatorRole   = user.role || ROLES.SUPER_ADMIN;
+      data.creatorRole   = user.role || ROLES.CENTRAL_ADMIN;
       data.creatorChapter = (user.chapter || "").trim();
       data.creatorState   = (user.state   || "").trim();
 
@@ -298,7 +298,7 @@ export const eventService = {
         // They can choose which chapters to include, but scope stays 'state'
 
       } else {
-        // super_admin: global — everyone can see
+        // central_admin: global — everyone can see
         data.visibilityScope = "global";
       }
     } else {
@@ -456,7 +456,7 @@ export const eventService = {
    */
   getEventRegistrations: async (eventId, user) => {
     const query = { _id: eventId };
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== ROLES.SECRETARIAT) {
+    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT) {
       query.createdBy = (user.id || user._id);
     }
     const event = await Event.findOne(query).lean();
@@ -499,7 +499,7 @@ export const eventService = {
    */
   updateEvent: async (id, updateData, user) => {
     const query = { _id: id };
-    if (user && user.role !== ROLES.SUPER_ADMIN) {
+    if (user && user.role !== ROLES.CENTRAL_ADMIN) {
       query.createdBy = (user.id || user._id);
     }
     const existing = await Event.findOne(query);
@@ -566,7 +566,7 @@ export const eventService = {
    */
   deleteEvent: async (id, user) => {
     const query = { _id: id };
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== ROLES.SECRETARIAT) {
+    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT) {
       query.createdBy = (user.id || user._id);
     }
     const existing = await Event.findOne(query);

@@ -11,7 +11,7 @@ router.get("/public", roleController.getPublicRoles);
 
 // Admin-only routes
 router.use(authMiddleware);
-router.use(requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN));
+router.use(requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN));
 
 router.get("/", roleController.getAllRoles);
 router.post("/", roleController.createRole);

@@ -371,7 +371,7 @@ export const paymentService = {
         }
 
         // 2. Notify Super Admins
-        const superAdmins = await User.find({ role: ROLES.SUPER_ADMIN }).select("_id email name");
+        const superAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
         const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
         const adminEmails = [...new Set([adminFallbackEmail, ...superAdmins.map((a) => a.email)].filter(Boolean))];
 
@@ -632,7 +632,7 @@ export const paymentService = {
 
       // 2. Send official payment receipt to Secretariat Admin for verification
       try {
-        const superAdmins = await User.find({ role: ROLES.SUPER_ADMIN }).select("_id email name");
+        const superAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
         const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
         const adminEmails = [...new Set([adminFallbackEmail, ...superAdmins.map((a) => a.email)].filter(Boolean))];
 

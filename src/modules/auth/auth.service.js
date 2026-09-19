@@ -461,7 +461,7 @@ export const authService = {
     }
 
     // Check chapter status if user is associated with a chapter and is not Super Admin / State Admin
-    if (user.chapter && user.role !== ROLES.SUPER_ADMIN && user.role !== ROLES.STATE_ADMIN) {
+    if (user.chapter && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.STATE_ADMIN) {
       const chapter = await Chapter.findOne({ name: user.chapter });
       if (chapter && chapter.status === "Inactive") {
         throw new UnauthorizedError("Your chapter is currently inactive. Please contact the RIFAH Administration.");
@@ -757,7 +757,7 @@ export const authService = {
     if (existingUser) {
       // SECURITY GUARD: Strictly block Admin Google OAuth login
       if (
-        existingUser.role === ROLES.SUPER_ADMIN ||
+        existingUser.role === ROLES.CENTRAL_ADMIN ||
         existingUser.role === ROLES.STATE_ADMIN ||
         existingUser.role === ROLES.CHAPTER_ADMIN
       ) {

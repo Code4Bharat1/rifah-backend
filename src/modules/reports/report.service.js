@@ -431,7 +431,7 @@ export const reportService = {
               breakdownRegistered.businesses++;
             } else if (r === "customer") {
               breakdownRegistered.consumers++;
-            } else if (r === "chapter_admin" || r === "state_admin" || r === "super_admin") {
+            } else if (r === "chapter_admin" || r === "state_admin" || r === "central_admin") {
               breakdownRegistered.admins++;
             } else {
               breakdownRegistered.other++;

@@ -67,7 +67,7 @@ export const getCourses = async (user, query = {}) => {
   let filter = { ...query };
 
   // Admins only see and manage their OWN scope's courses in their respective panel
-  if (user.role === ROLES.SUPER_ADMIN) {
+  if (user.role === ROLES.CENTRAL_ADMIN) {
     // Central Admin only manages Centre courses in their panel
     filter.scope = 'centre';
   } else if (user.role === ROLES.STATE_ADMIN) {
@@ -135,7 +135,7 @@ export const getCourseById = async (courseId, user) => {
   const course = await Course.findById(courseId).populate('createdBy', 'firstName lastName');
   if (!course) throw new NotFoundError("Course not found");
   
-  if (user.role !== ROLES.SUPER_ADMIN && !course.isActive) {
+  if (user.role !== ROLES.CENTRAL_ADMIN && !course.isActive) {
       if (!canManageCourse(user, course)) {
           throw new ForbiddenError("Course is not available");
       }
@@ -156,7 +156,7 @@ export const getCourseById = async (courseId, user) => {
                       (course.scope === 'chapter' && String(course.chapterId) === String(chapterId));
     
     if (!canAccess) throw new ForbiddenError("You do not have access to this course");
-  } else if (!canManageCourse(user, course) && user.role !== ROLES.SUPER_ADMIN) {
+  } else if (!canManageCourse(user, course) && user.role !== ROLES.CENTRAL_ADMIN) {
      throw new ForbiddenError("You do not have access to this course");
   }
 
@@ -166,14 +166,14 @@ export const getCourseById = async (courseId, user) => {
 
 // Helpers
 const getScopeFromRole = (role) => {
-  if (role === ROLES.SUPER_ADMIN) return 'centre';
+  if (role === ROLES.CENTRAL_ADMIN) return 'centre';
   if (role === ROLES.STATE_ADMIN) return 'state';
   if (role === ROLES.CHAPTER_ADMIN) return 'chapter';
   return 'centre'; // fallback
 };
 
 const canManageCourse = (user, course) => {
-  if (user.role === ROLES.SUPER_ADMIN) return true;
+  if (user.role === ROLES.CENTRAL_ADMIN) return true;
   if (user.role === ROLES.STATE_ADMIN) {
     const userState = user.state || user.stateId;
     return course.scope === 'state' && course.state === userState;

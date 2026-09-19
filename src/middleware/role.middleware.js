@@ -6,16 +6,15 @@ import { ROLE_HIERARCHY } from "../shared/constants/roles.js";
  * @param  {...string} allowedRoles
  */
 export const requireRole = (...allowedRoles) => {
+  const roles = allowedRoles.flat();
   return (req, res, next) => {
     if (!req.user) {
       return next(new UnauthorizedError("Authentication required"));
     }
 
-    console.log("DEBUG requireRole - user:", req.user.email, "role:", req.user.role, "allowedRoles:", allowedRoles);
-
-    if (!allowedRoles.includes(req.user.role)) {
+    if (!roles.includes(req.user.role)) {
       return next(
-        new ForbiddenError(`Access denied. Requires one of: ${allowedRoles.join(", ")}`)
+        new ForbiddenError(`Access denied. Requires one of: ${roles.join(", ")}`)
       );
     }
 

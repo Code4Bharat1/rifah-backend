@@ -16,7 +16,7 @@ router.get("/summary/me", authMiddleware, requireRole(ROLES.BUSINESS_OWNER), tha
 router.get(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   thankYouNoteController.listForAdmin
 );
 

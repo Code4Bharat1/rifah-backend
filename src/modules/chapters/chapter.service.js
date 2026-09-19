@@ -139,7 +139,7 @@ export const chapterService = {
 
   assignAdmin: async (chapterId, { name, email }, requester) => {
     // STRICT DELEGATION: Super Admin cannot assign Chapter Admins directly
-    if (requester && requester.role === ROLES.SUPER_ADMIN) {
+    if (requester && requester.role === ROLES.CENTRAL_ADMIN) {
       throw new ForbiddenError("Super Admin cannot assign Chapter Admins directly. Only the State Admin for this state can assign Chapter Admins.");
     }
 
@@ -209,7 +209,7 @@ export const chapterService = {
     const passwordHash = await hashPassword(randomPassword);
 
     if (existingUserWithEmail) {
-      if (existingUserWithEmail.role === ROLES.SUPER_ADMIN || existingUserWithEmail.role === ROLES.STATE_ADMIN) {
+      if (existingUserWithEmail.role === ROLES.CENTRAL_ADMIN || existingUserWithEmail.role === ROLES.STATE_ADMIN) {
         throw new ConflictError("Cannot assign a Super Admin or State Admin as a Chapter Admin");
       }
 

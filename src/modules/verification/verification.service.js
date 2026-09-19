@@ -218,7 +218,7 @@ export const verificationService = {
     const business = await Business.findById(verification.business);
     
     // RBAC: Geographic Scope Enforcement
-    if (!reviewer || ![ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(reviewer.role)) {
+    if (!reviewer || ![ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(reviewer.role)) {
       throw new ForbiddenError("You are not authorized to verify businesses.");
     }
 
@@ -369,7 +369,7 @@ export const verificationService = {
       if (!verification.business || (!stateRegex.test(verification.business.state || "") && !stateRegex.test(verification.business.chapter || ""))) {
         throw new ForbiddenError("You are not authorized to view documents outside your state");
       }
-    } else if (requester.role !== ROLES.SUPER_ADMIN) {
+    } else if (requester.role !== ROLES.CENTRAL_ADMIN) {
       // If it's a business owner, they should only see their own
       // (This covers Business Owner panel access if they use this route)
       if (String(verification.submittedBy) !== String(requester.id)) {

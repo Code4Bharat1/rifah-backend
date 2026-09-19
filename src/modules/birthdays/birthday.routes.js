@@ -2,6 +2,7 @@ import { Router } from "express";
 import { birthdayController } from "./birthday.controller.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
+import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
@@ -14,7 +15,7 @@ router.get("/today", birthdayController.getTodayBirthdays);
 // Manual trigger for birthday email dispatch (Admins only)
 router.post(
   "/trigger-emails",
-  requireRole(["super_admin", "secretariat"]),
+  requireRole(ROLES.CENTRAL_ADMIN),
   birthdayController.triggerBirthdayEmails
 );
 

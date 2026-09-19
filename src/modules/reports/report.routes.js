@@ -18,48 +18,48 @@ router.get("/business-analytics", authMiddleware, reportController.getBusinessAn
 router.get(
   "/overview",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   reportController.getAdminOverview
 );
 router.get(
   "/admin/overview",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   reportController.getAdminOverview
 );
 
 router.get(
   "/admin/export/csv",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   reportController.exportAdminCsv
 );
 
 router.get(
   "/admin/export/revenue",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   reportController.exportRevenue
 );
 
 router.get(
   "/admin/export/memberships",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   reportController.exportMemberships
 );
 
 router.get(
   "/admin/export/leads",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   reportController.exportLeads
 );
 
 router.get(
   "/admin/events-analytics",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   reportController.getEventsAnalytics
 );
 

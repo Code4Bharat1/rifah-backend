@@ -44,7 +44,7 @@ router.post(
 router.post(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateRequest(validateCreateEvent),
   eventController.createEvent
 );
@@ -52,7 +52,7 @@ router.post(
 router.get(
   "/:id/registrations",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.getEventRegistrations
 );
@@ -60,7 +60,7 @@ router.get(
 router.patch(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateUpdateEvent),
   eventController.updateEvent
@@ -68,7 +68,7 @@ router.patch(
 router.put(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateUpdateEvent),
   eventController.updateEvent
@@ -77,7 +77,7 @@ router.put(
 router.post(
   "/:id/cover",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   upload.single("cover"),
   eventController.uploadCover
@@ -86,7 +86,7 @@ router.post(
 router.delete(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.deleteEvent
 );
@@ -95,7 +95,7 @@ router.delete(
 router.get(
   "/:id/operations",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.getOperations
 );
@@ -103,7 +103,7 @@ router.get(
 router.patch(
   "/:id/operations",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.updateOperations
 );
@@ -111,7 +111,7 @@ router.patch(
 router.patch(
   "/:id/attendees/:attendeeId/checkin",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.toggleCheckin
 );
@@ -119,7 +119,7 @@ router.patch(
 router.post(
   "/:id/finance",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.addFinance
 );

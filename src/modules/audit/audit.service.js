@@ -100,7 +100,7 @@ export const auditService = {
           userIds.push(userId);
         }
         filter.actor = { $in: userIds };
-        filter.actorRole = { $ne: ROLES.SUPER_ADMIN };
+        filter.actorRole = { $ne: ROLES.CENTRAL_ADMIN };
         filter.action = { $nin: ["DELETE", "delete"] };
       }
     }

@@ -10,14 +10,14 @@ const router = Router();
 router.get(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
   stateController.listStates
 );
 
 router.get(
   "/:stateName",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
   stateController.getStateByName
 );
 
@@ -25,7 +25,7 @@ router.get(
 router.post(
   "/assign-admin",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN),
   stateController.assignStateAdmin
 );
 
@@ -33,7 +33,7 @@ router.post(
 router.delete(
   "/:stateName/admin",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN),
   stateController.removeStateAdmin
 );
 
@@ -41,7 +41,7 @@ router.delete(
 router.put(
   "/:stateName",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN),
   stateController.updateState
 );
 
@@ -49,7 +49,7 @@ router.put(
 router.delete(
   "/:stateName",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN),
   stateController.deleteState
 );
 

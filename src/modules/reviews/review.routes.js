@@ -31,14 +31,14 @@ router.post(
 router.get(
   "/admin/all",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   reviewController.listReviewsForAdmin
 );
 
 router.patch(
   "/:id/moderate",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateModerateReview),
   reviewController.moderateReview
@@ -47,14 +47,14 @@ router.patch(
 router.delete(
   "/admin/all",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN),
   reviewController.deleteAllReviews
 );
 
 router.delete(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN),
   validateObjectIdParam("id"),
   reviewController.deleteReview
 );

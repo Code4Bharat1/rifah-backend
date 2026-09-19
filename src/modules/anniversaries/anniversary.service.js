@@ -198,7 +198,7 @@ export const anniversaryService = {
     }
 
     // 2. Query scope for chapter members / businesses
-    const isAdmin = ["super_admin", "secretariat"].includes(userDoc?.role || currentUser.role);
+    const isAdmin = (userDoc?.role || currentUser.role) === "central_admin";
     const isStateAdmin = (userDoc?.role || currentUser.role) === "state_admin";
 
     const bizQuery = {

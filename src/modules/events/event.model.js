@@ -162,7 +162,7 @@ const eventSchema = new mongoose.Schema(
     // These are stamped at creation time so access checks are instant.
     creatorRole: {
       type: String,
-      default: "super_admin", // super_admin | state_admin | chapter_admin
+      default: "central_admin", // central_admin | state_admin | chapter_admin
     },
     creatorChapter: {
       type: String,
@@ -175,7 +175,7 @@ const eventSchema = new mongoose.Schema(
       index: true,
     },
     // visibilityScope drives the access check in listEvents / getEventBySlugOrId
-    //   'global'  → created by super_admin  → everyone can see
+    //   'global'  → created by central_admin  → everyone can see
     //   'state'   → created by state_admin  → that state's members can see
     //   'chapter' → created by chapter_admin → that chapter's members can see
     visibilityScope: {

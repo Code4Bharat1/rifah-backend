@@ -29,7 +29,7 @@ export const leadService = {
       if (outOfChapter) {
         throw new ForbiddenError("Security Violation: You can only route leads to businesses within your chapter.");
       }
-    } else if (user && [ "super_admin", "secretariat" ].includes(user.role)) {
+    } else if (user && [ "central_admin", "secretariat" ].includes(user.role)) {
       if (enquiry.status !== "Escalated") {
         throw new ForbiddenError("Head Office can only route a lead after it has been escalated.");
       }
@@ -215,7 +215,7 @@ export const leadService = {
       const isOwner = businessOwnerId && businessOwnerId === String(user.id);
       const isRequester = enquiryRequesterId && enquiryRequesterId === String(user.id);
       const isSameBusiness = user.businessId && String(user.businessId) === String(lead.business?._id || lead.business || "");
-      const isAdmin = ["super_admin", "secretariat", "chapter_admin"].includes(user.role);
+      const isAdmin = ["central_admin", "secretariat", "chapter_admin"].includes(user.role);
 
       if (!isOwner && !isRequester && !isSameBusiness && !isAdmin && (businessOwnerId || enquiryRequesterId)) {
         throw new ForbiddenError("You are not authorized to view this lead");
@@ -277,7 +277,7 @@ export const leadService = {
     const businessId = String(lead.business?._id || lead.business || "");
     const isOwner = businessOwnerId && businessOwnerId === String(user.id);
     const isSameBusiness = user.businessId && String(user.businessId) === businessId;
-    const isAdmin = ["super_admin", "secretariat", "chapter_admin"].includes(user.role);
+    const isAdmin = ["central_admin", "secretariat", "chapter_admin"].includes(user.role);
 
     if (!isOwner && !isSameBusiness && !isAdmin && businessOwnerId) {
       throw new ForbiddenError("Security Violation: You are not authorized to quote on this business lead");
@@ -464,7 +464,7 @@ export const leadService = {
       const businessId = String(lead.business?._id || lead.business || "");
       const isOwner = businessOwnerId && businessOwnerId === String(user.id);
       const isSameBusiness = user.businessId && String(user.businessId) === businessId;
-      const isAdmin = ["super_admin", "secretariat", "chapter_admin"].includes(user.role);
+      const isAdmin = ["central_admin", "secretariat", "chapter_admin"].includes(user.role);
 
       if (!isOwner && !isSameBusiness && !isAdmin && businessOwnerId) {
         throw new ForbiddenError("You are not authorized to update this lead's status");

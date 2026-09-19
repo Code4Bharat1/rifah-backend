@@ -316,7 +316,7 @@ export const catalogueService = {
     }
 
     const isOwner = String(item.business?.owner) === String(user.id);
-    const isAdmin = ["super_admin", "secretariat"].includes(user.role);
+    const isAdmin = user.role === "central_admin";
 
     if (!isOwner && !isAdmin) {
       throw new ForbiddenError("Unauthorized to update this item");
@@ -355,7 +355,7 @@ export const catalogueService = {
     }
 
     const isOwner = String(item.business.owner) === String(user.id);
-    const isAdmin = ["super_admin", "secretariat"].includes(user.role);
+    const isAdmin = user.role === "central_admin";
 
     if (!isOwner && !isAdmin) {
       throw new ForbiddenError("Unauthorized to delete this item");

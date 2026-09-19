@@ -15,23 +15,24 @@ const seedAdmin = async () => {
 
     if (existingAdmin) {
       console.log(`Admin account already exists (${adminEmail}). Updating credentials...`);
+      existingAdmin.name = "RIFAH Central Admin";
       existingAdmin.passwordHash = await hashPassword("12345678");
-      existingAdmin.role = ROLES.SUPER_ADMIN;
+      existingAdmin.role = ROLES.CENTRAL_ADMIN;
       existingAdmin.status = STATUSES.USER.ACTIVE;
       await existingAdmin.save();
-      console.log(`✅ Admin account (${adminEmail}) updated successfully!`);
+      console.log(`✅ Admin account (${adminEmail}) updated successfully to Central Admin!`);
     } else {
       const passwordHash = await hashPassword("12345678");
       await User.create({
-        name: "RIFAH Super Admin",
+        name: "RIFAH Central Admin",
         email: adminEmail,
         passwordHash,
         phone: "+91 22 2345 6789",
-        role: ROLES.SUPER_ADMIN,
+        role: ROLES.CENTRAL_ADMIN,
         status: STATUSES.USER.ACTIVE,
         chapter: "Mumbai Chapter",
       });
-      console.log(`✅ Super Admin created successfully: ${adminEmail} / 12345678`);
+      console.log(`✅ Central Admin created successfully: ${adminEmail} / 12345678`);
     }
 
     await mongoose.disconnect();

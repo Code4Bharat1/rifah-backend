@@ -13,9 +13,9 @@ const router = Router();
 router.get("/plans", membershipController.getPlans);
 
 // Admin plan management (Restricted to Super Admin)
-router.post("/plans", authMiddleware, requireRole(ROLES.SUPER_ADMIN), membershipController.createPlan);
-router.put("/plans/:planId", authMiddleware, requireRole(ROLES.SUPER_ADMIN), membershipController.updatePlan);
-router.delete("/plans/:planId", authMiddleware, requireRole(ROLES.SUPER_ADMIN), membershipController.deletePlan);
+router.post("/plans", authMiddleware, requireRole(ROLES.CENTRAL_ADMIN), membershipController.createPlan);
+router.put("/plans/:planId", authMiddleware, requireRole(ROLES.CENTRAL_ADMIN), membershipController.updatePlan);
+router.delete("/plans/:planId", authMiddleware, requireRole(ROLES.CENTRAL_ADMIN), membershipController.deletePlan);
 
 // Business Owner membership management
 router.get("/me", authMiddleware, membershipController.getMyMembership);

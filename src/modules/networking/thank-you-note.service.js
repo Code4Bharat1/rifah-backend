@@ -17,7 +17,7 @@ const withPopulate = (query) =>
 
 const buildScopeFilter = (user) => {
   if (!user) return { _id: null };
-  if (user.role === ROLES.SUPER_ADMIN) return {};
+  if (user.role === ROLES.CENTRAL_ADMIN) return {};
   if (user.role === ROLES.STATE_ADMIN) {
     if (!user.state) return { _id: null };
     const re = new RegExp(`^${user.state.trim()}$`, "i");
@@ -130,7 +130,7 @@ export const thankYouNoteService = {
     ];
     if (partyIds.includes(String(user.id))) return record;
 
-    if (user.role === ROLES.SUPER_ADMIN) return record;
+    if (user.role === ROLES.CENTRAL_ADMIN) return record;
 
     if (user.role === ROLES.STATE_ADMIN && user.state) {
       const re = new RegExp(`^${user.state.trim()}$`, "i");

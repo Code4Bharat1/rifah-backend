@@ -123,18 +123,13 @@ const run = async () => {
   ]);
 
   // ---------------------------------------------------------------------
-  // 5. Users: super admin, central admin, chapter admins, business owners, customers
+  // 5. Users: central admin, chapter admins, business owners, customers
   // ---------------------------------------------------------------------
   console.log("Seeding Users...");
 
-  const superAdmin = await User.create({
-    name: "RIFAH Super Admin", email: "admin@gmail.com", passwordHash: adminPwHash,
-    phone: "+91 22 2345 6789", role: ROLES.SUPER_ADMIN, status: "Active",
-  });
-
-  const secretariat = await User.create({
-    name: "RIFAH Central Admin", email: "secretariat@rifah.org", passwordHash: adminPwHash,
-    phone: "+91 22 2345 6790", role: ROLES.SECRETARIAT, status: "Active",
+  const centralAdmin = await User.create({
+    name: "RIFAH Central Admin", email: "admin@gmail.com", passwordHash: adminPwHash,
+    phone: "+91 22 2345 6789", role: ROLES.CENTRAL_ADMIN, status: "Active",
   });
 
   const chapterAdmins = [];

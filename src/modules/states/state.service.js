@@ -185,7 +185,7 @@ export const stateService = {
     const existingUser = await User.findOne({ email: cleanEmail });
 
     if (existingUser) {
-      if (existingUser.role === ROLES.SUPER_ADMIN) {
+      if (existingUser.role === ROLES.CENTRAL_ADMIN) {
         throw new ConflictError("Cannot reassign a Super Admin as a State Admin");
       }
 

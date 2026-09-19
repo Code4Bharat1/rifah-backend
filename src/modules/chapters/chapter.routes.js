@@ -20,7 +20,7 @@ router.get("/slug/:slug", optionalAuthMiddleware, chapterController.getChapterBy
 router.get(
   "/:id/details",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   chapterController.getChapterDetails
 );
@@ -31,7 +31,7 @@ router.get("/:id", validateObjectIdParam("id"), chapterController.getChapterById
 router.post(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
   validateRequest(validateCreateChapter),
   chapterController.createChapter
 );
@@ -39,7 +39,7 @@ router.post(
 router.patch(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateUpdateChapter),
   chapterController.updateChapter
@@ -48,7 +48,7 @@ router.patch(
 router.patch(
   "/:id/status",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   chapterController.updateChapterStatus
 );
@@ -56,7 +56,7 @@ router.patch(
 router.post(
   "/:id/units",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateAddUnit),
   chapterController.addUnit
@@ -65,7 +65,7 @@ router.post(
 router.delete(
   "/:id/units/:unitId",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   chapterController.removeUnit
 );

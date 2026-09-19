@@ -25,7 +25,7 @@ export const validateUpdateStatus = (data = {}) => {
   }
 
   if (data.role) {
-    const allowedRoles = ["customer", "business_owner", "chapter_admin", "secretariat", "super_admin"];
+    const allowedRoles = ["customer", "business_owner", "chapter_admin", "state_admin", "central_admin"];
     if (!allowedRoles.includes(data.role)) {
       errors.push({ field: "role", message: `Role must be one of: ${allowedRoles.join(", ")}` });
     }

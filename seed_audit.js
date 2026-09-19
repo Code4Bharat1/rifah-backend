@@ -23,8 +23,8 @@ async function seedLogs() {
     const dummyLogs = [
       {
         actor: new mongoose.Types.ObjectId(),
-        actorName: "Super Admin",
-        actorRole: "super_admin",
+        actorName: "Central Admin",
+        actorRole: "central_admin",
         action: "UPDATE",
         targetModel: "Business",
         targetId: new mongoose.Types.ObjectId().toString(),
@@ -33,8 +33,8 @@ async function seedLogs() {
       },
       {
         actor: new mongoose.Types.ObjectId(),
-        actorName: "Super Admin",
-        actorRole: "super_admin",
+        actorName: "Central Admin",
+        actorRole: "central_admin",
         action: "CREATE",
         targetModel: "Notification",
         targetId: "global-bc-12345",

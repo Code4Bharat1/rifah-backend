@@ -55,14 +55,14 @@ let skipped = 0;
 
 for (const ev of events) {
   let visibilityScope = "global";
-  let creatorRole     = "super_admin";
+  let creatorRole     = "central_admin";
   let creatorChapter  = "";
   let creatorState    = "";
 
   if (ev.createdBy) {
     const creator = await User.findById(ev.createdBy).lean();
     if (creator) {
-      creatorRole    = creator.role    || "super_admin";
+      creatorRole    = creator.role    || "central_admin";
       creatorChapter = creator.chapter || "";
       creatorState   = creator.state   || "";
 

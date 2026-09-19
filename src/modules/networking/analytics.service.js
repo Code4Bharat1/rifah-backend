@@ -7,7 +7,7 @@ const stateRegex = (state) => new RegExp(`^${state.trim()}$`, "i");
 
 /** Documents where the GIVER (business that generated business for someone) is within the admin's scope */
 const giverScopeMatch = (user) => {
-  if (!user || user.role === ROLES.SUPER_ADMIN) return {};
+  if (!user || user.role === ROLES.CENTRAL_ADMIN) return {};
   if (user.role === ROLES.STATE_ADMIN) return user.state ? { giverState: stateRegex(user.state) } : { _id: null };
   if (user.role === ROLES.CHAPTER_ADMIN) return user.chapterId ? { giverChapterId: user.chapterId } : { _id: null };
   return { _id: null };
@@ -15,7 +15,7 @@ const giverScopeMatch = (user) => {
 
 /** Documents where the RECEIVER (business that received business) is within the admin's scope */
 const receiverScopeMatch = (user) => {
-  if (!user || user.role === ROLES.SUPER_ADMIN) return {};
+  if (!user || user.role === ROLES.CENTRAL_ADMIN) return {};
   if (user.role === ROLES.STATE_ADMIN) return user.state ? { receiverState: stateRegex(user.state) } : { _id: null };
   if (user.role === ROLES.CHAPTER_ADMIN) return user.chapterId ? { receiverChapterId: user.chapterId } : { _id: null };
   return { _id: null };
@@ -23,7 +23,7 @@ const receiverScopeMatch = (user) => {
 
 /** Documents touching the admin's scope at all (either party) — counted once, no double-count */
 const eitherScopeMatch = (user) => {
-  if (!user || user.role === ROLES.SUPER_ADMIN) return {};
+  if (!user || user.role === ROLES.CENTRAL_ADMIN) return {};
   if (user.role === ROLES.STATE_ADMIN) {
     if (!user.state) return { _id: null };
     const re = stateRegex(user.state);
@@ -45,7 +45,7 @@ const sumAmount = async (match) => {
 };
 
 const scopeLabel = (user) => {
-  if (!user || user.role === ROLES.SUPER_ADMIN) return { level: "central", name: "All India" };
+  if (!user || user.role === ROLES.CENTRAL_ADMIN) return { level: "central", name: "All India" };
   if (user.role === ROLES.STATE_ADMIN) return { level: "state", name: user.state || "" };
   if (user.role === ROLES.CHAPTER_ADMIN) return { level: "chapter", name: "" };
   return { level: "none", name: "" };
@@ -146,7 +146,7 @@ export const analyticsService = {
    */
   breakdown: async (user, { level } = {}) => {
     if (level === "state") {
-      if (!user || user.role !== ROLES.SUPER_ADMIN) {
+      if (!user || user.role !== ROLES.CENTRAL_ADMIN) {
         throw new ForbiddenError("Only central admin can view state-wise breakdown");
       }
       const [givenRows, receivedRows] = await Promise.all([
@@ -184,7 +184,7 @@ export const analyticsService = {
         const re = stateRegex(user.state);
         giverMatch = { giverState: re };
         receiverMatch = { receiverState: re };
-      } else if (!user || user.role !== ROLES.SUPER_ADMIN) {
+      } else if (!user || user.role !== ROLES.CENTRAL_ADMIN) {
         throw new ForbiddenError("Only central or state admin can view chapter-wise breakdown");
       }
 

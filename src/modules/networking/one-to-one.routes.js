@@ -14,7 +14,7 @@ router.get("/me", authMiddleware, requireRole(ROLES.BUSINESS_OWNER), oneToOneCon
 router.get(
   "/",
   authMiddleware,
-  requireRole(ROLES.SUPER_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   oneToOneController.listForAdmin
 );
 
