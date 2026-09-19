@@ -876,5 +876,79 @@ export const eventService = {
       }
     });
     console.log("[EventScheduler] Started checking for scheduled events...");
-  }
+  },
+
+  // ─── Ask & Give Board ──────────────────────────────────────────────────────
+  async getAskGiveBoard(eventId) {
+    const event = await Event.findById(eventId)
+      .populate("registeredUsers.user", "name email phone company businessName profilePhoto")
+      .lean();
+    if (!event) throw new NotFoundError("Event not found");
+
+    return (event.registeredUsers || [])
+      .filter((r) => (r.asks && r.asks.length > 0) || (r.gives && r.gives.length > 0))
+      .map((r) => ({
+        attendeeId: r._id,
+        user: r.user,
+        asks: r.asks || [],
+        gives: r.gives || [],
+        registeredAt: r.registeredAt,
+      }));
+  },
+
+  async updateAttendeeAskGive(eventId, attendeeId, { asks, gives }) {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const attendee = event.registeredUsers.id(attendeeId);
+    if (!attendee) throw new NotFoundError("Attendee not found");
+
+    if (asks) attendee.asks = asks.slice(0, 3);
+    if (gives) attendee.gives = gives.slice(0, 3);
+    await event.save();
+    return { asks: attendee.asks, gives: attendee.gives };
+  },
+
+  // ─── Entrance Desk Gate Action ─────────────────────────────────────────────
+  async gateAction(eventId, attendeeId, action) {
+    if (!["approved", "rejected"].includes(action)) {
+      throw new BadRequestError("Invalid gate action. Use 'approved' or 'rejected'.");
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const attendee = event.registeredUsers.id(attendeeId);
+    if (!attendee) throw new NotFoundError("Attendee not found");
+
+    attendee.gateStatus = action;
+    if (action === "approved") {
+      attendee.gateApprovedAt = new Date();
+      attendee.attendanceStatus = "Present";
+    }
+    await event.save();
+    return { gateStatus: attendee.gateStatus, attendeeId };
+  },
+
+  // ─── Event Scripts ─────────────────────────────────────────────────────────
+  async getScripts(eventId) {
+    const event = await Event.findById(eventId).select("scripts speakers teamAssignments slogan theme chapter").lean();
+    if (!event) throw new NotFoundError("Event not found");
+    return { scripts: event.scripts || [], meta: { speakers: event.speakers, team: event.teamAssignments, slogan: event.slogan, theme: event.theme, chapter: event.chapter } };
+  },
+
+  async updateScript(eventId, segmentId, { customText, language }) {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const existing = (event.scripts || []).find((s) => s.segmentId === segmentId);
+    if (existing) {
+      if (customText !== undefined) existing.customText = customText;
+      if (language !== undefined) existing.language = language;
+    } else {
+      event.scripts.push({ segmentId, customText: customText || "", language: language || "English" });
+    }
+    await event.save();
+    return event.scripts;
+  },
 };
