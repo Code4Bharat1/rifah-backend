@@ -364,7 +364,9 @@ export const eventService = {
             user: userId, 
             registeredAt: new Date(), 
             status: "Confirmed",
-            paymentStatus,
+            paymentStatus: paymentStatus,
+            amountPaid: paymentData?.amount || 0,
+            couponApplied: paymentData?.couponApplied || "",
             paymentId: paymentData?.paymentId,
             transactionId: paymentData?.transactionId
           } 

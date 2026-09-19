@@ -21,6 +21,10 @@ export const validateCreateEvent = (data = {}) => {
     if (isNaN(price) || price < 0 || data.ticketPrice === "" || data.ticketPrice === undefined || data.ticketPrice === null) {
       errors.push({ field: "ticketPrice", message: "Ticket price must be a valid number for paid events" });
     }
+    const memPrice = Number(data.memberPrice);
+    if (!isNaN(memPrice) && memPrice < 0) {
+      errors.push({ field: "memberPrice", message: "Member price cannot be negative" });
+    }
   }
   return { valid: errors.length === 0, errors };
 };
@@ -36,6 +40,12 @@ export const validateUpdateEvent = (data = {}) => {
       const price = Number(data.ticketPrice);
       if (isNaN(price) || price < 0) {
         errors.push({ field: "ticketPrice", message: "Ticket price must be a valid number for paid events" });
+      }
+    }
+    if (isPaid && data.memberPrice !== undefined) {
+      const memPrice = Number(data.memberPrice);
+      if (isNaN(memPrice) || memPrice < 0) {
+        errors.push({ field: "memberPrice", message: "Member price cannot be negative" });
       }
     }
   }

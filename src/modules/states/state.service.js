@@ -5,6 +5,7 @@ import { Event } from "../events/event.model.js";
 import { Referral } from "../networking/referral.model.js";
 import { OneToOne } from "../networking/one-to-one.model.js";
 import { ThankYouNote } from "../networking/thank-you-note.model.js";
+import { StateProfile } from "./state-profile.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -87,17 +88,34 @@ export const stateService = {
       chaptersByStateMap.get(st).push(ch);
     });
 
+    // Fetch all StateProfiles
+    const allProfiles = await StateProfile.find({});
+    const profileByStateMap = new Map();
+    allProfiles.forEach((p) => {
+      profileByStateMap.set(p.name.trim().toLowerCase(), p);
+    });
+
+    // Add states from profiles that might not have an admin or chapter yet
+    allProfiles.forEach((p) => {
+      const key = p.name.trim().toLowerCase();
+      if (!targetStates.includes(p.name.trim())) {
+        targetStates.push(p.name.trim());
+      }
+    });
+
     // Build formatted state objects
     const result = targetStates.map((stateName) => {
       const key = stateName.trim().toLowerCase();
       const admin = adminByStateMap.get(key) || null;
       const chapters = chaptersByStateMap.get(key) || [];
+      const profile = profileByStateMap.get(key) || null;
       const activeChaptersCount = chapters.filter((c) => c.status === "Active").length;
       const totalBusinesses = chapters.reduce((sum, c) => sum + (c.businessesCount || 0), 0);
 
       return {
         state: stateName,
         admin,
+        profile,
         chaptersCount: chapters.length,
         activeChaptersCount,
         totalBusinesses,
@@ -129,9 +147,10 @@ export const stateService = {
     }
 
     const stateRegex = new RegExp(`^${stateName.trim()}$`, "i");
-    const [admin, chapters] = await Promise.all([
+    const [admin, chapters, profile] = await Promise.all([
       User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex }).select("-passwordHash"),
       Chapter.find({ state: stateRegex }).sort({ name: 1 }),
+      StateProfile.findOne({ name: stateRegex })
     ]);
 
     const chapterIds = chapters.map((c) => c._id);
@@ -153,6 +172,7 @@ export const stateService = {
     return {
       state: stateName,
       admin,
+      profile,
       chapters: enrichedChapters,
       chaptersCount: chapters.length,
       totalBusinesses,
@@ -162,8 +182,9 @@ export const stateService = {
   /**
    * Super Admin allocates a state to a State Admin.
    * Creates new user or upgrades existing user to ROLES.STATE_ADMIN.
+   * Upserts the StateProfile with image and address.
    */
-  assignStateAdmin: async ({ state, name, email, phone }) => {
+  assignStateAdmin: async ({ state, name, email, phone, image, address }) => {
     if (!state || !email || !name) {
       throw new BadRequestError("State, Name, and Email are required");
     }
@@ -184,6 +205,20 @@ export const stateService = {
 
     const existingUser = await User.findOne({ email: cleanEmail });
 
+    const upsertStateProfile = async () => {
+      await StateProfile.findOneAndUpdate(
+        { name: cleanState },
+        { 
+          name: cleanState, 
+          ...(image && { image }),
+          ...(address && { address }),
+          email: cleanEmail, 
+          ...(phone && { phone: phone.trim() }) 
+        },
+        { upsert: true, new: true, runValidators: true }
+      );
+    };
+
     if (existingUser) {
       if (existingUser.role === ROLES.CENTRAL_ADMIN) {
         throw new ConflictError("Cannot reassign a Super Admin as a State Admin");
@@ -199,8 +234,8 @@ export const stateService = {
       if (phone) existingUser.phone = phone.trim();
       await existingUser.save();
 
-      // Send upgrade notification email
       await emailService.sendStateAdminUpgradeEmail(cleanEmail, cleanState, existingUser.name);
+      await upsertStateProfile();
 
       return existingUser;
     }
@@ -221,6 +256,7 @@ export const stateService = {
 
     // Send invitation email with credentials
     await emailService.sendStateAdminInvite(cleanEmail, password, cleanState, newAdmin.name);
+    await upsertStateProfile();
 
     return newAdmin;
   },
@@ -281,9 +317,6 @@ export const stateService = {
     return { message: "State renamed successfully", state: newName };
   },
 
-  /**
-   * Delete a state (Safe Detachment: set to Unassigned)
-   */
   deleteState: async (stateName) => {
     const stateRegex = new RegExp(`^${stateName.trim()}$`, "i");
 
@@ -321,6 +354,32 @@ export const stateService = {
     await ThankYouNote.updateMany({ receiverState: stateRegex }, { $set: { receiverState: unassigned } });
 
     return { message: "State deleted (detached) successfully" };
+  },
+
+  /**
+   * Edit a state profile (image, address, etc)
+   */
+  updateStateProfile: async (stateName, { image, address, phone, email }) => {
+    const cleanState = stateName.trim();
+    if (!cleanState) {
+      throw new BadRequestError("State name is required");
+    }
+
+    const updatedProfile = await StateProfile.findOneAndUpdate(
+      { name: new RegExp(`^${cleanState}$`, "i") },
+      { 
+        $set: {
+          name: cleanState,
+          ...(image !== undefined && { image }),
+          ...(address !== undefined && { address }),
+          ...(phone !== undefined && { phone }),
+          ...(email !== undefined && { email })
+        }
+      },
+      { upsert: true, new: true, runValidators: true }
+    );
+
+    return updatedProfile;
   },
 };
 

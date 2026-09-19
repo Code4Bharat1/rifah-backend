@@ -23,8 +23,11 @@ export const eventController = {
       payload.isPaid = payload.isPaid === true || payload.isPaid === "true" || payload.isPaid === "Paid";
       if (payload.isPaid) {
         payload.ticketPrice = Number(payload.ticketPrice) || 0;
+        payload.memberPrice = Number(payload.memberPrice) || 0;
       } else {
         payload.ticketPrice = 0;
+        payload.memberPrice = 0;
+        payload.memberCouponCode = "";
       }
     }
     const created = await eventService.createEvent(payload, req.user);
@@ -47,11 +50,11 @@ export const eventController = {
 
   registerPaidForEvent: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { paymentId, transactionId } = req.body;
+    const { paymentId, transactionId, amount, couponApplied } = req.body;
     if (!paymentId) {
       return ApiResponse.error(res, "Payment details are required for paid events", 400);
     }
-    const event = await eventService.registerUserForEvent(id, req.user.id, { paymentId, transactionId });
+    const event = await eventService.registerUserForEvent(id, req.user.id, { paymentId, transactionId, amount, couponApplied });
     return ApiResponse.success(res, event, "Paid registration for event successful");
   }),
 
@@ -66,8 +69,13 @@ export const eventController = {
     const payload = { ...req.body };
     if (payload.isPaid !== undefined) {
       payload.isPaid = payload.isPaid === true || payload.isPaid === "true" || payload.isPaid === "Paid";
-      if (payload.isPaid && payload.ticketPrice !== undefined) {
-        payload.ticketPrice = Number(payload.ticketPrice) || 0;
+      if (payload.isPaid) {
+        if (payload.ticketPrice !== undefined) payload.ticketPrice = Number(payload.ticketPrice) || 0;
+        if (payload.memberPrice !== undefined) payload.memberPrice = Number(payload.memberPrice) || 0;
+      } else {
+        payload.ticketPrice = 0;
+        payload.memberPrice = 0;
+        payload.memberCouponCode = "";
       }
     }
     const updated = await eventService.updateEvent(id, payload, req.user);
