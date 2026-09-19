@@ -191,6 +191,27 @@ app.use(
       } catch (err) {
         console.error("Dynamic PDF fallback generation error:", err);
       }
+    } else if (filename.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+      // 4. Dynamic Image fallback (never 404 on missing dummy images)
+      res.removeHeader("X-Frame-Options");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      res.setHeader("Content-Security-Policy", "frame-ancestors *");
+      res.setHeader("Content-Type", "image/svg+xml");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+          <rect width="100%" height="100%" fill="#f1f5f9"/>
+          <text x="50%" y="45%" font-family="system-ui, sans-serif" font-size="24" font-weight="bold" fill="#64748b" text-anchor="middle">
+            Placeholder Image
+          </text>
+          <text x="50%" y="55%" font-family="system-ui, sans-serif" font-size="16" fill="#94a3b8" text-anchor="middle">
+            ${filename}
+          </text>
+        </svg>
+      `;
+      return res.send(Buffer.from(svg.trim()));
     }
 
     next();

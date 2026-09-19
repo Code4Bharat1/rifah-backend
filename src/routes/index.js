@@ -34,6 +34,7 @@ import { roleRoutes } from "../modules/roles/role.routes.js";
 import { documentRoutes } from "../modules/documents/document.routes.js";
 import { centralAdminRoutes } from "../modules/central-admin/central-admin.routes.js";
 import { postRoutes } from "../modules/posts/post.routes.js";
+import { fileRoutes } from "../modules/files/file.routes.js";
 
 const apiRouter = Router();
 
@@ -41,6 +42,7 @@ const apiRouter = Router();
 apiRouter.use("/health", healthRoutes);
 
 // Modular Monolith Domain Routes
+apiRouter.use("/files", fileRoutes);
 apiRouter.use("/auth", authRoutes);
 apiRouter.use("/users", userRoutes);
 apiRouter.use("/businesses", businessRoutes);
