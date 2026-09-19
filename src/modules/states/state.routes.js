@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { stateController } from "./state.controller.js";
-import { authMiddleware } from "../../middleware/auth.middleware.js";
+import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { upload } from "../../middleware/upload.middleware.js";
 import { ROLES } from "../../shared/constants/roles.js";
@@ -16,18 +16,16 @@ router.post(
   stateController.uploadImage
 );
 
-// Super Admin and State Admin can view states
+// Public route to view states (filtered by requester role if authenticated)
 router.get(
   "/",
-  authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  optionalAuthMiddleware,
   stateController.listStates
 );
 
 router.get(
   "/:stateName",
-  authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  optionalAuthMiddleware,
   stateController.getStateByName
 );
 

@@ -98,7 +98,8 @@ export const stateService = {
     // Add states from profiles that might not have an admin or chapter yet
     allProfiles.forEach((p) => {
       const key = p.name.trim().toLowerCase();
-      if (!targetStates.includes(p.name.trim())) {
+      if (!uniqueStateMap.has(key)) {
+        uniqueStateMap.set(key, p.name.trim());
         targetStates.push(p.name.trim());
       }
     });
