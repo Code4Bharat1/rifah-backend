@@ -415,7 +415,7 @@ export const businessService = {
     }
 
     const isOwner = String(business.owner) === String(user.id);
-    const isAdmin = ["central_admin", "super_admin", "admin"].includes(user.role);
+    const isAdmin = user.role === "central_admin";
     const isChapterAdmin = user.role === "chapter_admin";
     const isOwnChapterAdmin = isChapterAdmin && business.chapterId && user.chapterId && String(business.chapterId) === String(user.chapterId);
 
@@ -676,13 +676,13 @@ export const businessService = {
 
     const effectiveRole = userDoc?.role || currentUser.role;
 
-    // Admin / Super Admin should NOT receive chapter new member banners or alerts
-    if (["super_admin", "admin", "secretariat"].includes(effectiveRole)) {
+    // Central Admin should NOT receive chapter new member banners or alerts
+    if (effectiveRole === "central_admin") {
       return [];
     }
 
     const effectiveChapter = userDoc?.chapter || myBiz?.chapter || currentUser.chapter;
-    const isAdmin = ["central_admin", "super_admin", "admin"].includes(effectiveRole);
+    const isAdmin = effectiveRole === "central_admin";
     const isStateAdmin = effectiveRole === "state_admin";
 
     // 7 days window for recent new members

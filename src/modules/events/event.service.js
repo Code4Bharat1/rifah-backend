@@ -76,7 +76,7 @@ export const eventService = {
       // 1. Creator always sees their own events regardless of scope
       visibilityConditions.push({ createdBy: userId });
 
-      if (userRole === ROLES.CENTRAL_ADMIN || userRole === "super_admin" || userRole === "admin") {
+      if (userRole === ROLES.CENTRAL_ADMIN) {
         // Central admin sees ALL events — no filter
         visibilityConditions.push({});
 
@@ -456,7 +456,7 @@ export const eventService = {
    */
   getEventRegistrations: async (eventId, user) => {
     const query = { _id: eventId };
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== "super_admin" && user.role !== "admin") {
+    if (user && user.role !== ROLES.CENTRAL_ADMIN) {
       query.createdBy = (user.id || user._id);
     }
     const event = await Event.findOne(query).lean();
@@ -499,7 +499,7 @@ export const eventService = {
    */
   updateEvent: async (id, updateData, user) => {
     const query = { _id: id };
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== "super_admin" && user.role !== "admin") {
+    if (user && user.role !== ROLES.CENTRAL_ADMIN) {
       query.createdBy = (user.id || user._id);
     }
     const existing = await Event.findOne(query);
@@ -566,7 +566,7 @@ export const eventService = {
    */
   deleteEvent: async (id, user) => {
     const query = { _id: id };
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== "super_admin" && user.role !== "admin") {
+    if (user && user.role !== ROLES.CENTRAL_ADMIN) {
       query.createdBy = (user.id || user._id);
     }
     const existing = await Event.findOne(query);

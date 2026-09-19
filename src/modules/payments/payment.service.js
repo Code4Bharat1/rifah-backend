@@ -370,10 +370,10 @@ export const paymentService = {
           }
         }
 
-        // 2. Notify Super Admins
-        const superAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
+        // 2. Notify Central Admins
+        const centralAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
         const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
-        const adminEmails = [...new Set([adminFallbackEmail, ...superAdmins.map((a) => a.email)].filter(Boolean))];
+        const adminEmails = [...new Set([adminFallbackEmail, ...centralAdmins.map((a) => a.email)].filter(Boolean))];
 
         for (const adminMail of adminEmails) {
           emailService.sendAdminPaymentReceiptAlert({
@@ -392,7 +392,7 @@ export const paymentService = {
           }).catch(() => {});
         }
 
-        for (const admin of superAdmins) {
+        for (const admin of centralAdmins) {
           notificationService.createNotification({
             recipientId: admin._id,
             type: "Payment",
@@ -630,11 +630,11 @@ export const paymentService = {
         }
       }
 
-      // 2. Send official payment receipt to Secretariat Admin for verification
+      // 2. Send official payment receipt to Central Admin for verification
       try {
-        const superAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
+        const centralAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
         const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
-        const adminEmails = [...new Set([adminFallbackEmail, ...superAdmins.map((a) => a.email)].filter(Boolean))];
+        const adminEmails = [...new Set([adminFallbackEmail, ...centralAdmins.map((a) => a.email)].filter(Boolean))];
 
         for (const adminMail of adminEmails) {
           await emailService.sendAdminPaymentReceiptAlert({
@@ -653,7 +653,7 @@ export const paymentService = {
           });
         }
 
-        for (const admin of superAdmins) {
+        for (const admin of centralAdmins) {
           await notificationService.createNotification({
             recipientId: admin._id,
             type: "Payment",

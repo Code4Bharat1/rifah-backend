@@ -13,10 +13,8 @@ export const requireRole = (...allowedRoles) => {
     }
 
     const userRole = req.user.role;
-    const isCentralAdminUser = userRole === "central_admin" || userRole === "super_admin" || userRole === "admin";
-    const allowsCentralAdmin = roles.includes("central_admin") || roles.includes("super_admin") || roles.includes("admin");
 
-    if (roles.includes(userRole) || (isCentralAdminUser && allowsCentralAdmin)) {
+    if (roles.includes(userRole)) {
       return next();
     }
 
@@ -36,11 +34,15 @@ export const requireMinRole = (minimumRole) => {
       return next(new UnauthorizedError("Authentication required"));
     }
 
-    const userLevel = ROLE_HIERARCHY[req.user.role] ?? 0;
-    const requiredLevel = ROLE_HIERARCHY[minimumRole] ?? 100;
+    const userLevel = ROLE_HIERARCHY[req.user.role] ?? -1;
+    const requiredLevel = ROLE_HIERARCHY[minimumRole] ?? 999;
 
     if (userLevel < requiredLevel) {
-      return next(new ForbiddenError("Insufficient role permissions"));
+      return next(
+        new ForbiddenError(
+          `Access denied. Requires minimum role: ${minimumRole}`
+        )
+      );
     }
 
     next();

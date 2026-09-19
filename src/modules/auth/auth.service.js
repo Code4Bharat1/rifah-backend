@@ -493,8 +493,8 @@ export const authService = {
 
     const availableRoles = new Set([userObj.role]);
     if (userObj.previousRole) availableRoles.add(userObj.previousRole);
-    if (["super_admin", "central_admin", "state_admin", "chapter_admin"].includes(userObj.role) ||
-        ["super_admin", "central_admin", "state_admin", "chapter_admin"].includes(userObj.previousRole)) {
+    if (["central_admin", "state_admin", "chapter_admin"].includes(userObj.role) ||
+        ["central_admin", "state_admin", "chapter_admin"].includes(userObj.previousRole)) {
       availableRoles.add("business_owner");
     }
 
@@ -550,8 +550,8 @@ export const authService = {
 
     const validRoles = new Set([user.role]);
     if (user.previousRole) validRoles.add(user.previousRole);
-    if (["super_admin", "central_admin", "state_admin", "chapter_admin"].includes(user.role) || 
-        ["super_admin", "central_admin", "state_admin", "chapter_admin"].includes(user.previousRole)) {
+    if (["central_admin", "state_admin", "chapter_admin"].includes(user.role) || 
+        ["central_admin", "state_admin", "chapter_admin"].includes(user.previousRole)) {
       validRoles.add("business_owner");
     }
 

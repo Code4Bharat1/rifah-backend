@@ -110,8 +110,8 @@ export const birthdayService = {
 
     const effectiveRole = userDoc?.role || currentUser.role;
 
-    // Admin / Super Admin should NOT receive chapter celebration alerts or notifications
-    if (["super_admin", "admin", "secretariat"].includes(effectiveRole)) {
+    // Central Admin should NOT receive chapter celebration alerts or notifications
+    if (effectiveRole === "central_admin") {
       return { isSelfBirthday: false, selfName: "", todayBirthdays: [], totalCount: 0 };
     }
 
@@ -148,8 +148,7 @@ export const birthdayService = {
       }
     }
 
-    // 2. Query scope based on role
-    const isAdmin = ["central_admin", "super_admin", "admin"].includes(userDoc?.role || currentUser.role);
+    const isAdmin = (userDoc?.role || currentUser.role) === "central_admin";
     const isStateAdmin = (userDoc?.role || currentUser.role) === "state_admin";
 
     const userQuery = {

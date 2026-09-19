@@ -140,8 +140,8 @@ export const anniversaryService = {
 
     const effectiveRole = userDoc?.role || currentUser.role;
 
-    // Admin / Super Admin should NOT receive chapter celebration alerts or notifications
-    if (["super_admin", "admin", "secretariat"].includes(effectiveRole)) {
+    // Central Admin should NOT receive chapter celebration alerts or notifications
+    if (effectiveRole === "central_admin") {
       return {
         isSelfAnniversary: false,
         selfName: "",
@@ -198,7 +198,7 @@ export const anniversaryService = {
     }
 
     // 2. Query scope for chapter members / businesses
-    const isAdmin = ["central_admin", "super_admin", "admin"].includes(userDoc?.role || currentUser.role);
+    const isAdmin = (userDoc?.role || currentUser.role) === "central_admin";
     const isStateAdmin = (userDoc?.role || currentUser.role) === "state_admin";
 
     const bizQuery = {

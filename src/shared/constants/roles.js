@@ -1,7 +1,5 @@
 export const ROLES = Object.freeze({
   CENTRAL_ADMIN: "central_admin",
-  SUPER_ADMIN: "central_admin", // alias for backwards compatibility
-  ADMIN: "central_admin", // alias for backwards compatibility
   STATE_ADMIN: "state_admin",
   CHAPTER_ADMIN: "chapter_admin",
   BUSINESS_OWNER: "business_owner",
@@ -11,8 +9,6 @@ export const ROLES = Object.freeze({
 
 export const ROLE_HIERARCHY = Object.freeze({
   [ROLES.CENTRAL_ADMIN]: 100,
-  super_admin: 100,
-  admin: 100,
   [ROLES.STATE_ADMIN]: 80,
   [ROLES.CHAPTER_ADMIN]: 60,
   [ROLES.BUSINESS_OWNER]: 40,

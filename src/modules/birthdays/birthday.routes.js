@@ -15,7 +15,7 @@ router.get("/today", birthdayController.getTodayBirthdays);
 // Manual trigger for birthday email dispatch (Admins only)
 router.post(
   "/trigger-emails",
-  requireRole(ROLES.CENTRAL_ADMIN, "super_admin", "admin"),
+  requireRole(ROLES.CENTRAL_ADMIN),
   birthdayController.triggerBirthdayEmails
 );
 

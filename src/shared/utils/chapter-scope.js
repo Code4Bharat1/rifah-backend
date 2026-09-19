@@ -14,7 +14,7 @@ export const getChapterFilter = async (user, entityType = "direct") => {
   if (!user || !user.role) return {};
 
   // Central Admins have unrestricted access
-  if (user.role === ROLES.CENTRAL_ADMIN || user.role === "super_admin" || user.role === "admin") {
+  if (user.role === ROLES.CENTRAL_ADMIN) {
     return {};
   }
 

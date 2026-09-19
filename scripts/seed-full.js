@@ -392,7 +392,7 @@ const run = async () => {
       ],
       status,
       remarks: status === "correction_requested" ? "Please re-upload a clearer scan of the GST certificate." : "",
-      reviewedBy: status === "verified" ? superAdmin._id : undefined,
+      reviewedBy: status === "verified" ? centralAdmin._id : undefined,
       reviewedAt: status === "verified" ? new Date() : undefined,
     });
   }
@@ -557,18 +557,18 @@ const run = async () => {
   console.log("Seeding Audit logs...");
   for (let i = 0; i < chapters.length; i++) {
     await Audit.create({
-      actor: superAdmin._id,
-      actorName: superAdmin.name,
-      actorRole: superAdmin.role,
+      actor: centralAdmin._id,
+      actorName: centralAdmin.name,
+      actorRole: centralAdmin.role,
       action: "CREATE",
       targetModel: "Chapter",
       targetId: chapters[i]._id.toString(),
       summary: `Created new chapter: ${chapters[i].name}`,
     });
     await Audit.create({
-      actor: superAdmin._id,
-      actorName: superAdmin.name,
-      actorRole: superAdmin.role,
+      actor: centralAdmin._id,
+      actorName: centralAdmin.name,
+      actorRole: centralAdmin.role,
       action: "CREATE",
       targetModel: "User",
       targetId: chapterAdmins[i]._id.toString(),

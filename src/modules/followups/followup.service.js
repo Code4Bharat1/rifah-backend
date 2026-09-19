@@ -126,7 +126,7 @@ export const followupService = {
     let syncedCount = 0;
 
     for (const prospect of prospects) {
-      if (prospect.role === "chapter_admin" || prospect.role === "state_admin" || prospect.role === "central_admin" || prospect.role === "super_admin") {
+      if (prospect.role === "chapter_admin" || prospect.role === "state_admin" || prospect.role === "central_admin") {
         continue;
       }
 
