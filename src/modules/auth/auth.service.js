@@ -490,12 +490,19 @@ export const authService = {
       userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
     }
 
+    const availableRoles = new Set([userObj.role]);
+    if (userObj.previousRole) availableRoles.add(userObj.previousRole);
+    if (["super_admin", "central_admin", "state_admin", "chapter_admin"].includes(userObj.role) ||
+        ["super_admin", "central_admin", "state_admin", "chapter_admin"].includes(userObj.previousRole)) {
+      availableRoles.add("business_owner");
+    }
+
     return { 
       user: userObj, 
       accessToken, 
       refreshToken,
-      requiresRoleSelection: !!userObj.previousRole,
-      availableRoles: userObj.previousRole ? [userObj.role, userObj.previousRole] : [userObj.role]
+      requiresRoleSelection: availableRoles.size > 1,
+      availableRoles: Array.from(availableRoles)
     };
   },
 
@@ -540,20 +547,25 @@ export const authService = {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User not found");
 
-    if (!user.previousRole) {
+    const validRoles = new Set([user.role]);
+    if (user.previousRole) validRoles.add(user.previousRole);
+    if (["super_admin", "central_admin", "state_admin", "chapter_admin"].includes(user.role) || 
+        ["super_admin", "central_admin", "state_admin", "chapter_admin"].includes(user.previousRole)) {
+      validRoles.add("business_owner");
+    }
+
+    if (validRoles.size <= 1) {
       throw new BadRequestError("You do not have any other roles to switch to");
     }
 
-    if (user.role === targetRole) {
-      // Already active
-    } else if (user.previousRole === targetRole) {
-      // Swap them
-      const temp = user.role;
-      user.role = user.previousRole;
-      user.previousRole = temp;
-      await user.save();
-    } else {
+    if (!validRoles.has(targetRole)) {
       throw new BadRequestError("Invalid target role");
+    }
+
+    if (user.role !== targetRole) {
+      user.previousRole = user.role;
+      user.role = targetRole;
+      await user.save();
     }
 
     const tokenPayload = {
