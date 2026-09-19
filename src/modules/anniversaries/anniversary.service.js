@@ -454,4 +454,30 @@ export const anniversaryService = {
 
     return { chapter: targetChapter, count: seeded.length, seeded };
   },
+
+  /**
+   * Removes test anniversary businesses and users from the database.
+   */
+  cleanAnniversaryTestData: async () => {
+    try {
+      const testEmails = [
+        "tariq.ansari@rifahtest.com",
+        "zubair.khan@rifahtest.com",
+        "amina.siddiqui@rifahtest.com",
+      ];
+      const testSlugs = [
+        "ansari-precision-engineering",
+        "al-barakah-logistics",
+        "siddiqui-fine-textiles",
+      ];
+      const deletedUsers = await User.deleteMany({ email: { $in: testEmails } });
+      const deletedBusinesses = await Business.deleteMany({ slug: { $in: testSlugs } });
+      logger.info(`[ANNIVERSARY CLEANUP] Removed ${deletedUsers.deletedCount} test user(s) and ${deletedBusinesses.deletedCount} test business(es).`);
+      return { deletedUsers: deletedUsers.deletedCount, deletedBusinesses: deletedBusinesses.deletedCount };
+    } catch (err) {
+      logger.error("[ANNIVERSARY CLEANUP ERROR]", err);
+      throw err;
+    }
+  },
 };
+

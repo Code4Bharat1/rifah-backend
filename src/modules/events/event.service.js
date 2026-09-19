@@ -473,22 +473,29 @@ export const eventService = {
       let userId;
       let registeredAt = event.createdAt;
       let status = "Confirmed";
+      let _id = null;
+      let gateStatus = "waiting";
 
       if (typeof entry === "string" || entry instanceof mongoose.Types.ObjectId) {
         userId = entry;
+        _id = entry;
       } else if (entry && typeof entry === "object") {
         userId = entry.user || entry._id;
+        _id = entry._id || userId;
         registeredAt = entry.registeredAt || event.createdAt;
         status = entry.status || "Confirmed";
+        gateStatus = entry.gateStatus || "waiting";
       }
 
       if (!userId) continue;
 
       const userData = await User.findById(userId).select("name email phone role chapter businessName").lean();
       registrations.push({
+        _id,
         user: userData || { name: "Deleted User", email: "N/A" },
         registeredAt,
         status,
+        gateStatus,
         attendanceStatus: entry.attendanceStatus || "Pending",
       });
     }

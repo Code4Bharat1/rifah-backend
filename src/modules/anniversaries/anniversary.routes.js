@@ -22,4 +22,8 @@ router.post(
 // Seed test businesses celebrating anniversary today
 router.post("/seed-test", anniversaryController.seedAnniversaryTestData);
 
+// Remove test anniversary businesses and users
+router.post("/clean-test", anniversaryController.cleanAnniversaryTestData);
+
 export default router;
+

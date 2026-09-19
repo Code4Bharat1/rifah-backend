@@ -36,4 +36,17 @@ export const anniversaryController = {
       data: result,
     });
   }),
+
+  /**
+   * Remove test anniversary businesses and users
+   */
+  cleanAnniversaryTestData: asyncHandler(async (req, res) => {
+    const result = await anniversaryService.cleanAnniversaryTestData();
+    res.json({
+      success: true,
+      message: "Successfully removed anniversary test businesses and users.",
+      data: result,
+    });
+  }),
 };
+

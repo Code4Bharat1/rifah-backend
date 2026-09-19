@@ -137,6 +137,14 @@ export const userService = {
       }
     }
 
+    // SECURITY: this generic endpoint may only ever demote to customer/business_owner.
+    // Granting an admin tier must always go through its dedicated, eligibility-checked
+    // assignment endpoint (chapter/state admin assignment, central admin transfer) —
+    // never here, where there is no paid/verified business check or singleton enforcement.
+    if (role && ![ROLES.CUSTOMER, ROLES.BUSINESS_OWNER].includes(role)) {
+      throw new ForbiddenError("Admin roles can only be granted through their dedicated assignment endpoints.");
+    }
+
     if (status) userToUpdate.status = status;
     if (role) userToUpdate.role = role;
 
