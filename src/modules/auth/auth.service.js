@@ -54,7 +54,7 @@ export const authService = {
 
     try {
       await emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role });
-    } catch (err) {}
+    } catch (err) { }
 
     const tokenPayload = {
       id: user._id,
@@ -497,9 +497,9 @@ export const authService = {
       availableRoles.add("business_owner");
     }
 
-    return { 
-      user: userObj, 
-      accessToken, 
+    return {
+      user: userObj,
+      accessToken,
       refreshToken,
       requiresRoleSelection: availableRoles.size > 1,
       availableRoles: Array.from(availableRoles)
