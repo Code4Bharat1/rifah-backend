@@ -8,6 +8,7 @@ import { Verification } from "../verification/verification.model.js";
 import { Catalogue } from "../catalogue/catalogue.model.js";
 import { Review } from "../reviews/review.model.js";
 import { Event } from "../events/event.model.js";
+import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
 export const reportService = {
   /**
@@ -269,59 +270,165 @@ export const reportService = {
   },
 
   /**
-   * Export Memberships Data
+   * Export Businesses Data
    */
-  exportMembershipsData: async (startDate, endDate) => {
-    const query = { status: "Active" };
-    if (startDate && endDate) {
-      query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+  exportBusinessesData: async (startDate, endDate, requester) => {
+    const conditions = [];
+    
+    const dateFilter = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      if (!isNaN(start.getTime())) dateFilter.$gte = start;
     }
-    const users = await User.find(query);
-    const headers = ["Name", "Email", "Phone", "Role", "Chapter", "Organization", "City", "Joined Date"];
-    const rows = users.map(u => [
-      u.name || '',
-      u.email || '',
-      u.phone || '',
-      u.role || '',
-      u.chapter || '',
-      u.organization || '',
-      u.city || '',
-      u.createdAt.toISOString()
+    if (endDate) {
+      const end = new Date(endDate);
+      if (!isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999);
+        dateFilter.$lte = end;
+      }
+    }
+    if (Object.keys(dateFilter).length > 0) {
+      conditions.push({ createdAt: dateFilter });
+    }
+
+    if (requester && requester.role === "chapter_admin") {
+      const filter = await getChapterFilter(requester, "direct_id");
+      if (Object.keys(filter).length > 0) conditions.push(filter);
+    }
+    const query = conditions.length > 0 ? { $and: conditions } : {};
+    const businesses = await Business.find(query).sort({ createdAt: -1 });
+    const headers = ["Business Name", "Owner", "Email", "Phone", "Category", "City", "State", "Chapter", "Status", "Joined Date"];
+    const rows = businesses.map(b => [
+      b.name || b.businessName || '',
+      b.ownerName || '',
+      b.email || '',
+      b.phone || '',
+      b.category || '',
+      b.city || '',
+      b.state || '',
+      b.chapter || '',
+      b.status || '',
+      b.createdAt ? new Date(b.createdAt).toISOString() : ''
     ]);
     return { headers, rows };
   },
 
   /**
+   * Export Memberships Data
+   */
+  exportMembershipsData: async (startDate, endDate, requester) => {
+    const conditions = [];
+    conditions.push({
+      $or: [
+        { verification: { $in: ["verified", "Verified", "approved", "Approved"] } },
+        { isVerified: true }
+      ]
+    });
+    
+    const dateFilter = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      if (!isNaN(start.getTime())) dateFilter.$gte = start;
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      if (!isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999);
+        dateFilter.$lte = end;
+      }
+    }
+    if (Object.keys(dateFilter).length > 0) {
+      conditions.push({ createdAt: dateFilter });
+    }
+
+    if (requester && requester.role === "chapter_admin") {
+      const filter = await getChapterFilter(requester, "direct_id");
+      if (Object.keys(filter).length > 0) conditions.push(filter);
+    }
+    const query = conditions.length > 0 ? { $and: conditions } : {};
+    const businesses = await Business.find(query).populate("owner", "name email phone avatar sourcingInterest roleInBusiness").sort({ createdAt: -1 });
+    const headers = ["Business Name", "Owner", "Email", "Phone", "Tier", "Chapter", "Verification", "City", "State", "Joined Date"];
+    const rows = businesses.map(b => [
+      b.name || b.businessName || '',
+      b.ownerName || '',
+      b.email || '',
+      b.phone || '',
+      b.membership || 'Basic',
+      b.chapter || '',
+      b.verification || (b.isVerified ? 'verified' : 'pending'),
+      b.city || '',
+      b.state || '',
+      b.createdAt ? new Date(b.createdAt).toISOString() : ''
+    ]);
+    return { headers, rows, rawBusinesses: businesses };
+  },
+
+  /**
    * Export Leads Data
    */
-  exportLeadsData: async (startDate, endDate) => {
-    const query = {};
-    if (startDate && endDate) {
-      query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+  exportLeadsData: async (startDate, endDate, requester) => {
+    const conditions = [];
+    
+    const dateFilter = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      if (!isNaN(start.getTime())) dateFilter.$gte = start;
     }
-    const leads = await Lead.find(query)
-      .populate("business", "businessName")
-      .populate({
-        path: "enquiry",
-        select: "title quantity requiredBy requester guestName guestEmail guestPhone",
-        populate: {
-          path: "requester",
-          select: "name email phone",
-        }
-      });
+    if (endDate) {
+      const end = new Date(endDate);
+      if (!isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999);
+        dateFilter.$lte = end;
+      }
+    }
+    if (Object.keys(dateFilter).length > 0) {
+      conditions.push({ createdAt: dateFilter });
+    }
+
+    if (requester && requester.role === "chapter_admin") {
+      if (!requester.chapterId) {
+        conditions.push({ _id: null }); // Deny access
+      } else {
+        const businesses = await Business.find({ chapterId: requester.chapterId }).select("_id");
+        const businessIds = businesses.map((b) => b._id);
+        conditions.push({
+          $or: [
+            { chapterId: requester.chapterId },
+            { targetBusiness: { $in: businessIds } }
+          ]
+        });
+      }
+    }
+
+    const query = conditions.length > 0 ? { $and: conditions } : {};
+    
+    const enquiries = await Enquiry.find(query)
+      .populate("requester", "name email phone")
+      .populate("targetBusiness", "name")
+      .sort({ createdAt: -1 });
       
-    const headers = ["Business", "Buyer Name", "Buyer Email", "Buyer Phone", "Enquiry Product", "Enquiry Qty", "Enquiry Required By", "Lead Status", "Date"];
-    const rows = leads.map(l => [
-      l.business?.businessName || '',
-      l.enquiry?.requester?.name || l.enquiry?.guestName || '',
-      l.enquiry?.requester?.email || l.enquiry?.guestEmail || '',
-      l.enquiry?.requester?.phone || l.enquiry?.guestPhone || '',
-      l.enquiry?.title || '',
-      l.enquiry?.quantity || '',
-      l.enquiry?.requiredBy ? new Date(l.enquiry.requiredBy).toLocaleDateString() : '',
-      l.status,
-      new Date(l.createdAt).toLocaleDateString(),
-    ]);
+    const headers = ["Reference ID", "Title", "Category", "Type", "Buyer Name", "Buyer Email", "Buyer Phone", "Target Location", "Quantity", "Budget", "Status", "Date Created"];
+    const rows = enquiries.map(e => {
+      const buyer = e.requester || {};
+      const buyerName = buyer.name || e.requesterName || e.guestName || 'Registered Buyer';
+      const buyerEmail = buyer.email || e.guestEmail || '';
+      const buyerPhone = buyer.phone || e.guestPhone || '';
+      
+      return [
+        e.referenceId || '',
+        e.title || '',
+        e.category || '',
+        e.targetBusiness ? "Direct RFQ" : "Broadcast RFQ",
+        buyerName,
+        buyerEmail,
+        buyerPhone,
+        e.city || e.location || '',
+        e.quantity || '',
+        e.budget || '',
+        e.status || '',
+        e.createdAt ? new Date(e.createdAt).toISOString().split("T")[0] : '',
+      ];
+    });
 
     return { headers, rows };
   },

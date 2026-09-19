@@ -43,6 +43,13 @@ router.get(
 );
 
 router.get(
+  "/admin/export/businesses",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  reportController.exportBusinesses
+);
+
+router.get(
   "/admin/export/memberships",
   authMiddleware,
   requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),

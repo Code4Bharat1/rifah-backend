@@ -60,9 +60,20 @@ export const reportController = {
     return res.status(200).send(csvData);
   }),
 
+  exportBusinesses: asyncHandler(async (req, res) => {
+    const { startDate, endDate, format } = req.query;
+    const data = await reportService.exportBusinessesData(startDate, endDate, req.user);
+    if (format === "json") return ApiResponse.success(res, data, "Businesses data retrieved");
+    
+    const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", 'attachment; filename="businesses_report.csv"');
+    return res.status(200).send(csvData);
+  }),
+
   exportMemberships: asyncHandler(async (req, res) => {
     const { startDate, endDate, format } = req.query;
-    const data = await reportService.exportMembershipsData(startDate, endDate);
+    const data = await reportService.exportMembershipsData(startDate, endDate, req.user);
     if (format === "json") return ApiResponse.success(res, data, "Memberships data retrieved");
     
     const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
@@ -73,7 +84,7 @@ export const reportController = {
 
   exportLeads: asyncHandler(async (req, res) => {
     const { startDate, endDate, format } = req.query;
-    const data = await reportService.exportLeadsData(startDate, endDate);
+    const data = await reportService.exportLeadsData(startDate, endDate, req.user);
     if (format === "json") return ApiResponse.success(res, data, "Leads data retrieved");
     
     const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
