@@ -64,7 +64,11 @@ export const roleService = {
     if (queryParams.chapterId && queryParams.chapterId !== "all") filter.chapterId = queryParams.chapterId;
 
     const roles = await Role.find(filter)
-      .populate("userId", "name avatar organization city state")
+      .populate({
+        path: "userId",
+        select: "name avatar organization city state email phone chapterId",
+        populate: { path: "chapterId", select: "name slug city state" }
+      })
       .populate("businessId", "name slug logo industry city state")
       .populate("chapterId", "name slug city state")
       .sort({ displayOrder: 1, createdAt: 1 });
