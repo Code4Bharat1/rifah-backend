@@ -30,6 +30,7 @@ import birthdayRoutes from "../modules/birthdays/birthday.routes.js";
 import anniversaryRoutes from "../modules/anniversaries/anniversary.routes.js";
 import { powerNetworkingRoutes } from "../modules/power-networking/power-networking.routes.js";
 import { followupRoutes } from "../modules/followups/followup.routes.js";
+import { roleRoutes } from "../modules/roles/role.routes.js";
 
 const apiRouter = Router();
 
@@ -67,6 +68,7 @@ apiRouter.use("/power-networking", powerNetworkingRoutes);
 apiRouter.use("/courses", courseRoutes);
 apiRouter.use("/birthdays", birthdayRoutes);
 apiRouter.use("/anniversaries", anniversaryRoutes);
+apiRouter.use("/roles", roleRoutes);
 
 export { apiRouter };
 export default apiRouter;

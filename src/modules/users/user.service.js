@@ -87,7 +87,11 @@ export const userService = {
     }
 
     if (queryParams.role) {
-      filter.role = queryParams.role;
+      if (queryParams.role.includes(",")) {
+        filter.role = { $in: queryParams.role.split(",") };
+      } else {
+        filter.role = queryParams.role;
+      }
     }
     if (queryParams.status) {
       filter.status = queryParams.status;
