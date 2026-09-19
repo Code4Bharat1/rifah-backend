@@ -40,6 +40,18 @@ export const followupController = {
     }
   },
 
+  async syncMembers(req, res, next) {
+    try {
+      const { chapter } = req.body;
+      const effectiveChapter = chapter || req.user?.chapter;
+      if (!effectiveChapter) throw new Error("Chapter is required for member sync");
+      const result = await followupService.syncFromMembers(effectiveChapter);
+      res.json({ success: true, message: `Synced ${result.syncedCount} members and prospects`, data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
+
   async updateStatus(req, res, next) {
     try {
       const { id } = req.params;

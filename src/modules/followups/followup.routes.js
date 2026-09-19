@@ -10,6 +10,7 @@ router.get("/", followupController.getFollowups);
 router.get("/stats", followupController.getStats);
 router.post("/", followupController.create);
 router.post("/sync-event/:eventId", followupController.syncEvent);
+router.post("/sync/members", followupController.syncMembers);
 router.patch("/:id/status", followupController.updateStatus);
 router.post("/:id/note", followupController.addNote);
 router.post("/:id/message", followupController.logMessage);

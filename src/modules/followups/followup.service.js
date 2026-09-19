@@ -115,6 +115,54 @@ export const followupService = {
     return { syncedCount, totalAttendees: attendees.length };
   },
 
+  async syncFromMembers(chapter) {
+    const chapterFilter = { $regex: new RegExp(chapter.replace(/\s*[Cc]hapter\s*/g, ""), "i") };
+    
+    // Find all users in the chapter that are pending, rejected, or have no role (prospects)
+    const prospects = await User.find({
+      chapter: chapterFilter,
+    });
+
+    let syncedCount = 0;
+
+    for (const prospect of prospects) {
+      if (prospect.role === "chapter_admin" || prospect.role === "state_admin" || prospect.role === "central_admin" || prospect.role === "super_admin") {
+        continue;
+      }
+
+      const name = prospect.name || "Prospect";
+      const mobile = prospect.phone || prospect.mobile || "Not Provided";
+      const email = prospect.email || "";
+      const company = prospect.businessName || prospect.companyName || "";
+
+      const existing = await Followup.findOne({
+        type: "membership",
+        chapter: chapterFilter,
+        $or: [{ mobile }, { email: email || "non-existent" }],
+      });
+
+      if (!existing) {
+        let status = "pending";
+        if (prospect.membershipStatus === "Expired") status = "expired";
+        if (prospect.membershipStatus === "Expiring Soon") status = "expiring_soon";
+
+        await Followup.create({
+          type: "membership",
+          chapter: prospect.chapter || chapter,
+          name,
+          mobile,
+          email,
+          company,
+          status: status,
+          category: prospect.role === "business_owner" ? "Member" : "Prospect",
+        });
+        syncedCount++;
+      }
+    }
+
+    return { syncedCount, totalProspects: prospects.length };
+  },
+
   async updateStatus(id, status, note, author = "Admin") {
     const update = { status, lastContactedAt: new Date() };
     const doc = await Followup.findById(id);
