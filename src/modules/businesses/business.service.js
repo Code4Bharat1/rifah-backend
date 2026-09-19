@@ -415,7 +415,19 @@ export const businessService = {
     }
 
     const isOwner = String(business.owner) === String(user.id);
+<<<<<<< Updated upstream
     const isAdmin = ["central_admin", "super_admin", "admin"].includes(user.role);
+=======
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+    const isAdmin = user.role === "central_admin";
+=======
+    const isAdmin = ["super_admin", "admin"].includes(user.role);
+>>>>>>> Stashed changes
+=======
+    const isAdmin = ["super_admin", "admin"].includes(user.role);
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
     const isChapterAdmin = user.role === "chapter_admin";
     const isOwnChapterAdmin = isChapterAdmin && business.chapterId && user.chapterId && String(business.chapterId) === String(user.chapterId);
 
@@ -682,7 +694,19 @@ export const businessService = {
     }
 
     const effectiveChapter = userDoc?.chapter || myBiz?.chapter || currentUser.chapter;
+<<<<<<< Updated upstream
     const isAdmin = ["central_admin", "super_admin", "admin"].includes(effectiveRole);
+=======
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+    const isAdmin = effectiveRole === "central_admin";
+=======
+    const isAdmin = ["super_admin", "admin"].includes(effectiveRole);
+>>>>>>> Stashed changes
+=======
+    const isAdmin = ["super_admin", "admin"].includes(effectiveRole);
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
     const isStateAdmin = effectiveRole === "state_admin";
 
     // 7 days window for recent new members

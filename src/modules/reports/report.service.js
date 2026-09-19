@@ -431,7 +431,19 @@ export const reportService = {
               breakdownRegistered.businesses++;
             } else if (r === "customer") {
               breakdownRegistered.consumers++;
+<<<<<<< Updated upstream
             } else if (r === "chapter_admin" || r === "state_admin" || r === "central_admin" || r === "super_admin" || r === "admin") {
+=======
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+            } else if (r === "chapter_admin" || r === "state_admin" || r === "central_admin") {
+=======
+            } else if (r === "chapter_admin" || r === "state_admin" || r === "central_admin" || r === "super_admin" || r === "admin") {
+>>>>>>> Stashed changes
+=======
+            } else if (r === "chapter_admin" || r === "state_admin" || r === "central_admin" || r === "super_admin" || r === "admin") {
+>>>>>>> Stashed changes
+>>>>>>> Stashed changes
               breakdownRegistered.admins++;
             } else {
               breakdownRegistered.other++;
