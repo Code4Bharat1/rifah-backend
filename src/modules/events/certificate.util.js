@@ -26,78 +26,117 @@ export const generateCertificate = async (attendee, eventDetails, options = {}) 
       // Draw background
       doc.rect(0, 0, width, height).fill("#ffffff");
 
-      // Draw borders depending on style
-      doc.rect(20, 20, width - 40, height - 40)
+      // Draw elegant borders
+      const margin = 30;
+      doc.rect(margin, margin, width - margin * 2, height - margin * 2)
          .lineWidth(4)
          .stroke(accentColor);
 
-      doc.rect(26, 26, width - 52, height - 52)
+      const innerMargin = 38;
+      doc.rect(innerMargin, innerMargin, width - innerMargin * 2, height - innerMargin * 2)
          .lineWidth(1)
          .stroke(accentColor);
 
+      // Draw corner accents
+      const cornerSize = 25;
+      const drawCorner = (x, y, dx, dy) => {
+        doc.moveTo(x + dx, y)
+           .lineTo(x, y)
+           .lineTo(x, y + dy)
+           .lineWidth(3)
+           .stroke(accentColor);
+      };
+      drawCorner(innerMargin - 4, innerMargin - 4, cornerSize, cornerSize); // Top-Left
+      drawCorner(width - innerMargin + 4, innerMargin - 4, -cornerSize, cornerSize); // Top-Right
+      drawCorner(innerMargin - 4, height - innerMargin + 4, cornerSize, -cornerSize); // Bottom-Left
+      drawCorner(width - innerMargin + 4, height - innerMargin + 4, -cornerSize, -cornerSize); // Bottom-Right
+
+      // Logo
+      const logoPath = path.resolve(process.cwd(), "..", "rifah-frontend", "public", "rifah-logo.png");
+      if (fs.existsSync(logoPath)) {
+        doc.image(logoPath, width / 2 - 60, 50, { width: 120 });
+      }
+
       // Header
-      doc.fontSize(40)
+      doc.fontSize(42)
          .fillColor(accentColor)
          .font("Helvetica-Bold")
-         .text("CERTIFICATE", 0, 120, { align: "center" });
+         .text("CERTIFICATE", 0, 130, { align: "center", tracking: 4 });
 
-      doc.fontSize(20)
+      doc.fontSize(18)
          .fillColor("#666666")
          .font("Helvetica")
-         .text("OF PARTICIPATION", 0, 165, { align: "center" });
+         .text("OF PARTICIPATION", 0, 180, { align: "center", tracking: 2 });
 
       // Body text
       doc.fontSize(16)
-         .fillColor("#333333")
-         .text("This is proudly presented to", 0, 230, { align: "center" });
+         .fillColor("#444444")
+         .font("Helvetica-Oblique")
+         .text("This is proudly presented to", 0, 240, { align: "center" });
 
       // Attendee Name
-      doc.fontSize(36)
+      doc.fontSize(38)
          .fillColor(accentColor)
          .font("Helvetica-Bold")
-         .text(attendee.name.toUpperCase(), 0, 270, { align: "center" });
+         .text(attendee.name.toUpperCase(), 0, 280, { align: "center" });
 
-      // Separator line
-      doc.moveTo(220, 315)
-         .lineTo(622, 315)
-         .lineWidth(1)
-         .stroke(accentColor);
+      // Separator line under name
+      doc.moveTo(width / 2 - 200, 325)
+         .lineTo(width / 2 + 200, 325)
+         .lineWidth(1.5)
+         .stroke("#cccccc");
 
       // Event details
       doc.fontSize(16)
-         .fillColor("#333333")
+         .fillColor("#444444")
          .font("Helvetica")
-         .text(`for participating in ${eventDetails.title}`, 0, 340, { align: "center" });
+         .text(`For participating in`, 0, 350, { align: "center" });
+
+      doc.fontSize(20)
+         .fillColor("#222222")
+         .font("Helvetica-Bold")
+         .text(`${eventDetails.title}`, 0, 375, { align: "center" });
 
       doc.fontSize(14)
-         .text(`held on ${eventDetails.date} by RIFAH ${eventDetails.chapter}`, 0, 370, { align: "center" });
+         .fillColor("#666666")
+         .font("Helvetica")
+         .text(`Held on ${eventDetails.date} by RIFAH ${eventDetails.chapter}`, 0, 405, { align: "center" });
 
       // Signatures
-      const sigY = 460;
+      const sigY = 485;
       
       // Signature 1
-      doc.moveTo(150, sigY)
-         .lineTo(350, sigY)
+      doc.moveTo(180, sigY)
+         .lineTo(340, sigY)
          .lineWidth(1)
          .stroke("#000000");
       
       doc.fontSize(12)
          .fillColor("#333333")
-         .text(eventDetails.signatory1Role || "Chapter President", 150, sigY + 10, { width: 200, align: "center" });
+         .font("Helvetica-Bold")
+         .text(eventDetails.signatory1Role || "Chapter President", 180, sigY + 10, { width: 160, align: "center" });
 
       // Signature 2
-      doc.moveTo(492, sigY)
-         .lineTo(692, sigY)
+      doc.moveTo(502, sigY)
+         .lineTo(662, sigY)
          .lineWidth(1)
          .stroke("#000000");
       
-      doc.text(eventDetails.signatory2Role || "Chapter Secretary", 492, sigY + 10, { width: 200, align: "center" });
+      doc.fontSize(12)
+         .text(eventDetails.signatory2Role || "Chapter Secretary", 502, sigY + 10, { width: 160, align: "center" });
 
-      // Add a simple Serial Number at bottom left
-      const serialNumber = `RIFAH-${eventDetails.chapter.replace(/\s+/g, "").substring(0, 3).toUpperCase()}-${attendee.id.substring(0, 6).toUpperCase()}`;
+      // Serial Number & Footer
+      const cleanChapter = (eventDetails.chapter || "").replace(/\s+/g, "").substring(0, 3).toUpperCase();
+      const serialNumber = `RIFAH-${cleanChapter || "GLB"}-${(attendee.id || "000000").substring(0, 6).toUpperCase()}`;
+      
       doc.fontSize(10)
          .fillColor("#999999")
-         .text(`Serial No: ${serialNumber}`, 40, height - 40);
+         .font("Helvetica")
+         .text(`Serial No: ${serialNumber}`, 60, height - 60);
+
+      doc.fontSize(10)
+         .fillColor("#999999")
+         .text(`RIFAH Chamber of Commerce and Industry`, 0, height - 60, { align: "center" });
 
       doc.end();
     } catch (error) {

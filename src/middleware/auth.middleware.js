@@ -7,12 +7,19 @@ import { User } from "../modules/users/user.model.js";
  * Middleware to authenticate requests using JWT Bearer token
  */
 export const authMiddleware = async (req, res, next) => {
+  let token;
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
+  } else if (req.query.token) {
+    token = req.query.token;
+  }
+  
+  if (!token) {
     return next(new UnauthorizedError("Authentication token is required", ERROR_CODES.UNAUTHORIZED));
   }
 
-  const token = authHeader.split(" ")[1];
   try {
     const decoded = verifyAccessToken(token);
     req.user = decoded; // { id, email, role, chapterId, businessId, state }
@@ -42,9 +49,16 @@ export const authMiddleware = async (req, res, next) => {
  * Optional authentication middleware - attaches req.user if token is present, proceeds anyway if not
  */
 export const optionalAuthMiddleware = (req, res, next) => {
+  let token;
   const authHeader = req.headers.authorization;
+  
   if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.split(" ")[1];
+    token = authHeader.split(" ")[1];
+  } else if (req.query.token) {
+    token = req.query.token;
+  }
+  
+  if (token) {
     try {
       req.user = verifyAccessToken(token);
     } catch {
