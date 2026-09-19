@@ -55,92 +55,122 @@ const broadcastEventToAudience = async (event) => {
 
 export const eventService = {
   /**
-   * Browse public events
+   * Browse events — creator-scope RBAC:
+   *   chapter_admin created  → visible only to that chapter's members & admins
+   *   state_admin created    → visible only to that state's members & admins
+   *   super_admin created    → visible to everyone (global)
    */
   listEvents: async (queryParams = {}, user) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
 
+    // ── Build visibility $or based on creator-scope ──────────────────────────
     const visibilityConditions = [];
 
     if (user) {
-      // 1. Creator always sees their events
-      visibilityConditions.push({ createdBy: (user.id || user._id) });
+      const userId = user.id || user._id;
+      const userRole = user.role;
+      const userChapter = (user.chapter || "").trim();
+      const userState   = (user.state   || "").trim();
 
-      if (user.role === ROLES.SUPER_ADMIN || user.role === ROLES.SECRETARIAT) {
-        // Super admin sees all
+      // 1. Creator always sees their own events regardless of scope
+      visibilityConditions.push({ createdBy: userId });
+
+      if (userRole === ROLES.SUPER_ADMIN) {
+        // Super admin sees ALL events — no filter
         visibilityConditions.push({});
-      } else if (user.role === ROLES.STATE_ADMIN && user.state) {
-        const stateRegex = new RegExp(`^${user.state.trim()}$`, "i");
-        visibilityConditions.push({ targetStates: { $in: ["All", stateRegex] } });
-        
-        // Also events targeted to chapters within their state (or All)
-        const stateChapters = await mongoose.model('Chapter').find({ state: stateRegex }).select("name");
-        const chapterNames = stateChapters.map(c => new RegExp(`^${c.name.trim()}$`, "i"));
-        if (chapterNames.length > 0) {
-          visibilityConditions.push({ targetChapters: { $in: ["All", ...chapterNames] } });
-        }
-      } else if (user.role === ROLES.CHAPTER_ADMIN && user.chapter) {
-        // Chapter Admin sees events targeted to their chapter, their state, or "All"
-        const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
-        visibilityConditions.push({ targetChapters: { $in: ["All", chapterRegex] } });
-        if (user.state) {
-          visibilityConditions.push({ targetStates: { $in: ["All", new RegExp(`^${user.state.trim()}$`, "i")] } });
-        }
-      } else if ([ROLES.BUSINESS_OWNER, ROLES.CUSTOMER].includes(user.role)) {
-        if (queryParams.all === "true" || queryParams.scope === "all" || queryParams.showAll === "true") {
-          // Allow viewing all published chamber events across all chapters and locations
-          visibilityConditions.push({});
-        } else {
-          // Regular users must match audience, state, and chapter
-          const userRoleDisplay = user.role === ROLES.BUSINESS_OWNER ? "Businesses" : "Consumers";
-          const audienceMatch = { targetAudience: { $in: ["All", userRoleDisplay] } };
-          
-          const locConditions = [{ targetStates: "All", targetChapters: "All" }]; // Fully public
-          
-          if (user.state) {
-            locConditions.push({ targetStates: new RegExp(`^${user.state.trim()}$`, "i") });
-          }
-          if (user.chapter) {
-            locConditions.push({ targetChapters: new RegExp(`^${user.chapter.trim()}$`, "i") });
-            locConditions.push({ chapter: new RegExp(`^${user.chapter.trim()}$`, "i") }); // Legacy
-          }
-          
+
+      } else if (userRole === ROLES.STATE_ADMIN) {
+        // State admin sees:
+        //   a. Global events (created by super_admin)
+        //   b. State-scope events in their own state
+        //   c. Chapter-scope events within their state
+        visibilityConditions.push({ visibilityScope: "global" });
+        if (userState) {
+          const stateRx = new RegExp(`^${userState}$`, "i");
           visibilityConditions.push({
-             $and: [
-               audienceMatch,
-               { $or: locConditions }
-             ]
+            visibilityScope: "state",
+            creatorState: stateRx,
+          });
+          visibilityConditions.push({
+            visibilityScope: "chapter",
+            creatorState: stateRx,
+          });
+        }
+
+      } else if (userRole === ROLES.CHAPTER_ADMIN) {
+        // Chapter admin sees:
+        //   a. Global events
+        //   b. State-scope events in their state
+        //   c. Chapter-scope events in their own chapter
+        visibilityConditions.push({ visibilityScope: "global" });
+        if (userState) {
+          visibilityConditions.push({
+            visibilityScope: "state",
+            creatorState: new RegExp(`^${userState}$`, "i"),
+          });
+        }
+        if (userChapter) {
+          visibilityConditions.push({
+            visibilityScope: "chapter",
+            creatorChapter: new RegExp(`^${userChapter}$`, "i"),
+          });
+        }
+
+      } else {
+        // Regular users (business_owner / customer):
+        //   a. Always see global events
+        //   b. See state-scope events in their state
+        //   c. See chapter-scope events in their chapter
+        //   d. They must also be in the targetAudience
+        const roleDisplay = userRole === ROLES.BUSINESS_OWNER ? "Businesses" : "Consumers";
+        const audienceMatch = { targetAudience: { $in: ["All", roleDisplay] } };
+
+        // Global events open to this audience
+        visibilityConditions.push({ ...audienceMatch, visibilityScope: "global" });
+
+        if (userState) {
+          visibilityConditions.push({
+            ...audienceMatch,
+            visibilityScope: "state",
+            creatorState: new RegExp(`^${userState}$`, "i"),
+          });
+        }
+        if (userChapter) {
+          visibilityConditions.push({
+            ...audienceMatch,
+            visibilityScope: "chapter",
+            creatorChapter: new RegExp(`^${userChapter}$`, "i"),
           });
         }
       }
     } else {
-      // Unauthenticated users see fully public events
+      // Unauthenticated: only global events that are fully public
       visibilityConditions.push({
-        targetAudience: "All",
-        targetStates: "All",
-        targetChapters: "All"
+        visibilityScope: "global",
+        targetAudience: { $in: ["All"] },
       });
     }
 
+    // Apply visibility filter (empty object = no restriction = see all)
     if (visibilityConditions.length > 0) {
-      // If it contains an empty object, it means no restrictions
       const hasEmpty = visibilityConditions.some(c => Object.keys(c).length === 0);
       if (!hasEmpty) {
         filter.$or = visibilityConditions;
       }
     }
 
+    // ── Additional query filters ──────────────────────────────────────────────
     if (queryParams.chapter) {
       filter.chapter = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
     }
 
     if (queryParams.status) {
       if (queryParams.status.toLowerCase() === "past") {
-        filter.date = { $lt: new Date().toISOString().split("T")[0] };
-        filter.status = STATUSES.EVENT.UPCOMING; // Only show published past events
+        filter.date   = { $lt: new Date().toISOString().split("T")[0] };
+        filter.status = STATUSES.EVENT.UPCOMING;
       } else if (queryParams.status.toLowerCase() === "upcoming") {
-        filter.date = { $gte: new Date().toISOString().split("T")[0] };
+        filter.date   = { $gte: new Date().toISOString().split("T")[0] };
         filter.status = STATUSES.EVENT.UPCOMING;
       } else {
         filter.status = new RegExp(`^${queryParams.status.trim()}$`, "i");
@@ -150,20 +180,20 @@ export const eventService = {
     if (queryParams.targetRole) {
       filter.targetAudience = { $in: [queryParams.targetRole, "All"] };
     }
-    
-    if (queryParams.city) filter.city = queryParams.city;
-    if (queryParams.mode) filter.mode = queryParams.mode;
+
+    if (queryParams.city)  filter.city  = queryParams.city;
+    if (queryParams.mode)  filter.mode  = queryParams.mode;
 
     let [events, total] = await Promise.all([
       Event.find(filter).sort(sort).skip(skip).limit(limit),
       Event.countDocuments(filter),
     ]);
 
-    // Fallback: If status filter yields 0 events, show available events
+    // Fallback: if status filter yields 0 events, show whatever is visible
     if (queryParams.status && events.length === 0) {
       delete filter.status;
       events = await Event.find(filter).sort(sort).skip(skip).limit(limit);
-      total = await Event.countDocuments(filter);
+      total  = await Event.countDocuments(filter);
     }
 
     return {
@@ -173,23 +203,64 @@ export const eventService = {
   },
 
   /**
-   * Get single event detail
+   * Get single event detail — enforces creator-scope access
    */
   getEventBySlugOrId: async (identifier, user) => {
     const isObjectId = identifier.match(/^[0-9a-fA-F]{24}$/);
     const query = isObjectId ? { _id: identifier } : { slug: identifier };
 
-    // Allow viewing if they have the link. Targeting is enforced in listEvents.
     const event = await Event.findOne(query);
-    if (!event) {
-      throw new NotFoundError("Event not found or access denied");
+    if (!event) throw new NotFoundError("Event not found");
+
+    // ── Access check ────────────────────────────────────────────────────────
+    if (event.visibilityScope === "global") {
+      // Everyone can see global events
+      return event;
     }
-    
+
+    if (!user) {
+      throw new ForbiddenError("You must be logged in to view this event.");
+    }
+
+    const userRole    = user.role;
+    const userId      = String(user.id || user._id);
+    const userChapter = (user.chapter || "").trim();
+    const userState   = (user.state   || "").trim();
+
+    // Creator always has access
+    if (String(event.createdBy) === userId) return event;
+
+    // Super admin sees all
+    if (userRole === ROLES.SUPER_ADMIN) return event;
+
+    if (event.visibilityScope === "state") {
+      // State admin, chapter admin, or regular user within the same state
+      const sameState = userState && event.creatorState &&
+        userState.toLowerCase() === event.creatorState.toLowerCase();
+      if (sameState || userRole === ROLES.STATE_ADMIN && sameState) {
+        return event;
+      }
+      throw new ForbiddenError("This event is restricted to members of its state.");
+    }
+
+    if (event.visibilityScope === "chapter") {
+      // Only members of the same chapter
+      const sameChapter = userChapter && event.creatorChapter &&
+        userChapter.toLowerCase() === event.creatorChapter.toLowerCase();
+      // State admin of the same state can also see chapter events in their state
+      const stateAdminSameState = userRole === ROLES.STATE_ADMIN && userState &&
+        event.creatorState && userState.toLowerCase() === event.creatorState.toLowerCase();
+
+      if (sameChapter || stateAdminSameState) return event;
+      throw new ForbiddenError("This event is restricted to members of its chapter.");
+    }
+
     return event;
   },
 
   /**
    * Create new event (Admin / Secretariat)
+   * Stamps creator-scope RBAC fields at creation time.
    */
   createEvent: async (data, user) => {
     let slug = generateSlug(data.title);
@@ -198,43 +269,54 @@ export const eventService = {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
-    // RBAC Scope Enforcement
+    // ── Stamp creator-scope fields ────────────────────────────────────────────
     if (user) {
+      data.createdBy     = user.id || user._id;
+      data.creatorRole   = user.role || ROLES.SUPER_ADMIN;
+      data.creatorChapter = (user.chapter || "").trim();
+      data.creatorState   = (user.state   || "").trim();
+
       if (user.role === ROLES.CHAPTER_ADMIN) {
-        data.chapter = user.chapter;
-        data.targetChapters = [user.chapter];
+        // Chapter admin events: visible only within their chapter
+        data.visibilityScope = "chapter";
+        data.chapter         = user.chapter;
+        data.targetChapters  = [user.chapter];
         if (user.state) data.targetStates = [user.state];
-        
-        // Force Pending Approval if they try to publish
+
+        // Chapter admins cannot directly publish; requires state/central approval
         if (data.status === STATUSES.EVENT.UPCOMING) {
           data.status = STATUSES.EVENT.PENDING_APPROVAL;
         }
+
       } else if (user.role === ROLES.STATE_ADMIN) {
-        if (user.state) data.targetStates = [user.state];
-        // They can select targetChapters, but targetStates is forced to their own state
+        // State admin events: visible to their entire state
+        data.visibilityScope = "state";
+        if (user.state) {
+          data.targetStates  = [user.state];
+          data.creatorState  = user.state;
+        }
+        // They can choose which chapters to include, but scope stays 'state'
+
+      } else {
+        // super_admin: global — everyone can see
+        data.visibilityScope = "global";
       }
+    } else {
+      data.visibilityScope = "global";
     }
 
-    // Ensure paid event attributes and fee are strictly synchronized
-    const isPaid = Boolean(data.isPaid === true || data.isPaid === "true" || data.isPaid === "Paid");
-    const ticketPrice = isPaid ? (Number(data.ticketPrice) || 0) : 0;
-    const fee = isPaid ? `₹${ticketPrice}` : (data.fee && data.fee !== "Complimentary for Members" ? data.fee : "Free");
+    // ── Sync paid event fields ────────────────────────────────────────────────
+    const isPaid       = Boolean(data.isPaid === true || data.isPaid === "true" || data.isPaid === "Paid");
+    const ticketPrice  = isPaid ? (Number(data.ticketPrice) || 0) : 0;
+    const fee          = isPaid ? `₹${ticketPrice}` : (data.fee && data.fee !== "Complimentary for Members" ? data.fee : "Free");
 
-    data.isPaid = isPaid;
+    data.isPaid      = isPaid;
     data.ticketPrice = ticketPrice;
-    data.fee = fee;
+    data.fee         = fee;
 
-    if (user) {
-      data.createdBy = (user.id || user._id);
-    }
-
-    const event = await Event.create({
-      ...data,
-      slug,
-    });
+    const event = await Event.create({ ...data, slug });
 
     if (data.targetAudience && data.targetAudience.length > 0 && event.status === STATUSES.EVENT.UPCOMING) {
-      // Async broadcast so it doesn't block the request
       broadcastEventToAudience(event);
     }
 
@@ -413,11 +495,11 @@ export const eventService = {
   },
 
   /**
-   * Update event details
+   * Update event details \u2014 preserves creator-scope RBAC
    */
   updateEvent: async (id, updateData, user) => {
     const query = { _id: id };
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== ROLES.SECRETARIAT) {
+    if (user && user.role !== ROLES.SUPER_ADMIN) {
       query.createdBy = (user.id || user._id);
     }
     const existing = await Event.findOne(query);
@@ -425,18 +507,25 @@ export const eventService = {
       throw new NotFoundError("Event not found or you don't have permission to edit it");
     }
 
+    // Always protect creator-scope fields \u2014 they can never be changed after creation
+    delete updateData.creatorRole;
+    delete updateData.creatorChapter;
+    delete updateData.creatorState;
+    delete updateData.visibilityScope; // Cannot elevate scope post-creation
+    delete updateData.createdBy;
+
     // RBAC: Chapter Admin Scope Enforcement
     if (user) {
       if (user.role === ROLES.CHAPTER_ADMIN) {
-        delete updateData.chapter; // Prevent modifying chapter
+        delete updateData.chapter;        // Cannot move event to another chapter
         delete updateData.targetChapters;
         delete updateData.targetStates;
-        // If chapter admin tries to publish or edit a published event, push it to Pending Approval
+        // Chapter admins go through approval to publish
         if (updateData.status === STATUSES.EVENT.UPCOMING) {
           updateData.status = STATUSES.EVENT.PENDING_APPROVAL;
         }
       } else if (user.role === ROLES.STATE_ADMIN) {
-        delete updateData.targetStates; // Prevent modifying targetStates
+        delete updateData.targetStates;   // Cannot change state scope
       }
     }
 
@@ -444,7 +533,7 @@ export const eventService = {
       updateData.slug = generateSlug(updateData.title);
     }
 
-    // Ensure paid event attributes and fee are strictly synchronized on update
+    // Sync paid event fields on update
     if (updateData.isPaid !== undefined || updateData.ticketPrice !== undefined || updateData.fee !== undefined) {
       const isPaid = updateData.isPaid !== undefined
         ? Boolean(updateData.isPaid === true || updateData.isPaid === "true" || updateData.isPaid === "Paid")
@@ -453,7 +542,7 @@ export const eventService = {
         ? (Number(updateData.ticketPrice !== undefined ? updateData.ticketPrice : existing.ticketPrice) || 0)
         : 0;
       const fee = isPaid
-        ? `₹${ticketPrice}`
+        ? `\u20b9${ticketPrice}`
         : (updateData.fee && updateData.fee !== "Complimentary for Members" ? updateData.fee : "Free");
 
       updateData.isPaid = isPaid;
@@ -462,7 +551,7 @@ export const eventService = {
     }
 
     const updated = await Event.findByIdAndUpdate(id, updateData, { new: true });
-    
+
     // Only broadcast if status changed to UPCOMING
     if (existing.status !== STATUSES.EVENT.UPCOMING && updated.status === STATUSES.EVENT.UPCOMING) {
       broadcastEventToAudience(updated);
@@ -470,6 +559,7 @@ export const eventService = {
 
     return updated;
   },
+
 
   /**
    * Delete event
@@ -495,7 +585,10 @@ export const eventService = {
    * RIFAH Operations Center: Get full operations state for an event
    */
   getOperations: async (eventId, user) => {
-    const event = await Event.findById(eventId).populate("registeredUsers.user", "name email phone mobile company city membershipStatus");
+    const event = await Event.findById(eventId).populate(
+      "registeredUsers.user",
+      "name email phone mobile whatsapp organization company city role membershipStatus"
+    );
     if (!event) throw new NotFoundError("Event not found");
 
     const registeredUsers = event.registeredUsers || [];
@@ -503,7 +596,10 @@ export const eventService = {
     const checkedIn = registeredUsers.filter((r) => r.attendanceStatus === "Present").length;
     const membersCount = registeredUsers.filter((r) => {
       const u = r.user;
-      return u?.membershipStatus && u.membershipStatus !== "None" && u.membershipStatus !== "Expired";
+      return (
+        u?.role === "business_owner" ||
+        (u?.membershipStatus && u.membershipStatus !== "None" && u.membershipStatus !== "Expired")
+      );
     }).length;
 
     let totalFees = 0;
@@ -512,6 +608,8 @@ export const eventService = {
     } else if (event.finance?.moneyIn?.length) {
       totalFees = event.finance.moneyIn.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
     }
+
+    const approvedCount = registeredUsers.filter((r) => r.status !== "Cancelled").length;
 
     return {
       event: {
@@ -544,38 +642,66 @@ export const eventService = {
         nonMemberFee: event.nonMemberFee !== undefined ? event.nonMemberFee : 500,
         paymentCodes: event.paymentCodes || [],
         staffCodes: event.staffCodes || [],
+        membershipJoiningLink: event.membershipJoiningLink || "",
+        membershipQrImage: event.membershipQrImage || "",
+        eventPoster: event.eventPoster || "",
+        repeatGuestThreshold: event.repeatGuestThreshold !== undefined ? event.repeatGuestThreshold : 3,
+        remindRepeatGuests: event.remindRepeatGuests !== false,
+        downloadListPermission: event.downloadListPermission || "Everyone (members and guests)",
+        certificateStyle: event.certificateStyle || "5 — Corporate (navy band, gold rule, clean typography)",
+        certificateAccentColor: event.certificateAccentColor || "#059669",
+        signatory1Role: event.signatory1Role || "Chapter President",
+        signatory1Name: event.signatory1Name || "",
+        signatory1Image: event.signatory1Image || "",
+        signatory2Role: event.signatory2Role || "Chapter Secretary",
+        signatory2Name: event.signatory2Name || "",
+        signatory2Image: event.signatory2Image || "",
         sponsors: event.sponsors || [],
         upcomingEvents: event.upcomingEvents || [],
         appearance: event.appearance || { primaryColor: "#06b6d4", darkBg: true },
         projectorUrl: event.projectorUrl || "",
+        registeredUsers: registeredUsers,
       },
       kpi: {
         registered: totalRegistered,
-        approved: totalRegistered,
+        approved: approvedCount,
         members: membersCount,
         checkedIn: checkedIn,
         fees: totalFees,
       },
       kpis: {
         registered: totalRegistered,
-        approved: totalRegistered,
+        approved: approvedCount,
         members: membersCount,
         checkedIn: checkedIn,
         fees: totalFees,
       },
-      attendees: registeredUsers.map((reg, idx) => ({
-        id: reg._id || `att-${idx}`,
-        userId: reg.user?._id || reg.user,
-        name: reg.user?.name || "Attendee " + (idx + 1),
-        email: reg.user?.email || "",
-        mobile: reg.user?.phone || reg.user?.mobile || "Not provided",
-        company: reg.user?.company || "Enterprise",
-        city: reg.user?.city || event.city || "Mumbai",
-        membership: reg.user?.membershipStatus || "Member",
-        status: reg.paymentStatus || (event.isPaid ? "Paid" : "Free"),
-        attendanceStatus: reg.attendanceStatus || "Pending",
-        time: reg.registeredAt ? new Date(reg.registeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "10:00 AM",
-      })),
+      attendees: registeredUsers.map((reg, idx) => {
+        const u = reg.user || {};
+        const isMem =
+          u.role === "business_owner" ||
+          (u.membershipStatus && u.membershipStatus !== "None" && u.membershipStatus !== "Expired");
+        return {
+          id: reg._id || `att-${idx}`,
+          userId: u._id || reg.user,
+          name: u.name || "Attendee " + (idx + 1),
+          email: u.email || "",
+          mobile: u.phone || u.whatsapp || u.mobile || "Not provided",
+          company: u.organization || u.company || "Enterprise",
+          city: u.city || event.city || "Mumbai",
+          isMember: Boolean(isMem),
+          membership: isMem ? "Active Member" : "Non-Member",
+          membershipStatus: isMem ? "Active Member" : "Non-Member",
+          approvalStatus: reg.status === "Cancelled" ? "Rejected" : "Approved",
+          status: reg.paymentStatus || (event.isPaid ? "Paid" : "Free"),
+          paymentStatus: reg.paymentStatus || (event.isPaid ? "Paid" : "Free"),
+          attendanceStatus: reg.attendanceStatus || "Pending",
+          entryStatus: reg.attendanceStatus === "Present" ? "Checked In" : "Pending",
+          time: reg.registeredAt
+            ? new Date(reg.registeredAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : "10:00 AM",
+        };
+      }),
     };
   },
 
@@ -613,6 +739,20 @@ export const eventService = {
       "nonMemberFee",
       "paymentCodes",
       "staffCodes",
+      "membershipJoiningLink",
+      "membershipQrImage",
+      "eventPoster",
+      "repeatGuestThreshold",
+      "remindRepeatGuests",
+      "downloadListPermission",
+      "certificateStyle",
+      "certificateAccentColor",
+      "signatory1Role",
+      "signatory1Name",
+      "signatory1Image",
+      "signatory2Role",
+      "signatory2Name",
+      "signatory2Image",
       "sponsors",
       "upcomingEvents",
       "appearance",

@@ -4,6 +4,7 @@ import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { NotFoundError } from "../../shared/errors/errors.js";
 import { auditService } from "../audit/audit.service.js";
+import { Business } from "../businesses/business.model.js";
 
 export const leadController = {
   routeLead: asyncHandler(async (req, res) => {

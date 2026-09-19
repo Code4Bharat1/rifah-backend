@@ -79,17 +79,17 @@ export const followupService = {
   },
 
   async syncFromEvent(eventId) {
-    const event = await Event.findById(eventId).populate("attendees.user");
+    const event = await Event.findById(eventId).populate("registeredUsers.user");
     if (!event) throw new Error("Event not found");
 
     let syncedCount = 0;
-    const attendees = event.attendees || [];
+    const attendees = event.registeredUsers || [];
 
     for (const att of attendees) {
-      const name = att.name || att.user?.name || "Participant";
-      const mobile = att.mobile || att.user?.phone || att.user?.mobile || "Not Provided";
-      const email = att.email || att.user?.email || "";
-      const company = att.company || att.businessName || "";
+      const name = att.user?.name || "Participant";
+      const mobile = att.user?.phone || att.user?.mobile || "Not Provided";
+      const email = att.user?.email || "";
+      const company = att.user?.businessName || att.user?.companyName || "";
 
       const existing = await Followup.findOne({
         event: eventId,
@@ -106,7 +106,7 @@ export const followupService = {
           email,
           company,
           status: "pending",
-          category: att.ticketType || "Attendee",
+          category: "Attendee",
         });
         syncedCount++;
       }

@@ -158,7 +158,34 @@ const eventSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    // ─── Creator-Scope RBAC Fields ───────────────────────────────────────────
+    // These are stamped at creation time so access checks are instant.
+    creatorRole: {
+      type: String,
+      default: "super_admin", // super_admin | state_admin | chapter_admin
+    },
+    creatorChapter: {
+      type: String,
+      default: "",
+      index: true,
+    },
+    creatorState: {
+      type: String,
+      default: "",
+      index: true,
+    },
+    // visibilityScope drives the access check in listEvents / getEventBySlugOrId
+    //   'global'  → created by super_admin  → everyone can see
+    //   'state'   → created by state_admin  → that state's members can see
+    //   'chapter' → created by chapter_admin → that chapter's members can see
+    visibilityScope: {
+      type: String,
+      enum: ["global", "state", "chapter"],
+      default: "global",
+      index: true,
+    },
     // RIFAH Operations Center Fields
+
     stageStatus: {
       type: String,
       enum: ["LIVE", "PAUSED", "IDLE", "ENDED"],
@@ -259,6 +286,20 @@ const eventSchema = new mongoose.Schema(
     nonMemberFee: { type: Number, default: 500 },
     paymentCodes: [{ type: String }],
     staffCodes: [{ type: String }],
+    membershipJoiningLink: { type: String, default: "" },
+    membershipQrImage: { type: String, default: "" },
+    eventPoster: { type: String, default: "" },
+    repeatGuestThreshold: { type: Number, default: 3 },
+    remindRepeatGuests: { type: Boolean, default: true },
+    downloadListPermission: { type: String, default: "Everyone (members and guests)" },
+    certificateStyle: { type: String, default: "5 — Corporate (navy band, gold rule, clean typography)" },
+    certificateAccentColor: { type: String, default: "#059669" },
+    signatory1Role: { type: String, default: "Chapter President" },
+    signatory1Name: { type: String, default: "" },
+    signatory1Image: { type: String, default: "" },
+    signatory2Role: { type: String, default: "Chapter Secretary" },
+    signatory2Name: { type: String, default: "" },
+    signatory2Image: { type: String, default: "" },
     sponsors: [
       {
         id: { type: String },
