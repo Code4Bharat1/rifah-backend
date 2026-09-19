@@ -185,6 +185,9 @@ export const authService = {
     avatar,
     ownerPhoto,
     photo,
+    website,
+    instagram,
+    linkedin,
   }) => {
     const cleanEmail = email.toLowerCase().trim();
     const cleanBusinessEmail = businessEmail ? businessEmail.toLowerCase().trim() : "";
@@ -192,6 +195,9 @@ export const authService = {
     const cleanLogo = (logo || "").trim();
     const cleanAvatar = (avatar || ownerPhoto || photo || "").trim();
     const cleanRole = (roleInBusiness || designation || "Founder / Owner").trim();
+    const cleanWebsite = (website || "").trim();
+    const cleanInstagram = (instagram || "").trim();
+    const cleanLinkedin = (linkedin || "").trim();
     const parsedDob = dob ? new Date(dob) : null;
     const parsedJoiningDate = joiningDate ? new Date(joiningDate) : new Date();
     const cleanTimezone = timezone && typeof timezone === "string" ? timezone.trim() : "Asia/Kolkata";
@@ -303,6 +309,9 @@ export const authService = {
       chapterId,
       membership: cleanMembership,
       about: about || "",
+      website: cleanWebsite,
+      instagram: cleanInstagram,
+      linkedin: cleanLinkedin,
       taxId: cleanTaxId,
       dob: parsedDob && !isNaN(parsedDob.getTime()) ? parsedDob : null,
       joiningDate: parsedJoiningDate && !isNaN(parsedJoiningDate.getTime()) ? parsedJoiningDate : new Date(),

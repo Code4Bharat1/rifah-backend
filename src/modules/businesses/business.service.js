@@ -362,7 +362,7 @@ export const businessService = {
     const ALLOWED_CREATE_FIELDS = [
       "name", "tagline", "about", "industry", "categories", "businessType",
       "city", "state", "address", "pincode", "chapter", "chapterId", "employees",
-      "founded", "website", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
+      "founded", "website", "instagram", "linkedin", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
       "accent", "logo", "coverImage", "gallery", "productsSummary",
       "servicesSummary", "certifications", "dob", "timezone"
     ];
@@ -428,7 +428,7 @@ export const businessService = {
       const ALLOWED_OWNER_FIELDS = [
         "name", "tagline", "about", "industry", "categories", "businessType",
         "city", "state", "address", "pincode", "chapter", "employees",
-        "founded", "website", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
+        "founded", "website", "instagram", "linkedin", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
         "accent", "logo", "coverImage", "gallery", "productsSummary",
         "servicesSummary", "certifications", "dob", "timezone",
         "contactPerson", "roleInBusiness", "designation", "contactPersonRole"
@@ -578,6 +578,9 @@ export const businessService = {
       chapterId,
       membership: data.membershipTier || "Free",
       about: data.about || "",
+      website: data.website || "",
+      instagram: data.instagram || "",
+      linkedin: data.linkedin || "",
       phone: data.phone || "",
       email: (data.businessEmail || cleanEmail).toLowerCase().trim(),
       ownerEmail: cleanEmail,

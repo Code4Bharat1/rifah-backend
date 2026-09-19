@@ -144,6 +144,16 @@ const businessSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    instagram: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    linkedin: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     taxId: {
       type: String,
       trim: true,
