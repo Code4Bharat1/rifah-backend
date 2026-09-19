@@ -244,7 +244,12 @@ export const postService = {
   uploadImage: async (file) => {
     if (!file) throw new NotFoundError("No file provided");
     const fileUrl = await storageService.uploadFile(file, "posts");
-    return { url: fileUrl };
+    let dataUrl = "";
+    if (file.buffer) {
+      const mime = file.mimetype || "image/png";
+      dataUrl = `data:${mime};base64,${file.buffer.toString("base64")}`;
+    }
+    return { url: fileUrl, dataUrl };
   },
 
   /**

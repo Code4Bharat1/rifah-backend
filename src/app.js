@@ -140,7 +140,7 @@ app.use(
     }
 
     // 2. Check all subfolders in uploads
-    const subdirs = ["logos", "covers", "gallery", "documents", "certificates", "catalogue", "avatars", "attachments"];
+    const subdirs = ["posts", "logos", "covers", "gallery", "documents", "certificates", "catalogue", "avatars", "attachments"];
     for (const sub of subdirs) {
       const subPath = path.join(uploadsPath, sub, filename);
       if (fs.existsSync(subPath) && fs.statSync(subPath).isFile()) {
