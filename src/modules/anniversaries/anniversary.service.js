@@ -198,7 +198,11 @@ export const anniversaryService = {
     }
 
     // 2. Query scope for chapter members / businesses
+<<<<<<< Updated upstream
     const isAdmin = (userDoc?.role || currentUser.role) === "central_admin";
+=======
+    const isAdmin = ["super_admin", "admin"].includes(userDoc?.role || currentUser.role);
+>>>>>>> Stashed changes
     const isStateAdmin = (userDoc?.role || currentUser.role) === "state_admin";
 
     const bizQuery = {

@@ -15,8 +15,13 @@ router.get("/today", birthdayController.getTodayBirthdays);
 // Manual trigger for birthday email dispatch (Admins only)
 router.post(
   "/trigger-emails",
+<<<<<<< Updated upstream
   requireRole(ROLES.CENTRAL_ADMIN),
+=======
+  requireRole(["super_admin", "admin"]),
+>>>>>>> Stashed changes
   birthdayController.triggerBirthdayEmails
 );
+
 
 export default router;

@@ -203,7 +203,11 @@ export const enquiryService = {
     if (user) {
       const isRequester = String(enquiry.requester?._id || enquiry.requester || "") === String(user.id);
       const isTargetOwner = String(enquiry.targetBusiness?.owner || "") === String(user.id);
+<<<<<<< Updated upstream
       const isAdmin = ["central_admin", "state_admin", "chapter_admin"].includes(user.role);
+=======
+      const isAdmin = ["super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
+>>>>>>> Stashed changes
 
       let hasRoutedLead = false;
       if (!isRequester && !isTargetOwner && !isAdmin) {

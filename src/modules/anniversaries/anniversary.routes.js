@@ -15,7 +15,11 @@ router.get("/today", anniversaryController.getTodayAnniversaries);
 // Manual trigger for anniversary email dispatch (Admins only)
 router.post(
   "/trigger-emails",
+<<<<<<< Updated upstream
   requireRole(ROLES.CENTRAL_ADMIN),
+=======
+  requireRole(["super_admin", "admin"]),
+>>>>>>> Stashed changes
   anniversaryController.triggerAnniversaryEmails
 );
 

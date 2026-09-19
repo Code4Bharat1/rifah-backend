@@ -13,8 +13,13 @@ import { ROLES } from "../constants/roles.js";
 export const getChapterFilter = async (user, entityType = "direct") => {
   if (!user || !user.role) return {};
 
+<<<<<<< Updated upstream
   // Super Admins have unrestricted access
   if (user.role === ROLES.CENTRAL_ADMIN) {
+=======
+  // Central Admins have unrestricted access
+  if (user.role === ROLES.CENTRAL_ADMIN || user.role === "super_admin" || user.role === "admin") {
+>>>>>>> Stashed changes
     return {};
   }
 

@@ -129,7 +129,11 @@ export const userService = {
       if (String(userToUpdate.chapterId || "") !== String(requester.chapterId || "")) {
         throw new ForbiddenError("Cannot modify users outside your chapter");
       }
+<<<<<<< Updated upstream
       if (userToUpdate.role === ROLES.CENTRAL_ADMIN || userToUpdate.role === ROLES.STATE_ADMIN) {
+=======
+      if (userToUpdate.role === ROLES.CENTRAL_ADMIN || userToUpdate.role === "super_admin" || userToUpdate.role === "admin" || userToUpdate.role === ROLES.STATE_ADMIN) {
+>>>>>>> Stashed changes
         throw new ForbiddenError("Cannot modify higher-tier admins");
       }
       if (role) {
@@ -149,7 +153,12 @@ export const userService = {
    */
   inviteUser: async (email, requester) => {
     // Only Chapter Admins and above can invite
+<<<<<<< Updated upstream
     if (![ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(requester.role)) {
+=======
+    const isAuthorized = [ROLES.CENTRAL_ADMIN, "super_admin", "admin", ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(requester.role);
+    if (!isAuthorized) {
+>>>>>>> Stashed changes
       throw new ForbiddenError("Insufficient permissions to invite members");
     }
     
