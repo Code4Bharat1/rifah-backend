@@ -179,8 +179,8 @@ const startServer = async () => {
     // 1.2 Ensure User Account for testing
     await ensureUserAccount();
 
-    // 1.3 Ensure Anniversary Test Data
-    await anniversaryService.seedAnniversaryTestData({ chapter: "Mumbai" });
+    // 1.3 Clean up any seeded Anniversary Test Data
+    await anniversaryService.cleanAnniversaryTestData();
 
     // 2. Start Scheduled Background Tasks
     eventService.startEventScheduler();
