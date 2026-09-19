@@ -34,7 +34,7 @@ export const authController = {
   }),
 
   switchRole: asyncHandler(async (req, res) => {
-    const { targetRole } = req.body;
+    const targetRole = req.body.targetRole || req.body.role;
     const result = await authService.switchRole(req.user.id, targetRole);
     return ApiResponse.success(res, result, "Role switched successfully");
   }),
