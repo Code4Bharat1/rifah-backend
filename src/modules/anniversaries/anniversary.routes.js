@@ -19,4 +19,7 @@ router.post(
   anniversaryController.triggerAnniversaryEmails
 );
 
+// Seed test businesses celebrating anniversary today
+router.post("/seed-test", anniversaryController.seedAnniversaryTestData);
+
 export default router;

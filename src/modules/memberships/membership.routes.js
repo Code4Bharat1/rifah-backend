@@ -27,5 +27,13 @@ router.post(
   membershipController.upgradePlan
 );
 
+// Admin manual trigger for membership expiry checks
+router.post(
+  "/check-expiries",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.SUPER_ADMIN),
+  membershipController.triggerExpiryReminders
+);
+
 export { router as membershipRoutes };
 export default router;

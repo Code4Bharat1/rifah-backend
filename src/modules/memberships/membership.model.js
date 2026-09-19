@@ -46,6 +46,21 @@ const membershipSchema = new mongoose.Schema(
         type: String,
       },
     ],
+    remindersSent: [
+      {
+        milestone: {
+          type: String,
+          required: true,
+        },
+        sentAt: {
+          type: Date,
+          default: Date.now,
+        },
+        forEndDate: {
+          type: Date,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

@@ -1486,4 +1486,307 @@ RIFAH Chamber of Commerce & Industry
     const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
     return emailService.sendEmail({ to: email, subject, html, attachments });
   },
+
+  /**
+   * Sends automated Membership Expiry Reminder email to business
+   * Supports all milestones:
+   * - before_30 (1 month before)
+   * - before_15 (15 days before)
+   * - before_10 (10 days before)
+   * - before_5  (5 days before)
+   * - before_2  (2 days before)
+   * - before_1  (1 day before)
+   * - day_0     (day of expiration)
+   * - after_2   (2 days after expiration)
+   * - after_5   (5 days after expiration)
+   * - after_7   (1 week after expiration)
+   * - after_14  (2 weeks after expiration)
+   */
+  sendMembershipExpiryReminderEmail: async ({
+    email,
+    businessName,
+    ownerName,
+    planName = "Membership",
+    endDate,
+    milestone,
+    chapter = "",
+  }) => {
+    if (!email) return false;
+
+    const logoPath = path.join(process.cwd(), "public", "rifah1-logo.png");
+    const hasLogo = fs.existsSync(logoPath);
+    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/biz/membership`;
+
+    const formattedDate = endDate
+      ? new Date(endDate).toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : "Upcoming";
+
+    // Configure milestone-specific messaging & styling
+    let subject = "";
+    let badgeText = "";
+    let badgeBg = "#fef3c7";
+    let badgeBorder = "#fde68a";
+    let badgeColor = "#b45309";
+    let headline = "";
+    let messageText = "";
+    let ctaText = "Renew Membership Online";
+
+    switch (milestone) {
+      case "before_30":
+        subject = `Reminder: Your RIFAH ${planName} Membership expires in 30 days`;
+        badgeText = "📅 1 Month (30 Days) Remaining";
+        badgeBg = "#eff6ff";
+        badgeBorder = "#bfdbfe";
+        badgeColor = "#1d4ed8";
+        headline = "Your Membership Renewal is in 30 Days";
+        messageText = `Your annual <strong>${planName} Membership</strong> with RIFAH Chamber of Commerce & Industry will expire on <strong>${formattedDate}</strong> (in 30 days). We invite you to renew early to enjoy continuous business networking and uninterrupted chamber privileges.`;
+        break;
+
+      case "before_15":
+        subject = `Upcoming Renewal: 15 days remaining for your RIFAH ${planName} Membership`;
+        badgeText = "⏰ 15 Days Remaining";
+        badgeBg = "#fef3c7";
+        badgeBorder = "#fde68a";
+        badgeColor = "#b45309";
+        headline = "15 Days Left to Renew Your Membership";
+        messageText = `This is a friendly reminder that your <strong>${planName} Membership</strong> subscription is set to expire on <strong>${formattedDate}</strong> (15 days from today). Secure your early renewal to maintain your priority listing and verified status.`;
+        break;
+
+      case "before_10":
+        subject = `Action Required: 10 days left for your RIFAH ${planName} Membership`;
+        badgeText = "⏳ 10 Days Remaining";
+        badgeBg = "#fef3c7";
+        badgeBorder = "#fcd34d";
+        badgeColor = "#b45309";
+        headline = "10 Days Remaining for Your Membership";
+        messageText = `Your membership with RIFAH Chamber is expiring on <strong>${formattedDate}</strong>. Don't risk losing direct access to verified chamber inquiries, chapter networking meetings, and business visibility.`;
+        break;
+
+      case "before_5":
+        subject = `Urgent: 5 days remaining before your RIFAH Membership expires`;
+        badgeText = "🚨 5 Days Remaining";
+        badgeBg = "#fff7ed";
+        badgeBorder = "#fed7aa";
+        badgeColor = "#c2410c";
+        headline = "Only 5 Days Remaining";
+        messageText = `Your <strong>${planName} Membership</strong> is scheduled to expire on <strong>${formattedDate}</strong>. Click below to renew immediately to ensure your business remains active on the directory.`;
+        break;
+
+      case "before_2":
+        subject = `Final Notice: Only 2 days left to renew your RIFAH Membership`;
+        badgeText = "⚠️ 2 Days Left · Final Notice";
+        badgeBg = "#fef2f2";
+        badgeBorder = "#fecaca";
+        badgeColor = "#b91c1c";
+        headline = "Only 48 Hours Left to Renew";
+        messageText = `Your membership privileges will expire in <strong>2 days</strong> on <strong>${formattedDate}</strong>. Avoid interruption in receiving customer RFQs, chamber leads, and verified business credentials.`;
+        break;
+
+      case "before_1":
+        subject = `Last Day Tomorrow: Your RIFAH Membership expires tomorrow`;
+        badgeText = "🔴 Expires Tomorrow";
+        badgeBg = "#fef2f2";
+        badgeBorder = "#f87171";
+        badgeColor = "#991b1b";
+        headline = "Your Membership Expires Tomorrow";
+        messageText = `Tomorrow is the last active day of your <strong>${planName} Membership</strong>. Please complete your renewal now to maintain seamless member benefits without any service disruption.`;
+        break;
+
+      case "day_0":
+        subject = `Important: Your RIFAH Membership expires today`;
+        badgeText = "⚠️ Expires Today";
+        badgeBg = "#fef2f2";
+        badgeBorder = "#ef4444";
+        badgeColor = "#7f1d1d";
+        headline = "Your Membership Expires Today";
+        messageText = `Your <strong>${planName} Membership</strong> with the RIFAH Chamber expires today (<strong>${formattedDate}</strong>). To retain your verified status, chapter voting rights, and lead access, please renew your subscription today.`;
+        ctaText = "Renew Membership Today";
+        break;
+
+      case "after_2":
+        subject = `Grace Period: Your RIFAH Membership expired 2 days ago`;
+        badgeText = "⚠️ Expired 2 Days Ago · Grace Period";
+        badgeBg = "#fef2f2";
+        badgeBorder = "#fecaca";
+        badgeColor = "#b91c1c";
+        headline = "Your Membership Has Expired (2 Days Ago)";
+        messageText = `Your <strong>${planName} Membership</strong> expired on <strong>${formattedDate}</strong>. You are currently in an official chamber grace period. Renew now to restore full member privileges without any penalty.`;
+        ctaText = "Re-activate Membership Now";
+        break;
+
+      case "after_5":
+        subject = `Urgent: 5 days since your RIFAH Membership expired`;
+        badgeText = "⚠️ 5 Days Past Expiration";
+        badgeBg = "#fef2f2";
+        badgeBorder = "#f87171";
+        badgeColor = "#991b1b";
+        headline = "5 Days Since Membership Expiration";
+        messageText = `It has been 5 days since your membership expired on <strong>${formattedDate}</strong>. Your verified badge, business catalogue visibility, and RFQ direct alerts are currently suspended. Click below to reinstate your membership.`;
+        ctaText = "Re-activate Membership";
+        break;
+
+      case "after_7":
+        subject = `Notice: 1 week since your RIFAH Membership expiration`;
+        badgeText = "🔴 1 Week Post-Expiration";
+        badgeBg = "#fdf4ff";
+        badgeBorder = "#f0abfc";
+        badgeColor = "#86198f";
+        headline = "1 Week Since Membership Expired";
+        messageText = `One week has passed since your membership expired on <strong>${formattedDate}</strong>. We value your presence in the RIFAH Chamber network and would be delighted to have you continue with us. Renew your business plan now.`;
+        ctaText = "Rejoin RIFAH Chamber";
+        break;
+
+      case "after_14":
+        subject = `Final Notice: 2 weeks since your RIFAH Membership expiration`;
+        badgeText = "🔴 2 Weeks Post-Expiration · Final Notice";
+        badgeBg = "#f1f5f9";
+        badgeBorder = "#cbd5e1";
+        badgeColor = "#334155";
+        headline = "2 Weeks Since Membership Expired";
+        messageText = `It has been two weeks since your membership expired on <strong>${formattedDate}</strong>. Your account has been reverted to the Free tier. You can re-upgrade your membership at any time to unlock chamber growth opportunities and chapter support.`;
+        ctaText = "Re-upgrade Membership";
+        break;
+
+      default:
+        subject = `RIFAH Chamber Membership Status Notice`;
+        badgeText = "Membership Notice";
+        headline = "Membership Status Update";
+        messageText = `Your membership with RIFAH Chamber is due for renewal. Expiry date: <strong>${formattedDate}</strong>.`;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+      </head>
+      <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; padding: 24px 12px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+                <!-- Header Accent -->
+                <tr>
+                  <td style="height: 6px; background: linear-gradient(90deg, #0284c7 0%, #0060df 50%, #059669 100%);"></td>
+                </tr>
+
+                <!-- Content Area -->
+                <tr>
+                  <td style="padding: 36px 32px;">
+                    <!-- Brand Header -->
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td>
+                          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 40px; width: auto; margin-bottom: 12px;" />` : `<h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #071328; letter-spacing: -0.5px;">RIFAH CONNECT</h1>`}
+                          <p style="margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #0284c7;">Chamber of Commerce &amp; Industry</p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <div style="height: 1px; background-color: #e2e8f0; margin: 20px 0 24px 0;"></div>
+
+                    <!-- Milestone Badge -->
+                    <div style="display: inline-block; background-color: ${badgeBg}; border: 1px solid ${badgeBorder}; border-radius: 9999px; padding: 6px 16px; margin-bottom: 16px;">
+                      <span style="color: ${badgeColor}; font-size: 12px; font-weight: 700; letter-spacing: 0.3px;">${badgeText}</span>
+                    </div>
+
+                    <h2 style="margin: 0 0 12px 0; font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.3;">
+                      ${headline}
+                    </h2>
+
+                    <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #1e293b;">
+                      Dear <strong>${ownerName || businessName || "Valued Member"}</strong>,
+                    </p>
+
+                    <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #334155;">
+                      ${messageText}
+                    </p>
+
+                    <!-- Details Card -->
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 24px;">
+                      <tr>
+                        <td style="padding: 20px;">
+                          <p style="margin: 0 0 12px 0; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b;">Subscription Details</p>
+                          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                              <td style="padding: 4px 0; font-size: 13px; color: #64748b;">Business:</td>
+                              <td style="padding: 4px 0; font-size: 13px; font-weight: 700; color: #0f172a; text-align: right;">${businessName}</td>
+                            </tr>
+                            <tr>
+                              <td style="padding: 4px 0; font-size: 13px; color: #64748b;">Current Tier:</td>
+                              <td style="padding: 4px 0; font-size: 13px; font-weight: 700; color: #0284c7; text-align: right;">${planName}</td>
+                            </tr>
+                            <tr>
+                              <td style="padding: 4px 0; font-size: 13px; color: #64748b;">Expiry Date:</td>
+                              <td style="padding: 4px 0; font-size: 13px; font-weight: 700; color: #0f172a; text-align: right;">${formattedDate}</td>
+                            </tr>
+                            ${chapter ? `
+                            <tr>
+                              <td style="padding: 4px 0; font-size: 13px; color: #64748b;">Chapter:</td>
+                              <td style="padding: 4px 0; font-size: 13px; font-weight: 600; color: #334155; text-align: right;">${chapter}</td>
+                            </tr>` : ""}
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Member Benefits Recap -->
+                    <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 18px; margin-bottom: 28px;">
+                      <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 800; text-transform: uppercase; color: #166534; letter-spacing: 0.5px;">Continuous Member Privileges:</p>
+                      <ul style="margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; color: #15803d;">
+                        <li>Verified business credentials and priority directory ranking</li>
+                        <li>Direct access to buyer RFQs, tenders, and lead inquiries</li>
+                        <li>Invitations to chapter networking meetings and national expos</li>
+                        <li>Chamber dispute resolution and business advisory support</li>
+                      </ul>
+                    </div>
+
+                    <!-- CTA Button -->
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px; width: 100%;">
+                      <tr>
+                        <td align="center">
+                          <a href="${portalUrl}" target="_blank" style="font-size: 15px; font-weight: 700; color: #ffffff; text-decoration: none; padding: 14px 36px; display: inline-block; border-radius: 12px; background: linear-gradient(135deg, #0060df 0%, #0284c7 100%); box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);">
+                            ${ctaText} →
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin: 0 0 20px 0; font-size: 12px; line-height: 1.6; color: #64748b; text-align: center;">
+                      Prefer offline payment via RTGS/NEFT or need an official invoice? Simply reply to this email or reach out to your Chapter Secretariat.
+                    </p>
+
+                    <!-- Footer Sign-off -->
+                    <div style="margin-top: 28px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+                      <p style="margin: 0; font-size: 13px; font-weight: 700; color: #1e293b;">Membership &amp; Secretariat Desk</p>
+                      <p style="margin: 2px 0 0 0; font-size: 12px; color: #64748b;">RIFAH Chamber of Commerce &amp; Industry</p>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Bottom Footer -->
+                <tr>
+                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 32px; text-align: center;">
+                    <p style="margin: 0; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+                      This is an automated membership lifecycle notice sent to registered businesses on RIFAH Connect.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
 };

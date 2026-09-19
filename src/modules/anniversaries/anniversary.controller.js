@@ -24,4 +24,16 @@ export const anniversaryController = {
       sentCount,
     });
   }),
+
+  /**
+   * Seed test businesses celebrating their anniversary today
+   */
+  seedAnniversaryTestData: asyncHandler(async (req, res) => {
+    const result = await anniversaryService.seedAnniversaryTestData(req.user);
+    res.json({
+      success: true,
+      message: `Successfully seeded ${result.count} test businesses celebrating anniversary today in ${result.chapter}`,
+      data: result,
+    });
+  }),
 };

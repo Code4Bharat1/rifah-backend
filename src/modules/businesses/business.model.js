@@ -168,6 +168,21 @@ const businessSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    roleInBusiness: {
+      type: String,
+      trim: true,
+      default: "Founder / Owner",
+    },
+    designation: {
+      type: String,
+      trim: true,
+      default: "Founder / Owner",
+    },
+    contactPersonRole: {
+      type: String,
+      trim: true,
+      default: "Founder / Owner",
+    },
     email: {
       type: String,
       lowercase: true,

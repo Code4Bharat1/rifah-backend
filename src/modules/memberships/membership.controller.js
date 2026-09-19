@@ -107,4 +107,9 @@ export const membershipController = {
     const membership = await membershipService.upgradePlan(business._id, planId);
     return ApiResponse.success(res, membership, `Upgraded to ${membership.planName} tier successfully`);
   }),
+
+  triggerExpiryReminders: asyncHandler(async (req, res) => {
+    const result = await membershipService.checkAndSendMembershipExpiryReminders();
+    return ApiResponse.success(res, result, "Membership expiry reminder check executed");
+  }),
 };

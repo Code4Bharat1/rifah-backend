@@ -83,6 +83,16 @@ const userSchema = new mongoose.Schema(
       default: ROLES.CUSTOMER,
       index: true,
     },
+    designation: {
+      type: String,
+      trim: true,
+      default: "Founder / Owner",
+    },
+    roleInBusiness: {
+      type: String,
+      trim: true,
+      default: "Founder / Owner",
+    },
     previousRole: {
       type: String,
       default: "",

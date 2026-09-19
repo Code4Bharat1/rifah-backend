@@ -1,5 +1,8 @@
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
+import { Chapter } from "../chapters/chapter.model.js";
+import { hashPassword } from "../../infrastructure/auth/password.js";
+import { ROLES } from "../../shared/constants/roles.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
@@ -328,5 +331,127 @@ export const anniversaryService = {
     }, 60 * 60 * 1000);
 
     logger.info("[ANNIVERSARY SCHEDULER] Anniversary hourly wish scheduler started.");
+  },
+
+  /**
+   * Seeds 3 active member businesses in the current user's chapter celebrating their anniversary TODAY.
+   */
+  seedAnniversaryTestData: async (currentUser) => {
+    let targetChapter = currentUser?.chapter || "Mumbai";
+    let chapterDoc = await Chapter.findOne({ name: targetChapter });
+    if (!chapterDoc) {
+      chapterDoc = await Chapter.findOne({ status: "Active" });
+      if (chapterDoc) targetChapter = chapterDoc.name;
+    }
+
+    const now = new Date();
+    const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate(), 10, 0, 0);
+    const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate(), 11, 30, 0);
+    const threeYearsAgo = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate(), 9, 15, 0);
+
+    const defaultPassword = await hashPassword("Password@123");
+
+    const testItems = [
+      {
+        email: "tariq.ansari@rifahtest.com",
+        name: "Tariq Ansari",
+        phone: "9820123456",
+        businessName: "Ansari Precision Engineering Works",
+        slug: "ansari-precision-engineering",
+        industry: "Manufacturing & Heavy Engineering",
+        joiningDate: twoYearsAgo,
+        years: 2,
+      },
+      {
+        email: "zubair.khan@rifahtest.com",
+        name: "Zubair Khan",
+        phone: "9833456789",
+        businessName: "Al-Barakah Logistics & Freight Solutions",
+        slug: "al-barakah-logistics",
+        industry: "Logistics & Supply Chain",
+        joiningDate: oneYearAgo,
+        years: 1,
+      },
+      {
+        email: "amina.siddiqui@rifahtest.com",
+        name: "Amina Siddiqui",
+        phone: "9819987654",
+        businessName: "Siddiqui Fine Textiles & Garments",
+        slug: "siddiqui-fine-textiles",
+        industry: "Textiles & Apparel",
+        joiningDate: threeYearsAgo,
+        years: 3,
+      },
+    ];
+
+    const seeded = [];
+
+    for (const item of testItems) {
+      let user = await User.findOne({ email: item.email });
+      if (!user) {
+        user = await User.create({
+          name: item.name,
+          email: item.email,
+          passwordHash: defaultPassword,
+          phone: item.phone,
+          whatsapp: item.phone,
+          role: ROLES.BUSINESS_OWNER,
+          chapter: targetChapter,
+          chapterId: chapterDoc?._id,
+          status: "Active",
+          joiningDate: item.joiningDate,
+          lastAnniversaryWishYear: 0,
+        });
+      } else {
+        user.joiningDate = item.joiningDate;
+        user.lastAnniversaryWishYear = 0;
+        user.chapter = targetChapter;
+        user.chapterId = chapterDoc?._id;
+        await user.save();
+      }
+
+      let biz = await Business.findOne({ slug: item.slug });
+      if (!biz) {
+        biz = await Business.create({
+          name: item.businessName,
+          slug: item.slug,
+          owner: user._id,
+          industry: item.industry,
+          chapter: targetChapter,
+          chapterId: chapterDoc?._id,
+          city: targetChapter,
+          state: chapterDoc?.state || "Maharashtra",
+          phone: item.phone,
+          whatsapp: item.phone,
+          email: item.email,
+          ownerEmail: item.email,
+          status: "Active",
+          verification: "verified",
+          verificationStatus: "Verified",
+          isPaid: true,
+          membership: "Premium",
+          joiningDate: item.joiningDate,
+          createdAt: item.joiningDate,
+          lastAnniversaryWishYear: 0,
+        });
+      } else {
+        biz.joiningDate = item.joiningDate;
+        biz.createdAt = item.joiningDate;
+        biz.lastAnniversaryWishYear = 0;
+        biz.chapter = targetChapter;
+        biz.chapterId = chapterDoc?._id;
+        biz.status = "Active";
+        await biz.save();
+      }
+
+      seeded.push({
+        businessName: item.businessName,
+        owner: item.name,
+        yearsCompleted: item.years,
+        chapter: targetChapter,
+      });
+    }
+
+    return { chapter: targetChapter, count: seeded.length, seeded };
   },
 };

@@ -250,7 +250,7 @@ export const businessService = {
     }
 
     const [businesses, total] = await Promise.all([
-      Business.find(finalFilter).sort(sortOption).skip(skip).limit(limit).populate("owner", "name email phone"),
+      Business.find(finalFilter).sort(sortOption).skip(skip).limit(limit).populate("owner", "name email phone avatar designation roleInBusiness"),
       Business.countDocuments(finalFilter),
     ]);
 
@@ -273,21 +273,21 @@ export const businessService = {
     let business = null;
 
     if (isObjectId) {
-      business = await Business.findById(trimmed).populate("owner", "name email phone");
+      business = await Business.findById(trimmed).populate("owner", "name email phone avatar designation roleInBusiness");
     }
 
     if (!business) {
       // Case-insensitive exact slug match
       business = await Business.findOne({
         slug: new RegExp(`^${escapeRegex(trimmed)}$`, "i"),
-      }).populate("owner", "name email phone");
+      }).populate("owner", "name email phone avatar designation roleInBusiness");
     }
 
     if (!business) {
       // Fallback: match by business name
       business = await Business.findOne({
         name: new RegExp(`^${escapeRegex(trimmed)}$`, "i"),
-      }).populate("owner", "name email phone");
+      }).populate("owner", "name email phone avatar designation roleInBusiness");
     }
 
     if (!business) {
@@ -430,7 +430,8 @@ export const businessService = {
         "city", "state", "address", "pincode", "chapter", "employees",
         "founded", "website", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
         "accent", "logo", "coverImage", "gallery", "productsSummary",
-        "servicesSummary", "certifications", "dob", "timezone"
+        "servicesSummary", "certifications", "dob", "timezone",
+        "contactPerson", "roleInBusiness", "designation", "contactPersonRole"
       ];
       sanitizedData = {};
       for (const key of ALLOWED_OWNER_FIELDS) {
@@ -443,6 +444,14 @@ export const businessService = {
       sanitizedData.whatsappNumber = sanitizedData.whatsapp;
     } else if (sanitizedData.whatsappNumber && !sanitizedData.whatsapp) {
       sanitizedData.whatsapp = sanitizedData.whatsappNumber;
+    }
+
+    if (sanitizedData.roleInBusiness && !sanitizedData.designation) {
+      sanitizedData.designation = sanitizedData.roleInBusiness;
+      sanitizedData.contactPersonRole = sanitizedData.roleInBusiness;
+    } else if (sanitizedData.designation && !sanitizedData.roleInBusiness) {
+      sanitizedData.roleInBusiness = sanitizedData.designation;
+      sanitizedData.contactPersonRole = sanitizedData.designation;
     }
 
     if (sanitizedData.chapter || sanitizedData.chapterId) {
@@ -472,13 +481,17 @@ export const businessService = {
       runValidators: true,
     });
 
-    if (business.owner && (sanitizedData.dob !== undefined || sanitizedData.joiningDate !== undefined || sanitizedData.timezone !== undefined || sanitizedData.phone !== undefined || sanitizedData.whatsapp !== undefined)) {
+    if (business.owner) {
       const userUpdate = {};
       if (sanitizedData.dob !== undefined) userUpdate.dob = sanitizedData.dob ? new Date(sanitizedData.dob) : null;
       if (sanitizedData.joiningDate !== undefined) userUpdate.joiningDate = sanitizedData.joiningDate ? new Date(sanitizedData.joiningDate) : new Date();
       if (sanitizedData.timezone !== undefined) userUpdate.timezone = sanitizedData.timezone;
       if (sanitizedData.phone !== undefined) userUpdate.phone = sanitizedData.phone;
       if (sanitizedData.whatsapp !== undefined) userUpdate.whatsapp = sanitizedData.whatsapp;
+      if (sanitizedData.roleInBusiness !== undefined || sanitizedData.designation !== undefined) {
+        userUpdate.designation = sanitizedData.roleInBusiness || sanitizedData.designation;
+        userUpdate.roleInBusiness = sanitizedData.roleInBusiness || sanitizedData.designation;
+      }
       await User.findByIdAndUpdate(business.owner, userUpdate);
     }
 
@@ -509,6 +522,7 @@ export const businessService = {
       const passwordHash = await hashPassword(rawPassword);
       const chapterId = await resolveChapterIdByName(finalChapter);
       
+      const cleanRole = (data.roleInBusiness || data.designation || "Founder / Owner").trim();
       user = await User.create({
         name: data.ownerName.trim(),
         email: cleanEmail,
@@ -516,11 +530,18 @@ export const businessService = {
         phone: data.phone || "",
         chapter: finalChapter || "",
         chapterId,
+        designation: cleanRole,
+        roleInBusiness: cleanRole,
         role: ROLES.BUSINESS_OWNER,
         isProfileComplete: true,
         forcePasswordChange: true, // Forces them to change password on first login
       });
       isNewUser = true;
+    } else {
+      const cleanRole = (data.roleInBusiness || data.designation || user.designation || "Founder / Owner").trim();
+      user.designation = cleanRole;
+      user.roleInBusiness = cleanRole;
+      await user.save();
     }
 
     // Provision Business Profile
@@ -532,6 +553,7 @@ export const businessService = {
 
     const { chapterId, chapter } = await resolveChapterFields({ chapter: finalChapter });
     const categories = await ensureCategoriesExist(data.industry, data.subCategory);
+    const cleanRole = (data.roleInBusiness || data.designation || "Founder / Owner").trim();
 
     const business = await Business.create({
       name: data.businessName.trim(),
@@ -549,6 +571,9 @@ export const businessService = {
       taxId: data.taxId || "",
       region: data.region || "national",
       contactPerson: data.contactPerson || "",
+      roleInBusiness: cleanRole,
+      designation: cleanRole,
+      contactPersonRole: cleanRole,
       chapter: chapter || "",
       chapterId,
       membership: data.membershipTier || "Free",
