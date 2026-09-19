@@ -501,11 +501,18 @@ export const authService = {
       userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
     }
 
+    // Only add business_owner as available role if the admin actually has a registered business
     const availableRoles = new Set([userObj.role]);
     if (userObj.previousRole) availableRoles.add(userObj.previousRole);
     if (["central_admin", "state_admin", "chapter_admin"].includes(userObj.role) ||
         ["central_admin", "state_admin", "chapter_admin"].includes(userObj.previousRole)) {
-      availableRoles.add("business_owner");
+      // Check if user actually has a business profile
+      const ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
+      if (ownedBusiness) {
+        availableRoles.add("business_owner");
+        userObj.businessId = ownedBusiness._id;
+        userObj.businessSlug = ownedBusiness.slug;
+      }
     }
 
     return {
@@ -560,9 +567,15 @@ export const authService = {
 
     const validRoles = new Set([user.role]);
     if (user.previousRole) validRoles.add(user.previousRole);
-    if (["central_admin", "state_admin", "chapter_admin"].includes(user.role) || 
+
+    // An admin can switch to business_owner ONLY if they have a registered business
+    let ownedBusiness = null;
+    if (["central_admin", "state_admin", "chapter_admin"].includes(user.role) ||
         ["central_admin", "state_admin", "chapter_admin"].includes(user.previousRole)) {
-      validRoles.add("business_owner");
+      ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
+      if (ownedBusiness) {
+        validRoles.add("business_owner");
+      }
     }
 
     if (validRoles.size <= 1) {
@@ -592,7 +605,14 @@ export const authService = {
     const accessToken = signAccessToken(tokenPayload);
     const refreshToken = signRefreshToken(tokenPayload);
 
-    return { user, accessToken, refreshToken };
+    // Include business info so frontend can route to the correct business workspace
+    const userObj = user.toJSON ? user.toJSON() : { ...user._doc };
+    if (targetRole === "business_owner" && ownedBusiness) {
+      userObj.businessId = ownedBusiness._id;
+      userObj.businessSlug = ownedBusiness.slug;
+    }
+
+    return { user: userObj, accessToken, refreshToken };
   },
 
   /**
