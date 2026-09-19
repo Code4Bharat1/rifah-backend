@@ -108,4 +108,20 @@ export const verificationController = {
     
     return res.sendFile(absolutePath);
   }),
+
+  deleteVerification: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    await verificationService.deleteVerification(id, req.user);
+    
+    await auditService.logAction({
+      actor: req.user,
+      action: "DELETE",
+      targetModel: "Verification",
+      targetId: id,
+      summary: "Deleted orphaned verification record",
+      ipAddress: req.ip
+    });
+
+    return ApiResponse.success(res, null, "Orphaned verification record deleted successfully");
+  }),
 };

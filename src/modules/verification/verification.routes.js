@@ -59,5 +59,13 @@ router.patch(
   verificationController.reviewVerification
 );
 
+router.delete(
+  "/:id",
+  authMiddleware,
+  requireRole(ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  verificationController.deleteVerification
+);
+
 export { router as verificationRoutes };
 export default router;

@@ -1,1 +1,15 @@
-import dotenv from "dotenv"; import mongoose from "mongoose"; dotenv.config(); async function check() { await mongoose.connect(process.env.MONGODB_URI); const users = await mongoose.connection.db.collection("users").countDocuments(); const biz = await mongoose.connection.db.collection("businesses").countDocuments(); console.log("URI:", process.env.MONGODB_URI); console.log("Users:", users); console.log("Businesses:", biz); process.exit(0); } check();
+import { connectDatabase, disconnectDatabase } from "./src/infrastructure/database/mongoose.js";
+import { Verification } from "./src/modules/verification/verification.model.js";
+import { Business } from "./src/modules/businesses/business.model.js";
+import { User } from "./src/modules/users/user.model.js";
+
+async function check() {
+  await connectDatabase();
+  const verifications = await Verification.find().populate("business");
+  for (const v of verifications) {
+    console.log(`Business: ${v.business?.name}, Raw SubmittedBy: ${v.submittedBy}`);
+  }
+  await disconnectDatabase();
+}
+
+check();

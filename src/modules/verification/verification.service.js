@@ -197,6 +197,14 @@ export const verificationService = {
         doc.business.isPaid = isPaidStatus;
       }
       doc.paymentStatus = isPaidStatus ? "Paid" : "Pending";
+
+      if (requester?.role === ROLES.CHAPTER_ADMIN) {
+        if (!doc.business || !doc.submittedBy) {
+          doc.status = "rejected";
+          doc.isOrphaned = true;
+        }
+      }
+
       return doc;
     });
 
@@ -380,5 +388,27 @@ export const verificationService = {
     // Return the actual fileUrl stored in DB (e.g. "uploads/documents/xyz.pdf")
     const doc = verification.documents.find(d => d.fileUrl.includes(safeFilename));
     return doc.fileUrl;
+  },
+
+  /**
+   * Delete an orphaned verification record
+   */
+  deleteVerification: async (verificationId, requester) => {
+    const verification = await Verification.findById(verificationId).populate("business submittedBy");
+    if (!verification) {
+      throw new NotFoundError("Verification record not found");
+    }
+
+    if (requester.role !== ROLES.CHAPTER_ADMIN) {
+      throw new ForbiddenError("Only Chapter Administrators can delete orphaned verification records.");
+    }
+
+    // Ensure it is orphaned
+    if (verification.business && verification.submittedBy) {
+      throw new BadRequestError("This is not an orphaned record and cannot be deleted.");
+    }
+
+    await Verification.findByIdAndDelete(verificationId);
+    return { success: true };
   },
 };
