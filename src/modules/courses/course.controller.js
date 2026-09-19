@@ -1,6 +1,6 @@
 import { createCourse, updateCourse, getCourses, getCourseById, deleteCourse } from "./course.service.js";
 import { markContentWatched, getCourseProgress } from "./watchProgress.service.js";
-import { getBusinessCertificates } from "./certificate.service.js";
+import { getBusinessCertificates, generateCertificate } from "./certificate.service.js";
 import { Certificate } from "./certificate.model.js";
 import { Business } from "../businesses/business.model.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
@@ -53,6 +53,9 @@ export const courseController = {
       if (businessId) {
         progress = await getCourseProgress(businessId, id);
         certificate = await Certificate.findOne({ businessId, courseId: id }).lean();
+        if (progress?.isCompleted && !certificate) {
+          certificate = await generateCertificate(businessId, id);
+        }
       }
     }
 

@@ -166,11 +166,21 @@ app.use(
         }
 
         if (!pdfBuffer) {
-          pdfBuffer = pdfService.generateDocumentPlaceholderBuffer({
-            filename,
-            title: filename.includes("certificate") ? "RIFAH Business Certificate" : "Official Compliance & Verification Document",
-            documentType: targetSub === "certificates" ? "Chamber Business Certificate" : "Member Verification Document",
-          });
+          if (targetSub === "certificates" || filename.startsWith("CERT-") || filename.toLowerCase().includes("certificate")) {
+            const certNum = filename.replace(/\.pdf$/i, "");
+            pdfBuffer = await pdfService.generateCertificateBuffer({
+              recipientName: "RIFAH Member",
+              courseTitle: "Business Growth & Chamber Training Course",
+              companyName: "RIFAH Chamber Enterprise",
+              certificateNumber: certNum,
+            });
+          } else {
+            pdfBuffer = pdfService.generateDocumentPlaceholderBuffer({
+              filename,
+              title: "Official Compliance & Verification Document",
+              documentType: "Member Verification Document",
+            });
+          }
         }
 
         if (pdfBuffer) {
