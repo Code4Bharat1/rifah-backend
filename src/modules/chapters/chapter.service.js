@@ -6,7 +6,7 @@ import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { resolveEligibleAdminBusiness } from "../../shared/utils/admin-eligibility.js";
-import { NotFoundError, ConflictError, ForbiddenError } from "../../shared/errors/errors.js";
+import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
 import crypto from "crypto";
 
 export const chapterService = {
