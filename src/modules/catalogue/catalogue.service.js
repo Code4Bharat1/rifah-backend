@@ -316,11 +316,7 @@ export const catalogueService = {
     }
 
     const isOwner = String(item.business?.owner) === String(user.id);
-<<<<<<< Updated upstream
-    const isAdmin = user.role === "central_admin";
-=======
-    const isAdmin = ["super_admin", "admin"].includes(user.role);
->>>>>>> Stashed changes
+    const isAdmin = ["central_admin", "super_admin", "admin"].includes(user.role);
 
     if (!isOwner && !isAdmin) {
       throw new ForbiddenError("Unauthorized to update this item");
@@ -359,11 +355,7 @@ export const catalogueService = {
     }
 
     const isOwner = String(item.business.owner) === String(user.id);
-<<<<<<< Updated upstream
-    const isAdmin = user.role === "central_admin";
-=======
-    const isAdmin = ["super_admin", "admin"].includes(user.role);
->>>>>>> Stashed changes
+    const isAdmin = ["central_admin", "super_admin", "admin"].includes(user.role);
 
     if (!isOwner && !isAdmin) {
       throw new ForbiddenError("Unauthorized to delete this item");

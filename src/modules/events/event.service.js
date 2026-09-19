@@ -73,16 +73,11 @@ export const eventService = {
       const userChapter = (user.chapter || "").trim();
       const userState   = (user.state   || "").trim();
 
-<<<<<<< Updated upstream
       // 1. Creator always sees their own events regardless of scope
       visibilityConditions.push({ createdBy: userId });
 
-      if (userRole === ROLES.CENTRAL_ADMIN) {
-        // Central admin sees ALL events — no filter
-=======
-      if (user.role === ROLES.SUPER_ADMIN || user.role === "admin") {
-        // Super admin sees all
->>>>>>> Stashed changes
+      if (userRole === ROLES.CENTRAL_ADMIN || userRole === ROLES.SUPER_ADMIN || userRole === "admin") {
+        // Central/Super admin sees ALL events — no filter
         visibilityConditions.push({});
 
       } else if (userRole === ROLES.STATE_ADMIN) {
@@ -461,11 +456,7 @@ export const eventService = {
    */
   getEventRegistrations: async (eventId, user) => {
     const query = { _id: eventId };
-<<<<<<< Updated upstream
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT) {
-=======
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
->>>>>>> Stashed changes
+    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
       query.createdBy = (user.id || user._id);
     }
     const event = await Event.findOne(query).lean();
@@ -508,11 +499,7 @@ export const eventService = {
    */
   updateEvent: async (id, updateData, user) => {
     const query = { _id: id };
-<<<<<<< Updated upstream
-    if (user && user.role !== ROLES.CENTRAL_ADMIN) {
-=======
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
->>>>>>> Stashed changes
+    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
       query.createdBy = (user.id || user._id);
     }
     const existing = await Event.findOne(query);
@@ -579,11 +566,7 @@ export const eventService = {
    */
   deleteEvent: async (id, user) => {
     const query = { _id: id };
-<<<<<<< Updated upstream
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT) {
-=======
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
->>>>>>> Stashed changes
+    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
       query.createdBy = (user.id || user._id);
     }
     const existing = await Event.findOne(query);

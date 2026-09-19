@@ -173,6 +173,7 @@ export const authService = {
     membership,
     taxId,
     dob,
+    about,
     joiningDate,
     timezone = "Asia/Kolkata",
     region = "national",
