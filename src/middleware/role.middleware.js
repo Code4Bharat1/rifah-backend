@@ -12,19 +12,12 @@ export const requireRole = (...allowedRoles) => {
       return next(new UnauthorizedError("Authentication required"));
     }
 
-<<<<<<< Updated upstream
-    if (!roles.includes(req.user.role)) {
-      return next(
-        new ForbiddenError(`Access denied. Requires one of: ${roles.join(", ")}`)
-      );
-=======
     const userRole = req.user.role;
     const isCentralAdminUser = userRole === "central_admin" || userRole === "super_admin" || userRole === "admin";
     const allowsCentralAdmin = roles.includes("central_admin") || roles.includes("super_admin") || roles.includes("admin");
 
     if (roles.includes(userRole) || (isCentralAdminUser && allowsCentralAdmin)) {
       return next();
->>>>>>> Stashed changes
     }
 
     return next(

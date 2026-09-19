@@ -1,15 +1,5 @@
 export const ROLES = Object.freeze({
   CENTRAL_ADMIN: "central_admin",
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-  SUPER_ADMIN: "central_admin", // alias for backwards compatibility
-  ADMIN: "central_admin", // alias for backwards compatibility
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
   SUPER_ADMIN: "central_admin", // alias for backwards compatibility
   ADMIN: "central_admin", // alias for backwards compatibility
   STATE_ADMIN: "state_admin",
@@ -21,16 +11,6 @@ export const ROLES = Object.freeze({
 
 export const ROLE_HIERARCHY = Object.freeze({
   [ROLES.CENTRAL_ADMIN]: 100,
-<<<<<<< Updated upstream
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-  super_admin: 100,
-  admin: 100,
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
   super_admin: 100,
   admin: 100,
   [ROLES.STATE_ADMIN]: 80,

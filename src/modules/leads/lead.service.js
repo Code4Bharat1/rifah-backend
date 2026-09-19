@@ -29,19 +29,7 @@ export const leadService = {
       if (outOfChapter) {
         throw new ForbiddenError("Security Violation: You can only route leads to businesses within your chapter.");
       }
-<<<<<<< Updated upstream
-    } else if (user && [ "central_admin", "secretariat", "super_admin", "admin" ].includes(user.role)) {
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    } else if (user && [ "central_admin", "secretariat" ].includes(user.role)) {
-=======
     } else if (user && [ "central_admin", "super_admin", "admin" ].includes(user.role)) {
->>>>>>> Stashed changes
-=======
-    } else if (user && [ "central_admin", "super_admin", "admin" ].includes(user.role)) {
->>>>>>> Stashed changes
->>>>>>> Stashed changes
       if (enquiry.status !== "Escalated") {
         throw new ForbiddenError("Head Office can only route a lead after it has been escalated.");
       }
@@ -227,19 +215,7 @@ export const leadService = {
       const isOwner = businessOwnerId && businessOwnerId === String(user.id);
       const isRequester = enquiryRequesterId && enquiryRequesterId === String(user.id);
       const isSameBusiness = user.businessId && String(user.businessId) === String(lead.business?._id || lead.business || "");
-<<<<<<< Updated upstream
-      const isAdmin = ["central_admin", "secretariat", "super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-      const isAdmin = ["central_admin", "secretariat", "chapter_admin"].includes(user.role);
-=======
       const isAdmin = ["central_admin", "super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
->>>>>>> Stashed changes
-=======
-      const isAdmin = ["central_admin", "super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
       if (!isOwner && !isRequester && !isSameBusiness && !isAdmin && (businessOwnerId || enquiryRequesterId)) {
         throw new ForbiddenError("You are not authorized to view this lead");
@@ -301,19 +277,7 @@ export const leadService = {
     const businessId = String(lead.business?._id || lead.business || "");
     const isOwner = businessOwnerId && businessOwnerId === String(user.id);
     const isSameBusiness = user.businessId && String(user.businessId) === businessId;
-<<<<<<< Updated upstream
-      const isAdmin = ["central_admin", "secretariat", "super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    const isAdmin = ["central_admin", "secretariat", "chapter_admin"].includes(user.role);
-=======
     const isAdmin = ["central_admin", "super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
->>>>>>> Stashed changes
-=======
-    const isAdmin = ["central_admin", "super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
     if (!isOwner && !isSameBusiness && !isAdmin && businessOwnerId) {
       throw new ForbiddenError("Security Violation: You are not authorized to quote on this business lead");
@@ -500,19 +464,7 @@ export const leadService = {
       const businessId = String(lead.business?._id || lead.business || "");
       const isOwner = businessOwnerId && businessOwnerId === String(user.id);
       const isSameBusiness = user.businessId && String(user.businessId) === businessId;
-<<<<<<< Updated upstream
-      const isAdmin = ["central_admin", "secretariat", "super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-      const isAdmin = ["central_admin", "secretariat", "chapter_admin"].includes(user.role);
-=======
       const isAdmin = ["central_admin", "super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
->>>>>>> Stashed changes
-=======
-      const isAdmin = ["central_admin", "super_admin", "admin", "state_admin", "chapter_admin"].includes(user.role);
->>>>>>> Stashed changes
->>>>>>> Stashed changes
 
       if (!isOwner && !isSameBusiness && !isAdmin && businessOwnerId) {
         throw new ForbiddenError("You are not authorized to update this lead's status");

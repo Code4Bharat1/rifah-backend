@@ -73,27 +73,11 @@ export const eventService = {
       const userChapter = (user.chapter || "").trim();
       const userState   = (user.state   || "").trim();
 
-<<<<<<< Updated upstream
       // 1. Creator always sees their own events regardless of scope
       visibilityConditions.push({ createdBy: userId });
 
-      if (userRole === ROLES.CENTRAL_ADMIN || userRole === ROLES.SUPER_ADMIN || userRole === "admin") {
-        // Central/Super admin sees ALL events — no filter
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-      // 1. Creator always sees their own events regardless of scope
-      visibilityConditions.push({ createdBy: userId });
-
-      if (userRole === ROLES.CENTRAL_ADMIN) {
+      if (userRole === ROLES.CENTRAL_ADMIN || userRole === "super_admin" || userRole === "admin") {
         // Central admin sees ALL events — no filter
-=======
-=======
->>>>>>> Stashed changes
-      if (user.role === ROLES.SUPER_ADMIN || user.role === "admin") {
-        // Super admin sees all
->>>>>>> Stashed changes
->>>>>>> Stashed changes
         visibilityConditions.push({});
 
       } else if (userRole === ROLES.STATE_ADMIN) {
@@ -472,19 +456,7 @@ export const eventService = {
    */
   getEventRegistrations: async (eventId, user) => {
     const query = { _id: eventId };
-<<<<<<< Updated upstream
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT) {
-=======
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
->>>>>>> Stashed changes
-=======
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
->>>>>>> Stashed changes
->>>>>>> Stashed changes
+    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== "super_admin" && user.role !== "admin") {
       query.createdBy = (user.id || user._id);
     }
     const event = await Event.findOne(query).lean();
@@ -527,19 +499,7 @@ export const eventService = {
    */
   updateEvent: async (id, updateData, user) => {
     const query = { _id: id };
-<<<<<<< Updated upstream
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    if (user && user.role !== ROLES.CENTRAL_ADMIN) {
-=======
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
->>>>>>> Stashed changes
-=======
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
->>>>>>> Stashed changes
->>>>>>> Stashed changes
+    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== "super_admin" && user.role !== "admin") {
       query.createdBy = (user.id || user._id);
     }
     const existing = await Event.findOne(query);
@@ -606,19 +566,7 @@ export const eventService = {
    */
   deleteEvent: async (id, user) => {
     const query = { _id: id };
-<<<<<<< Updated upstream
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
-=======
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.SECRETARIAT) {
-=======
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
->>>>>>> Stashed changes
-=======
-    if (user && user.role !== ROLES.SUPER_ADMIN && user.role !== "admin") {
->>>>>>> Stashed changes
->>>>>>> Stashed changes
+    if (user && user.role !== ROLES.CENTRAL_ADMIN && user.role !== "super_admin" && user.role !== "admin") {
       query.createdBy = (user.id || user._id);
     }
     const existing = await Event.findOne(query);
