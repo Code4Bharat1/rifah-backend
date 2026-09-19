@@ -21,6 +21,7 @@ uploads/covers/*
 uploads/documents/*
 uploads/gallery/*
 uploads/logos/*
+uploads/posts/*
 !uploads/**/.gitkeep
 
 

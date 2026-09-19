@@ -49,7 +49,20 @@ function formatPost(post, currentUserId) {
       subtitle,
       timeAgo: "Just now",
     },
-    images: Array.isArray(post.images) && post.images.length > 0 ? post.images : (post.image ? [post.image] : []),
+    images: Array.isArray(post.images) && post.images.length > 0
+      ? post.images
+          .map((img) => {
+            if (typeof img === "string") return img;
+            if (img && (img.data || Buffer.isBuffer(img))) {
+              const mime = img.contentType || "image/png";
+              const buf = img.data || img;
+              const base64 = Buffer.isBuffer(buf) ? buf.toString("base64") : Buffer.from(buf).toString("base64");
+              return `data:${mime};base64,${base64}`;
+            }
+            return "";
+          })
+          .filter(Boolean)
+      : (post.image ? [post.image] : []),
     caption: post.caption || "",
     likesCount: typeof post.likesCount === "number" ? post.likesCount : likedByArr.length,
     likedBy: likedByArr.map((id) => String(id?._id || id)),

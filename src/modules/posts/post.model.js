@@ -2,29 +2,61 @@ import mongoose from "mongoose";
 
 const postSchema = new mongoose.Schema(
   {
-    // The user who created this post
+    // User who created the post
     author: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
       index: true,
     },
-    // Author's display name at time of posting (denormalized for performance)
-    authorName: { type: String, default: "" },
+
+    // Author information at the time of posting
+    authorName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
     authorRole: {
       type: String,
-      enum: ["central_admin", "state_admin", "chapter_admin", "business_owner", "customer", "public"],
+      enum: [
+        "central_admin",
+        "state_admin",
+        "chapter_admin",
+        "business_owner",
+        "customer",
+        "public",
+      ],
       default: "business_owner",
     },
-    authorAvatar: { type: String, default: "" },
-    // Chapter/State scoping
-    chapter: { type: String, trim: true, default: "", index: true },
+
+    authorAvatar: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    // Chapter / State scoping
+    chapter: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
+
     chapterId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Chapter",
       default: null,
     },
-    state: { type: String, trim: true, default: "", index: true },
+
+    state: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
+
     // Post content
     caption: {
       type: String,
@@ -32,32 +64,92 @@ const postSchema = new mongoose.Schema(
       trim: true,
       maxlength: [2000, "Caption cannot exceed 2000 characters"],
     },
-    // Images (URLs — stored after upload)
-    images: [{ type: String }],
+
+    // Post images (URLs, static paths, or binary media objects)
+    images: [{ type: mongoose.Schema.Types.Mixed }],
+
     // Engagement
-    likesCount: { type: Number, default: 0, min: 0 },
-    likedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-    comments: [
+    likesCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    likedBy: [
       {
-        _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
-        author: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-        authorName: { type: String },
-        authorAvatar: { type: String, default: "" },
-        text: { type: String, required: true, maxlength: 500 },
-        createdAt: { type: Date, default: Date.now },
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
       },
     ],
+
+    // Comments
+    comments: [
+      {
+        _id: {
+          type: mongoose.Schema.Types.ObjectId,
+          auto: true,
+        },
+
+        author: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+
+        authorName: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+
+        authorAvatar: {
+          type: String,
+          default: "",
+        },
+
+        text: {
+          type: String,
+          required: true,
+          trim: true,
+          maxlength: 500,
+        },
+
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+
     // Soft delete
-    isDeleted: { type: Boolean, default: false, index: true },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
+
   {
     timestamps: true,
   }
 );
 
-postSchema.index({ chapter: 1, createdAt: -1 });
-postSchema.index({ state: 1, createdAt: -1 });
-postSchema.index({ author: 1, createdAt: -1 });
+// Indexes
+postSchema.index({
+  chapter: 1,
+  createdAt: -1,
+});
 
+postSchema.index({
+  state: 1,
+  createdAt: -1,
+});
+
+postSchema.index({
+  author: 1,
+  createdAt: -1,
+});
+
+// Model
 export const Post = mongoose.model("Post", postSchema);
+
 export default Post;
