@@ -35,6 +35,7 @@ import { documentRoutes } from "../modules/documents/document.routes.js";
 import { centralAdminRoutes } from "../modules/central-admin/central-admin.routes.js";
 import { postRoutes } from "../modules/posts/post.routes.js";
 import { fileRoutes } from "../modules/files/file.routes.js";
+import { galleryRoutes } from "../modules/gallery/gallery.routes.js";
 
 const apiRouter = Router();
 
@@ -77,6 +78,7 @@ apiRouter.use("/roles", roleRoutes);
 apiRouter.use("/documents", documentRoutes);
 apiRouter.use("/central-admin", centralAdminRoutes);
 apiRouter.use("/posts", postRoutes);
+apiRouter.use("/gallery", galleryRoutes);
 
 export { apiRouter };
 export default apiRouter;

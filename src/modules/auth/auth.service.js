@@ -16,7 +16,7 @@ import {
   NotFoundError,
   BadRequestError,
 } from "../../shared/errors/errors.js";
-import { ROLES } from "../../shared/constants/roles.js";
+import { ROLES, ROLE_HIERARCHY } from "../../shared/constants/roles.js";
 import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { OAuth2Client } from "google-auth-library";
 import { env } from "../../config/env.js";
@@ -24,6 +24,16 @@ import { generateSlug } from "../../shared/utils/generate-id.js";
 import { resolveChapterIdByName } from "../../shared/utils/chapter-scope.js";
 
 const googleClient = new OAuth2Client(env.GOOGLE.CLIENT_ID || undefined);
+
+// Which panel each role actually lands in after login. Roles that share a workspace are
+// the same door, so the workspace picker must not offer them as separate choices.
+const WORKSPACE_BY_ROLE = {
+  [ROLES.CENTRAL_ADMIN]: "central",
+  [ROLES.STATE_ADMIN]: "state",
+  [ROLES.CHAPTER_ADMIN]: "chapter",
+  [ROLES.BUSINESS_OWNER]: "business",
+  [ROLES.CUSTOMER]: "business",
+};
 
 export const authService = {
   /**
@@ -511,25 +521,45 @@ export const authService = {
     }
 
     // Only add business_owner as available role if the admin actually has a registered business
-    const availableRoles = new Set([userObj.role]);
-    if (userObj.previousRole) availableRoles.add(userObj.previousRole);
+    const candidateRoles = new Set([userObj.role]);
+    if (userObj.previousRole) candidateRoles.add(userObj.previousRole);
     if (["central_admin", "state_admin", "chapter_admin"].includes(userObj.role) ||
         ["central_admin", "state_admin", "chapter_admin"].includes(userObj.previousRole)) {
       // Check if user actually has a business profile
       const ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
       if (ownedBusiness) {
-        availableRoles.add("business_owner");
+        candidateRoles.add("business_owner");
         userObj.businessId = ownedBusiness._id;
         userObj.businessSlug = ownedBusiness.slug;
       }
     }
 
+    // The picker exists to choose a WORKSPACE, not a role. business_owner and customer both
+    // land in /biz, so a member whose previousRole is "customer" (every customer who later
+    // registered a business) was being asked to pick between two doors into the same room.
+    // Collapse the candidates per workspace, keeping the highest-ranked role for each, and
+    // only ask when more than one distinct workspace is actually reachable.
+    const availableRoles = Array.from(candidateRoles)
+      .filter((role) => role && WORKSPACE_BY_ROLE[role])
+      .reduce((kept, role) => {
+        const workspace = WORKSPACE_BY_ROLE[role];
+        const existing = kept.find((r) => WORKSPACE_BY_ROLE[r] === workspace);
+        if (!existing) return [...kept, role];
+        return (ROLE_HIERARCHY[role] || 0) > (ROLE_HIERARCHY[existing] || 0)
+          ? kept.map((r) => (r === existing ? role : r))
+          : kept;
+      }, [])
+      .sort((a, b) => (ROLE_HIERARCHY[b] || 0) - (ROLE_HIERARCHY[a] || 0));
+
+    // A role outside the map (e.g. secretariat) still has to be able to sign in.
+    if (availableRoles.length === 0) availableRoles.push(userObj.role);
+
     return {
       user: userObj,
       accessToken,
       refreshToken,
-      requiresRoleSelection: availableRoles.size > 1,
-      availableRoles: Array.from(availableRoles)
+      requiresRoleSelection: availableRoles.length > 1,
+      availableRoles,
     };
   },
 

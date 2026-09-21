@@ -12,10 +12,35 @@ import { STATUSES } from "../../shared/constants/statuses.js";
 import { getChapterFilter, enforceBodyChapterScope, preventChapterModification } from "../../shared/utils/chapter-scope.js";
 import { postService } from "../posts/post.service.js";
 import { followupService } from "../followups/followup.service.js";
+import { eventMediaService } from "../gallery/gallery.service.js";
 
-// The only teamAssignments role keys that grant real Operations Centre access/tasks
-// (the remaining stageRoles keys are ceremonial display-only labels, unaffected by this).
-export const FUNCTIONAL_ROLES = ["entranceIncharge", "followupCoordinator", "treasurer", "guestManager", "eventCoordinator"];
+// teamAssignments role keys that grant real Operations Centre tools (each one unlocks a
+// working panel on the member's /biz/operations page).
+export const FUNCTIONAL_ROLES = ["entranceIncharge", "followupCoordinator", "treasurer", "guestManager", "eventCoordinator", "photosVideo"];
+
+// Ceremonial stage roles. These unlock no tools, but the assigned member is told they are
+// presenting, so they still need a real user link (not just a display name).
+export const STAGE_ROLES = [
+  "chapterAdmin",
+  "tilawatEquran",
+  "presidentWelcome",
+  "secretaryIntro",
+  "keynote1",
+  "keynote2",
+  "heroOfEvent",
+  "best60SecPitch",
+  "closingRemarks",
+  "voteOfThanks",
+  "eventEnd",
+];
+
+// Every role key that may be linked to a real user account via roleAssignments.
+export const ASSIGNABLE_ROLES = [...FUNCTIONAL_ROLES, ...STAGE_ROLES];
+
+// An event is "live" for its assigned members when the chapter admin has either taken the
+// stage live from Live Control, or moved the event itself into its Ongoing phase.
+export const isEventLive = (event) =>
+  event?.stageStatus === "LIVE" || event?.status === STATUSES.EVENT.ONGOING;
 
 const broadcastEventToAudience = async (event) => {
   if (!event.targetAudience || event.targetAudience.length === 0 || event.status !== STATUSES.EVENT.UPCOMING) {
@@ -416,9 +441,9 @@ export const eventService = {
   /**
    * Admin: Get all registrations for an event
    */
-  getEventRegistrations: async (eventId, user) => {
+  getEventRegistrations: async (eventId, user, { skipOwnerScope = false } = {}) => {
     const query = { _id: eventId };
-    if (user && user.role !== ROLES.CENTRAL_ADMIN) {
+    if (!skipOwnerScope && user && user.role !== ROLES.CENTRAL_ADMIN) {
       query.createdBy = (user.id || user._id);
     }
     const event = await Event.findOne(query).lean();
@@ -919,8 +944,8 @@ export const eventService = {
 
   // ─── Event Role Assignments (functional roles → real access) ─────────────
   async assignRole(eventId, role, userId, assignedBy) {
-    if (!FUNCTIONAL_ROLES.includes(role)) {
-      throw new BadRequestError(`'${role}' is not an assignable functional role`);
+    if (!ASSIGNABLE_ROLES.includes(role)) {
+      throw new BadRequestError(`'${role}' is not an assignable event role`);
     }
     const event = await Event.findById(eventId);
     if (!event) throw new NotFoundError("Event not found");
@@ -928,7 +953,7 @@ export const eventService = {
     // Unassign
     if (!userId) {
       event.roleAssignments = (event.roleAssignments || []).filter((a) => a.role !== role);
-      event.teamAssignments[role] = "";
+      if (event.teamAssignments) event.teamAssignments[role] = "";
       await event.save();
       return { role, user: null };
     }
@@ -945,10 +970,57 @@ export const eventService = {
 
     event.roleAssignments = (event.roleAssignments || []).filter((a) => a.role !== role);
     event.roleAssignments.push({ role, user: userId, assignedAt: new Date(), assignedBy });
-    event.teamAssignments[role] = user.name;
+    if (event.teamAssignments) event.teamAssignments[role] = user.name;
     await event.save();
 
     return { role, user: { _id: userId, name: user.name } };
+  },
+
+  /**
+   * Apply every role assignment for an event in ONE save. Saving them one call per role
+   * would have each request load and overwrite the same document in parallel, so the last
+   * write would silently drop the others.
+   */
+  async assignRolesBulk(eventId, assignments, assignedBy) {
+    if (!Array.isArray(assignments)) {
+      throw new BadRequestError("assignments must be an array of { role, userId }");
+    }
+    for (const { role } of assignments) {
+      if (!ASSIGNABLE_ROLES.includes(role)) {
+        throw new BadRequestError(`'${role}' is not an assignable event role`);
+      }
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const registeredIds = new Set(
+      (event.registeredUsers || []).map((reg) => String(reg.user?._id || reg.user))
+    );
+
+    const userIds = assignments.map((a) => a.userId).filter(Boolean);
+    const users = await User.find({ _id: { $in: userIds } }).select("name").lean();
+    const userMap = new Map(users.map((u) => [String(u._id), u]));
+
+    for (const { role, userId } of assignments) {
+      event.roleAssignments = (event.roleAssignments || []).filter((a) => a.role !== role);
+
+      if (!userId) {
+        if (event.teamAssignments) event.teamAssignments[role] = "";
+        continue;
+      }
+      if (!registeredIds.has(String(userId))) {
+        throw new BadRequestError("Only users registered for this event can be assigned a role");
+      }
+      const user = userMap.get(String(userId));
+      if (!user) throw new NotFoundError("User not found");
+
+      event.roleAssignments.push({ role, user: userId, assignedAt: new Date(), assignedBy });
+      if (event.teamAssignments) event.teamAssignments[role] = user.name;
+    }
+
+    await event.save();
+    return event.roleAssignments;
   },
 
   async getRoleAssignments(eventId) {
@@ -970,7 +1042,7 @@ export const eventService = {
 
   async getUserEventRoles(userId) {
     const events = await Event.find({ "roleAssignments.user": userId })
-      .select("title date chapter roleAssignments")
+      .select("title date chapter creatorState visibilityScope status stageStatus roleAssignments")
       .lean();
 
     const assignments = [];
@@ -982,6 +1054,11 @@ export const eventService = {
             eventTitle: event.title,
             eventDate: event.date,
             chapter: event.chapter,
+            state: event.creatorState || "",
+            scope: event.visibilityScope || "global",
+            status: event.status,
+            stageStatus: event.stageStatus,
+            isLive: isEventLive(event),
             role: a.role,
           });
         }
@@ -996,28 +1073,41 @@ export const eventService = {
 
     const userId = user.id || user._id;
     const isAdmin = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user.role);
-    const myRoles = isAdmin
-      ? FUNCTIONAL_ROLES
-      : (event.roleAssignments || [])
-          .filter((a) => String(a.user) === String(userId))
-          .map((a) => a.role);
+    const assignedRoles = (event.roleAssignments || [])
+      .filter((a) => String(a.user) === String(userId))
+      .map((a) => a.role);
+
+    // Admins can preview every tool; members only ever see what they were assigned.
+    const myRoles = isAdmin ? Array.from(new Set([...FUNCTIONAL_ROLES, ...assignedRoles])) : assignedRoles;
 
     if (!isAdmin && myRoles.length === 0) {
       throw new ForbiddenError("You are not assigned to this event");
     }
 
+    const live = isEventLive(event);
+
     const base = {
       eventId: event._id,
       title: event.title,
       date: event.date,
+      time: event.time,
       venue: event.venue,
       chapter: event.chapter,
+      state: event.creatorState || "",
+      status: event.status,
+      stageStatus: event.stageStatus,
+      // Tools stay read-only until the admin takes the event live. Admins are never gated.
+      isLive: live,
+      canAct: live || isAdmin,
       myRoles,
+      myFunctionalRoles: myRoles.filter((r) => FUNCTIONAL_ROLES.includes(r)),
+      myStageRoles: myRoles.filter((r) => STAGE_ROLES.includes(r)),
       data: {},
     };
 
     if (myRoles.includes("entranceIncharge")) {
-      base.data.registrations = await this.getEventRegistrations(eventId, user);
+      // skipOwnerScope: the gate incharge is a member, not the event's creator.
+      base.data.registrations = await this.getEventRegistrations(eventId, user, { skipOwnerScope: true });
     }
     if (myRoles.includes("followupCoordinator")) {
       base.data.followups = await followupService.getFollowups({ eventId, user });
@@ -1035,7 +1125,46 @@ export const eventService = {
         seats: event.seats,
       };
     }
+    if (myRoles.includes("photosVideo")) {
+      base.data.mediaCount = await eventMediaService.countForEvent(eventId);
+    }
 
     return base;
+  },
+
+  /**
+   * Gate Incharge: approve or reject a registrant at the entrance. Approving also marks
+   * them Present so the admin's attendee counts stay in step with the gate.
+   */
+  async setGateStatus(eventId, attendeeId, gateStatus, user) {
+    if (!["approved", "rejected", "waiting"].includes(gateStatus)) {
+      throw new BadRequestError("gateStatus must be one of: approved, rejected, waiting");
+    }
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const isAdmin = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user.role);
+    if (!isAdmin && !isEventLive(event)) {
+      throw new ForbiddenError("The gate opens once the admin takes this event live.");
+    }
+
+    const entry = (event.registeredUsers || []).find(
+      (r) => String(r._id) === String(attendeeId) || String(r.user) === String(attendeeId)
+    );
+    if (!entry) throw new NotFoundError("Registration not found for this event");
+
+    entry.gateStatus = gateStatus;
+    if (gateStatus === "approved") {
+      entry.gateApprovedAt = new Date();
+      entry.attendanceStatus = "Present";
+    } else if (gateStatus === "rejected") {
+      entry.attendanceStatus = "Absent";
+    } else {
+      entry.gateApprovedAt = undefined;
+      entry.attendanceStatus = "Pending";
+    }
+
+    await event.save();
+    return { attendeeId: entry._id, gateStatus: entry.gateStatus, attendanceStatus: entry.attendanceStatus };
   },
 };

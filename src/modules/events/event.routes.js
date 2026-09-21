@@ -134,6 +134,14 @@ router.patch(
   eventController.toggleCheckin
 );
 
+router.patch(
+  "/:id/attendees/:attendeeId/gate",
+  authMiddleware,
+  requireEventRoleOrAdmin("entranceIncharge"),
+  validateObjectIdParam("id"),
+  eventController.setGateStatus
+);
+
 router.post(
   "/:id/finance",
   authMiddleware,
@@ -149,6 +157,14 @@ router.patch(
   requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.assignRole
+);
+
+router.patch(
+  "/:id/role-assignments/bulk",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.assignRolesBulk
 );
 
 router.get(

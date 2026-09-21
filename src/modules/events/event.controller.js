@@ -174,6 +174,19 @@ export const eventController = {
     return ApiResponse.success(res, result, "Attendee check-in status updated");
   }),
 
+  assignRolesBulk: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const result = await eventService.assignRolesBulk(id, req.body?.assignments, req.user.id || req.user._id);
+    return ApiResponse.success(res, result, "Team assignments saved");
+  }),
+
+  setGateStatus: asyncHandler(async (req, res) => {
+    const { id, attendeeId } = req.params;
+    const { gateStatus } = req.body;
+    const result = await eventService.setGateStatus(id, attendeeId, gateStatus, req.user);
+    return ApiResponse.success(res, result, `Attendee ${result.gateStatus} at the gate`);
+  }),
+
   addFinance: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await eventService.addFinanceTransaction(id, req.body, req.user);
