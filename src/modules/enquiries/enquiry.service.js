@@ -125,15 +125,19 @@ export const enquiryService = {
           }
 
           if (targetEmail) {
-            await emailService.sendNewLeadEmail({
+            await emailService.sendNewEnquiryEmail({
               email: targetEmail,
               businessOwnerName: ownerName,
-              leadTitle: enquiry.title,
+              businessName: targetBiz.name,
+              enquiryTitle: enquiry.title,
               category: enquiry.category,
               quantity: enquiry.quantity,
               budget: enquiry.budget,
               location: enquiry.location || enquiry.city,
-              buyerName: enquiry.requesterName,
+              buyerName: enquiry.requesterName || enquiry.guestName || "Prospective Buyer",
+              buyerEmail: enquiry.guestEmail || (user?.email) || "",
+              buyerPhone: enquiry.guestPhone || (user?.phone) || "",
+              description: enquiry.description,
             });
           }
 

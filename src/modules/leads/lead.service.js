@@ -2,7 +2,6 @@ import { Lead } from "./lead.model.js";
 import { Enquiry } from "../enquiries/enquiry.model.js";
 import { Business } from "../businesses/business.model.js";
 import { User } from "../users/user.model.js";
-import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
@@ -49,48 +48,20 @@ export const leadService = {
         try {
           const biz = await Business.findById(businessId);
           if (biz) {
-            let targetEmail = null;
-            let ownerName = biz.name;
-
-            if (biz.owner) {
-              const ownerUser = await User.findById(biz.owner);
-              if (ownerUser?.email) {
-                targetEmail = ownerUser.email;
-                ownerName = ownerUser.name;
-              }
-            }
-
-            if (!targetEmail && biz.email) {
-              targetEmail = biz.email;
-            }
-
-            if (targetEmail) {
-              await emailService.sendNewLeadEmail({
-                email: targetEmail,
-                businessOwnerName: ownerName,
-                leadTitle: enquiry.title,
-                category: enquiry.category,
-                quantity: enquiry.quantity,
-                budget: enquiry.budget,
-                location: enquiry.city,
-                buyerName: enquiry.requesterName,
-              });
-            }
-
-            // Notify Business Owner
+            // Notify Business Owner in-app (portal notification only, email disabled for general leads)
             if (biz.owner) {
               await notificationService.createNotification({
                 recipientId: biz.owner,
                 type: "Lead",
                 title: "New Lead Assigned",
                 body: `You have received a new lead matching your business: "${enquiry.title}".`,
-                link: "/biz/leads",
+                link: "/biz/enquiries",
                 entityId: lead._id
               });
             }
           }
         } catch (err) {
-          console.error("Error sending lead notification/email:", err);
+          console.error("Error sending lead notification:", err);
         }
       }
     }

@@ -984,6 +984,69 @@ RIFAH Chamber of Commerce & Industry
   },
 
   /**
+   * Sends New Business Enquiry notification email to the Business Owner
+   */
+  sendNewEnquiryEmail: async ({
+    email,
+    businessOwnerName,
+    businessName,
+    enquiryTitle,
+    category,
+    quantity,
+    budget,
+    location,
+    buyerName,
+    buyerEmail,
+    buyerPhone,
+    description,
+  }) => {
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+    const portalUrl = (env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "");
+    const subject = `📩 New Business Enquiry: ${enquiryTitle || "Direct Requirement"}`;
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+        <div style="height: 6px; background: linear-gradient(90deg, #0284c7 0%, #10b981 100%);"></div>
+        <div style="padding: 32px;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`}
+          <span style="background-color: #dcfce7; color: #15803d; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">DIRECT ENQUIRY</span>
+          <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">You Have Received a New Business Enquiry!</h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${businessOwnerName || "Business Owner"}</strong>,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">A prospective buyer has submitted a direct requirement for <strong>${businessName || "your business"}</strong> on RIFAH Connect:</p>
+          
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <h3 style="margin: 0 0 12px 0; color: #0f172a; font-size: 16px;">${enquiryTitle}</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #475569;">
+              <tr><td style="padding: 6px 0; width: 35%;"><strong>Buyer Name:</strong></td><td style="text-align: right; font-weight: bold; color: #0f172a;">${buyerName || "Prospective Buyer"}</td></tr>
+              ${buyerEmail ? `<tr><td style="padding: 6px 0;"><strong>Buyer Email:</strong></td><td style="text-align: right; color: #0284c7;">${buyerEmail}</td></tr>` : ""}
+              ${buyerPhone ? `<tr><td style="padding: 6px 0;"><strong>Buyer Phone:</strong></td><td style="text-align: right; color: #0f172a;">${buyerPhone}</td></tr>` : ""}
+              <tr><td style="padding: 6px 0;"><strong>Category:</strong></td><td style="text-align: right; color: #0f172a;">${category || "Direct Requirement"}</td></tr>
+              ${quantity ? `<tr><td style="padding: 6px 0;"><strong>Quantity:</strong></td><td style="text-align: right; color: #0f172a;">${quantity}</td></tr>` : ""}
+              ${budget ? `<tr><td style="padding: 6px 0;"><strong>Budget:</strong></td><td style="text-align: right; font-weight: bold; color: #16a34a;">${budget}</td></tr>` : ""}
+              ${location ? `<tr><td style="padding: 6px 0;"><strong>Location:</strong></td><td style="text-align: right; color: #0f172a;">${location}</td></tr>` : ""}
+            </table>
+            ${description ? `
+              <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #cbd5e1; font-size: 13px; color: #334155; line-height: 1.5;">
+                <strong>Requirement Details:</strong><br/>
+                <span style="white-space: pre-line;">${description}</span>
+              </div>
+            ` : ""}
+          </div>
+
+          <div style="margin-top: 24px;">
+            <a href="${portalUrl}/biz/enquiries" style="background-color: #0284c7; color: #ffffff; padding: 12px 26px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Enquiry & Respond →</a>
+          </div>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Business Enquiry Desk</p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
+
+  /**
    * Sends New Business Lead notification email to matching Business Owner
    */
   sendNewLeadEmail: async ({ email, businessOwnerName, leadTitle, category, quantity, budget, location, buyerName }) => {
