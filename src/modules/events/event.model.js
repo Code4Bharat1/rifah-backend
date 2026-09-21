@@ -322,6 +322,18 @@ const eventSchema = new mongoose.Schema(
       voteOfThanks: { type: String, default: "" },
       eventEnd: { type: String, default: "" },
     },
+    // Structured, permission-relevant mirror of the 5 "functional" teamAssignments roles
+    // (entranceIncharge, followupCoordinator, treasurer, guestManager, eventCoordinator).
+    // teamAssignments above stays the display-name source of truth for scripts/agenda;
+    // this carries the actual user link so backend routes can check "is this user assigned".
+    roleAssignments: [
+      {
+        role: { type: String, required: true },
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        assignedAt: { type: Date, default: Date.now },
+        assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      },
+    ],
     signatories: {
       signatory1: { type: String, default: "Chapter President" },
       signatory2: { type: String, default: "Chapter Secretary" },

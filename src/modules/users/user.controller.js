@@ -2,11 +2,17 @@ import { userService } from "./user.service.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
+import { eventService } from "../events/event.service.js";
 
 export const userController = {
   getMe: asyncHandler(async (req, res) => {
     const user = await userService.getUserById(req.user.id);
     return ApiResponse.success(res, user, "User profile retrieved");
+  }),
+
+  getMyEventAssignments: asyncHandler(async (req, res) => {
+    const assignments = await eventService.getUserEventRoles(req.user.id);
+    return ApiResponse.success(res, assignments, "Event assignments retrieved");
   }),
 
   updateMe: asyncHandler(async (req, res) => {

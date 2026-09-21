@@ -250,4 +250,25 @@ export const eventController = {
     
     res.end(pdfBuffer);
   }),
+
+  // ─── Event Role Assignments ────────────────────────────────────────────────
+  assignRole: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { role, userId } = req.body;
+    const assignedBy = req.user.id || req.user._id;
+    const result = await eventService.assignRole(id, role, userId || null, assignedBy);
+    return ApiResponse.success(res, result, userId ? "Role assigned" : "Role unassigned");
+  }),
+
+  getRoleAssignments: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const data = await eventService.getRoleAssignments(id);
+    return ApiResponse.success(res, data, "Role assignments retrieved");
+  }),
+
+  getMyDuty: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const data = await eventService.getMyDuty(id, req.user);
+    return ApiResponse.success(res, data, "Duty details retrieved");
+  }),
 };

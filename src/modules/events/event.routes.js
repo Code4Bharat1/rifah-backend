@@ -10,6 +10,7 @@ import {
 } from "./event.validation.js";
 import { validateObjectIdParam } from "../../shared/validators/object-id.validation.js";
 import { ROLES } from "../../shared/constants/roles.js";
+import { requireEventRoleOrAdmin } from "../../middleware/event-role.middleware.js";
 
 const router = Router();
 
@@ -128,7 +129,7 @@ router.patch(
 router.patch(
   "/:id/attendees/:attendeeId/checkin",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireEventRoleOrAdmin("entranceIncharge"),
   validateObjectIdParam("id"),
   eventController.toggleCheckin
 );
@@ -136,9 +137,33 @@ router.patch(
 router.post(
   "/:id/finance",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireEventRoleOrAdmin("treasurer"),
   validateObjectIdParam("id"),
   eventController.addFinance
+);
+
+// ─── Event Role Assignments (functional roles → real access) ─────────────
+router.patch(
+  "/:id/role-assignments",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.assignRole
+);
+
+router.get(
+  "/:id/role-assignments",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.getRoleAssignments
+);
+
+router.get(
+  "/:id/my-duty",
+  authMiddleware,
+  validateObjectIdParam("id"),
+  eventController.getMyDuty
 );
 
 // ─── Ask & Give Routes ───────────────────────────────────────────────────

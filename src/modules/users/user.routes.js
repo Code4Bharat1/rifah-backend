@@ -35,6 +35,11 @@ router.post(
   authMiddleware,
   userController.deactivateMe
 );
+router.get(
+  "/me/event-assignments",
+  authMiddleware,
+  userController.getMyEventAssignments
+);
 
 // Admin User Management Routes
 router.get(

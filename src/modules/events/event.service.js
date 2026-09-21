@@ -11,6 +11,11 @@ import { ROLES } from "../../shared/constants/roles.js";
 import { STATUSES } from "../../shared/constants/statuses.js";
 import { getChapterFilter, enforceBodyChapterScope, preventChapterModification } from "../../shared/utils/chapter-scope.js";
 import { postService } from "../posts/post.service.js";
+import { followupService } from "../followups/followup.service.js";
+
+// The only teamAssignments role keys that grant real Operations Centre access/tasks
+// (the remaining stageRoles keys are ceremonial display-only labels, unaffected by this).
+export const FUNCTIONAL_ROLES = ["entranceIncharge", "followupCoordinator", "treasurer", "guestManager", "eventCoordinator"];
 
 const broadcastEventToAudience = async (event) => {
   if (!event.targetAudience || event.targetAudience.length === 0 || event.status !== STATUSES.EVENT.UPCOMING) {
@@ -627,7 +632,10 @@ export const eventService = {
         staffCodes: event.staffCodes || [],
         membershipJoiningLink: event.membershipJoiningLink || "",
         membershipQrImage: event.membershipQrImage || "",
-        eventPoster: event.eventPoster || "",
+        // eventPoster is legacy Operations-Centre-only storage; posterImage is the field
+        // actually written by the real event poster upload (POST /events/:id/poster) —
+        // prefer it so Operations Centre shows whatever poster was actually uploaded.
+        eventPoster: event.posterImage || event.eventPoster || "",
         repeatGuestThreshold: event.repeatGuestThreshold !== undefined ? event.repeatGuestThreshold : 3,
         remindRepeatGuests: event.remindRepeatGuests !== false,
         downloadListPermission: event.downloadListPermission || "Everyone (members and guests)",
@@ -910,5 +918,127 @@ export const eventService = {
     }
     await event.save();
     return event.scripts;
+  },
+
+  // ─── Event Role Assignments (functional roles → real access) ─────────────
+  async assignRole(eventId, role, userId, assignedBy) {
+    if (!FUNCTIONAL_ROLES.includes(role)) {
+      throw new BadRequestError(`'${role}' is not an assignable functional role`);
+    }
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    // Unassign
+    if (!userId) {
+      event.roleAssignments = (event.roleAssignments || []).filter((a) => a.role !== role);
+      event.teamAssignments[role] = "";
+      await event.save();
+      return { role, user: null };
+    }
+
+    const isEligible = (event.registeredUsers || []).some(
+      (reg) => String(reg.user?._id || reg.user) === String(userId)
+    );
+    if (!isEligible) {
+      throw new BadRequestError("Only users registered for this event can be assigned a role");
+    }
+
+    const user = await User.findById(userId).select("name");
+    if (!user) throw new NotFoundError("User not found");
+
+    event.roleAssignments = (event.roleAssignments || []).filter((a) => a.role !== role);
+    event.roleAssignments.push({ role, user: userId, assignedAt: new Date(), assignedBy });
+    event.teamAssignments[role] = user.name;
+    await event.save();
+
+    return { role, user: { _id: userId, name: user.name } };
+  },
+
+  async getRoleAssignments(eventId) {
+    const event = await Event.findById(eventId)
+      .select("roleAssignments")
+      .populate("roleAssignments.user", "name email phone")
+      .lean();
+    if (!event) throw new NotFoundError("Event not found");
+    return event.roleAssignments || [];
+  },
+
+  async hasEventRole(userId, eventId, role) {
+    if (!userId || !eventId || !role) return false;
+    const event = await Event.findOne(
+      { _id: eventId, roleAssignments: { $elemMatch: { role, user: userId } } }
+    ).select("_id").lean();
+    return Boolean(event);
+  },
+
+  async getUserEventRoles(userId) {
+    const events = await Event.find({ "roleAssignments.user": userId })
+      .select("title date chapter roleAssignments")
+      .lean();
+
+    const assignments = [];
+    for (const event of events) {
+      for (const a of event.roleAssignments || []) {
+        if (String(a.user) === String(userId)) {
+          assignments.push({
+            eventId: event._id,
+            eventTitle: event.title,
+            eventDate: event.date,
+            chapter: event.chapter,
+            role: a.role,
+          });
+        }
+      }
+    }
+    return assignments;
+  },
+
+  async getMyDuty(eventId, user) {
+    const event = await Event.findById(eventId).lean();
+    if (!event) throw new NotFoundError("Event not found");
+
+    const userId = user.id || user._id;
+    const isAdmin = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user.role);
+    const myRoles = isAdmin
+      ? FUNCTIONAL_ROLES
+      : (event.roleAssignments || [])
+          .filter((a) => String(a.user) === String(userId))
+          .map((a) => a.role);
+
+    if (!isAdmin && myRoles.length === 0) {
+      throw new ForbiddenError("You are not assigned to this event");
+    }
+
+    const base = {
+      eventId: event._id,
+      title: event.title,
+      date: event.date,
+      venue: event.venue,
+      chapter: event.chapter,
+      myRoles,
+      data: {},
+    };
+
+    if (myRoles.includes("entranceIncharge")) {
+      base.data.registrations = await this.getEventRegistrations(eventId, user);
+    }
+    if (myRoles.includes("followupCoordinator")) {
+      base.data.followups = await followupService.getFollowups({ eventId, user });
+    }
+    if (myRoles.includes("treasurer")) {
+      base.data.finance = event.finance || { moneyIn: [], moneyOut: [], treasurerNotes: "" };
+    }
+    if (myRoles.includes("guestManager")) {
+      base.data.speakers = event.speakers || [];
+    }
+    if (myRoles.includes("eventCoordinator")) {
+      base.data.agenda = event.agenda || [];
+      base.data.kpi = {
+        registeredCount: (event.registeredUsers || []).length,
+        seats: event.seats,
+      };
+    }
+
+    return base;
   },
 };
