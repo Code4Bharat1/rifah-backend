@@ -3,6 +3,17 @@ import { businessService } from "../businesses/business.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { NotFoundError } from "../../shared/errors/errors.js";
+import { pdfService } from "../../infrastructure/pdf/pdf.service.js";
+
+async function sendTabularPdf(res, { title, subtitle, headers, rows, filename }) {
+  const pdfBuffer = await pdfService.generateTabularReportBuffer({ title, subtitle, headers, rows });
+  res.set({
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Content-Length": pdfBuffer.length,
+  });
+  res.end(pdfBuffer);
+}
 
 export const reportController = {
   getBusinessAnalytics: asyncHandler(async (req, res) => {
@@ -42,8 +53,12 @@ export const reportController = {
     stats.membershipGrowth.forEach((m) => rows.push([`Growth ${m.month}`, m.count]));
     stats.chaptersDistribution.forEach((c) => rows.push([`Chapter ${c.chapter}`, c.count]));
 
+    if (req.query.format === "pdf") {
+      return sendTabularPdf(res, { title: "RIFAH Chamber Overview Report", headers, rows, filename: "admin_reports.pdf" });
+    }
+
     const csvData = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    
+
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="admin_reports.csv"');
     return res.status(200).send(csvData);
@@ -53,7 +68,10 @@ export const reportController = {
     const { startDate, endDate, format } = req.query;
     const data = await reportService.exportRevenueData(startDate, endDate);
     if (format === "json") return ApiResponse.success(res, data, "Revenue data retrieved");
-    
+    if (format === "pdf") {
+      return sendTabularPdf(res, { title: "Revenue Report", subtitle: [startDate, endDate].filter(Boolean).join(" – "), headers: data.headers, rows: data.rows, filename: "revenue_report.pdf" });
+    }
+
     const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="revenue_report.csv"');
@@ -64,7 +82,10 @@ export const reportController = {
     const { startDate, endDate, format } = req.query;
     const data = await reportService.exportBusinessesData(startDate, endDate, req.user);
     if (format === "json") return ApiResponse.success(res, data, "Businesses data retrieved");
-    
+    if (format === "pdf") {
+      return sendTabularPdf(res, { title: "Businesses Report", subtitle: [startDate, endDate].filter(Boolean).join(" – "), headers: data.headers, rows: data.rows, filename: "businesses_report.pdf" });
+    }
+
     const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="businesses_report.csv"');
@@ -75,7 +96,10 @@ export const reportController = {
     const { startDate, endDate, format } = req.query;
     const data = await reportService.exportMembershipsData(startDate, endDate, req.user);
     if (format === "json") return ApiResponse.success(res, data, "Memberships data retrieved");
-    
+    if (format === "pdf") {
+      return sendTabularPdf(res, { title: "Memberships Report", subtitle: [startDate, endDate].filter(Boolean).join(" – "), headers: data.headers, rows: data.rows, filename: "memberships_report.pdf" });
+    }
+
     const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="memberships_report.csv"');
@@ -86,7 +110,10 @@ export const reportController = {
     const { startDate, endDate, format } = req.query;
     const data = await reportService.exportLeadsData(startDate, endDate, req.user);
     if (format === "json") return ApiResponse.success(res, data, "Leads data retrieved");
-    
+    if (format === "pdf") {
+      return sendTabularPdf(res, { title: "Leads Report", subtitle: [startDate, endDate].filter(Boolean).join(" – "), headers: data.headers, rows: data.rows, filename: "leads_report.pdf" });
+    }
+
     const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="leads_report.csv"');
@@ -95,6 +122,19 @@ export const reportController = {
 
   getEventsAnalytics: asyncHandler(async (req, res) => {
     const data = await reportService.getEventsAnalyticsData(req.user, req.query);
+    if (req.query.format === "pdf") {
+      const headers = ["Event", "Date", "Chapter", "Status", "Registered", "Attended", "Attendance Rate", "Health"];
+      const rows = (data.events || []).map((e) => [
+        e.title, e.date, e.chapter, e.status, e.registeredCount, e.attendedCount, `${e.attendanceRate}%`, e.health,
+      ]);
+      return sendTabularPdf(res, {
+        title: "Events Analytics Report",
+        subtitle: `${data.kpis?.totalEvents || 0} events  •  ${data.kpis?.overallAttendanceRate || 0}% overall attendance`,
+        headers,
+        rows,
+        filename: "events_analytics_report.pdf",
+      });
+    }
     return ApiResponse.success(res, data, "Event analytics retrieved successfully");
   }),
 };

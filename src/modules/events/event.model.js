@@ -81,6 +81,17 @@ const eventSchema = new mongoose.Schema(
       enum: ENUMS.EVENT_MODES,
       default: "In-person",
     },
+    eventCategory: {
+      type: String,
+      enum: ["Meet", "Sports"],
+      default: "Meet",
+      index: true,
+    },
+    sportDetails: {
+      sportName: { type: String, default: "" },
+      venue: { type: String, default: "" },
+      teamsAllowed: { type: Number, default: 0 },
+    },
     organizer: {
       type: String,
       default: "RIFAH Chamber Central Admin",

@@ -57,6 +57,14 @@ router.get(
   eventController.getEventRegistrations
 );
 
+router.get(
+  "/:id/participants/pdf",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  eventController.downloadParticipantsPdf
+);
+
 router.patch(
   "/:id",
   authMiddleware,
@@ -148,15 +156,6 @@ router.patch(
   requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.updateAttendeeAskGive
-);
-
-// ─── Entrance Desk Routes ────────────────────────────────────────────────
-router.patch(
-  "/:id/attendees/:attendeeId/gate-action",
-  authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
-  validateObjectIdParam("id"),
-  eventController.gateAction
 );
 
 // ─── Event Scripts Routes ────────────────────────────────────────────────

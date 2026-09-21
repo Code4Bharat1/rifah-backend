@@ -2,6 +2,7 @@ import { eventService } from "./event.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
+import { pdfService } from "../../infrastructure/pdf/pdf.service.js";
 
 import { auditService } from "../audit/audit.service.js";
 
@@ -62,6 +63,27 @@ export const eventController = {
     const { id } = req.params;
     const registrations = await eventService.getEventRegistrations(id, req.user);
     return ApiResponse.success(res, registrations, "Event registrations retrieved");
+  }),
+
+  downloadParticipantsPdf: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const event = await eventService.getEventBySlugOrId(id, req.user);
+    if (!event) return ApiResponse.error(res, "Event not found", 404);
+
+    const registrations = await eventService.getEventRegistrations(id, req.user);
+    const pdfBuffer = await pdfService.generateParticipantsListBuffer({
+      eventTitle: event.title,
+      eventDate: event.date,
+      chapter: event.chapter,
+      registrations,
+    });
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="Participants-${event.title.replace(/\s+/g, "_")}.pdf"`,
+      "Content-Length": pdfBuffer.length,
+    });
+    res.end(pdfBuffer);
   }),
 
   updateEvent: asyncHandler(async (req, res) => {
@@ -170,14 +192,6 @@ export const eventController = {
     const { asks, gives } = req.body;
     const result = await eventService.updateAttendeeAskGive(id, attendeeId, { asks, gives });
     return ApiResponse.success(res, result, "Ask & Give updated");
-  }),
-
-  // ─── Entrance Desk Gate Action ─────────────────────────────────────────────
-  gateAction: asyncHandler(async (req, res) => {
-    const { id, attendeeId } = req.params;
-    const { action } = req.body; // "approved" or "rejected"
-    const result = await eventService.gateAction(id, attendeeId, action);
-    return ApiResponse.success(res, result, `Attendee ${action}`);
   }),
 
   // ─── Event Scripts ─────────────────────────────────────────────────────────

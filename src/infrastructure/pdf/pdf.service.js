@@ -547,6 +547,255 @@ export const pdfService = {
   },
 
   /**
+   * Generates a paginated PDF listing an event's registered participants
+   */
+  generateParticipantsListBuffer: ({
+    eventTitle = "RIFAH Event",
+    eventDate = "",
+    chapter = "",
+    registrations = [],
+  } = {}) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({ size: "A4", margin: 40, bufferPages: true });
+
+        const buffers = [];
+        doc.on("data", (chunk) => buffers.push(chunk));
+        doc.on("end", () => resolve(Buffer.concat(buffers)));
+        doc.on("error", reject);
+
+        const pageWidth = doc.page.width;
+        const marginX = 40;
+        const contentWidth = pageWidth - marginX * 2;
+
+        const columns = [
+          { key: "name", label: "Name", width: contentWidth * 0.28 },
+          { key: "phone", label: "Mobile", width: contentWidth * 0.18 },
+          { key: "chapter", label: "Chapter", width: contentWidth * 0.24 },
+          { key: "status", label: "Status", width: contentWidth * 0.15 },
+          { key: "gateStatus", label: "Gate", width: contentWidth * 0.15 },
+        ];
+
+        let logoPath = path.resolve(process.cwd(), "..", "rifah-frontend", "public", "rifah-logo.png");
+        if (!fs.existsSync(logoPath)) {
+          logoPath = path.resolve(process.cwd(), "public", "rifah-logo.png");
+        }
+        const hasLogo = fs.existsSync(logoPath);
+
+        const drawHeader = () => {
+          let y = doc.y;
+          if (hasLogo) {
+            doc.image(logoPath, marginX, y, { width: 40 });
+          }
+          doc.fontSize(16)
+             .fillColor("#0B1F33")
+             .font("Helvetica-Bold")
+             .text(eventTitle, marginX + (hasLogo ? 52 : 0), y, { width: contentWidth - (hasLogo ? 52 : 0) });
+          doc.fontSize(9)
+             .fillColor("#64748B")
+             .font("Helvetica")
+             .text(
+               [eventDate, chapter].filter(Boolean).join("  •  "),
+               marginX + (hasLogo ? 52 : 0),
+               doc.y,
+               { width: contentWidth - (hasLogo ? 52 : 0) }
+             );
+          doc.moveDown(0.5);
+          doc.fontSize(9)
+             .fillColor("#94A3B8")
+             .text(`Participants List  •  Generated ${new Date().toLocaleString("en-IN")}  •  Total: ${registrations.length}`, marginX, doc.y, { width: contentWidth });
+          doc.moveDown(0.75);
+          doc.moveTo(marginX, doc.y).lineTo(marginX + contentWidth, doc.y).lineWidth(1).stroke("#E2E8F0");
+          doc.moveDown(0.5);
+        };
+
+        const drawTableHeader = () => {
+          const y = doc.y;
+          doc.rect(marginX, y, contentWidth, 20).fill("#F1F5F9");
+          let x = marginX;
+          doc.fontSize(9).fillColor("#0B1F33").font("Helvetica-Bold");
+          columns.forEach((col) => {
+            doc.text(col.label, x + 4, y + 6, { width: col.width - 8 });
+            x += col.width;
+          });
+          doc.y = y + 20;
+        };
+
+        const rowHeight = 20;
+        const bottomLimit = doc.page.height - doc.page.margins.bottom - 30;
+
+        const addPageNumbers = () => {
+          const range = doc.bufferedPageRange();
+          for (let i = 0; i < range.count; i++) {
+            doc.switchToPage(range.start + i);
+            doc.fontSize(8)
+               .fillColor("#94A3B8")
+               .font("Helvetica")
+               .text(`Page ${i + 1} of ${range.count}`, marginX, doc.page.height - doc.page.margins.bottom + 10, {
+                 width: contentWidth,
+                 align: "center",
+               });
+          }
+        };
+
+        drawHeader();
+        drawTableHeader();
+
+        registrations.forEach((reg, idx) => {
+          if (doc.y + rowHeight > bottomLimit) {
+            doc.addPage();
+            drawTableHeader();
+          }
+          const y = doc.y;
+          if (idx % 2 === 1) {
+            doc.rect(marginX, y, contentWidth, rowHeight).fill("#FAFBFC");
+          }
+          let x = marginX;
+          doc.fontSize(9).fillColor("#0F172A").font("Helvetica");
+          const row = {
+            name: reg.user?.name || "—",
+            phone: reg.user?.phone || "—",
+            chapter: reg.user?.chapter || "—",
+            status: reg.status || "—",
+            gateStatus: reg.gateStatus || "—",
+          };
+          columns.forEach((col) => {
+            doc.text(String(row[col.key]), x + 4, y + 5, { width: col.width - 8, ellipsis: true });
+            x += col.width;
+          });
+          doc.y = y + rowHeight;
+        });
+
+        if (registrations.length === 0) {
+          doc.moveDown(1);
+          doc.fontSize(10).fillColor("#94A3B8").font("Helvetica").text("No registered participants yet.", marginX);
+        }
+
+        addPageNumbers();
+        doc.end();
+      } catch (err) {
+        reject(err);
+      }
+    });
+  },
+
+  /**
+   * Generates a paginated, professional-layout PDF for any {headers, rows} tabular report
+   * (admin/state-secretary data exports: revenue, businesses, memberships, leads, events analytics, etc.)
+   */
+  generateTabularReportBuffer: ({
+    title = "RIFAH Report",
+    subtitle = "",
+    headers = [],
+    rows = [],
+  } = {}) => {
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 40, bufferPages: true });
+
+        const buffers = [];
+        doc.on("data", (chunk) => buffers.push(chunk));
+        doc.on("end", () => resolve(Buffer.concat(buffers)));
+        doc.on("error", reject);
+
+        const marginX = 40;
+        const contentWidth = doc.page.width - marginX * 2;
+        const colWidth = contentWidth / Math.max(headers.length, 1);
+
+        let logoPath = path.resolve(process.cwd(), "..", "rifah-frontend", "public", "rifah-logo.png");
+        if (!fs.existsSync(logoPath)) {
+          logoPath = path.resolve(process.cwd(), "public", "rifah-logo.png");
+        }
+        const hasLogo = fs.existsSync(logoPath);
+
+        const drawHeader = () => {
+          const y = doc.y;
+          if (hasLogo) {
+            doc.image(logoPath, marginX, y, { width: 36 });
+          }
+          doc.fontSize(15)
+             .fillColor("#0B1F33")
+             .font("Helvetica-Bold")
+             .text(title, marginX + (hasLogo ? 46 : 0), y, { width: contentWidth - (hasLogo ? 46 : 0) });
+          if (subtitle) {
+            doc.fontSize(9)
+               .fillColor("#64748B")
+               .font("Helvetica")
+               .text(subtitle, marginX + (hasLogo ? 46 : 0), doc.y, { width: contentWidth - (hasLogo ? 46 : 0) });
+          }
+          doc.moveDown(0.4);
+          doc.fontSize(8.5)
+             .fillColor("#94A3B8")
+             .text(`Generated ${new Date().toLocaleString("en-IN")}  •  ${rows.length} record(s)`, marginX, doc.y, { width: contentWidth });
+          doc.moveDown(0.5);
+          doc.moveTo(marginX, doc.y).lineTo(marginX + contentWidth, doc.y).lineWidth(1).stroke("#E2E8F0");
+          doc.moveDown(0.5);
+        };
+
+        const drawTableHeader = () => {
+          const y = doc.y;
+          doc.rect(marginX, y, contentWidth, 20).fill("#F1F5F9");
+          let x = marginX;
+          doc.fontSize(8.5).fillColor("#0B1F33").font("Helvetica-Bold");
+          headers.forEach((h) => {
+            doc.text(String(h), x + 4, y + 6, { width: colWidth - 8, ellipsis: true });
+            x += colWidth;
+          });
+          doc.y = y + 20;
+        };
+
+        const rowHeight = 18;
+        const bottomLimit = doc.page.height - doc.page.margins.bottom - 30;
+
+        const addPageNumbers = () => {
+          const range = doc.bufferedPageRange();
+          for (let i = 0; i < range.count; i++) {
+            doc.switchToPage(range.start + i);
+            doc.fontSize(8)
+               .fillColor("#94A3B8")
+               .font("Helvetica")
+               .text(`Page ${i + 1} of ${range.count}`, marginX, doc.page.height - doc.page.margins.bottom + 10, {
+                 width: contentWidth,
+                 align: "center",
+               });
+          }
+        };
+
+        drawHeader();
+        drawTableHeader();
+
+        rows.forEach((row, idx) => {
+          if (doc.y + rowHeight > bottomLimit) {
+            doc.addPage();
+            drawTableHeader();
+          }
+          const y = doc.y;
+          if (idx % 2 === 1) {
+            doc.rect(marginX, y, contentWidth, rowHeight).fill("#FAFBFC");
+          }
+          let x = marginX;
+          doc.fontSize(8.5).fillColor("#0F172A").font("Helvetica");
+          row.forEach((cell) => {
+            doc.text(cell === undefined || cell === null ? "—" : String(cell), x + 4, y + 4, { width: colWidth - 8, ellipsis: true });
+            x += colWidth;
+          });
+          doc.y = y + rowHeight;
+        });
+
+        if (rows.length === 0) {
+          doc.moveDown(1);
+          doc.fontSize(10).fillColor("#94A3B8").font("Helvetica").text("No records found for this report.", marginX);
+        }
+
+        addPageNumbers();
+        doc.end();
+      } catch (err) {
+        reject(err);
+      }
+    });
+  },
+
+  /**
    * Generates a clean official document preview PDF buffer for verification documents
    */
   generateDocumentPlaceholderBuffer: ({
