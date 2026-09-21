@@ -108,10 +108,7 @@ const eventSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    memberCouponCode: {
-      type: String,
-      default: "",
-    },
+
     fee: {
       type: String,
       default: "Complimentary for Members",
@@ -165,10 +162,7 @@ const eventSchema = new mongoose.Schema(
           type: Number,
           default: 0,
         },
-        couponApplied: {
-          type: String,
-          default: "",
-        },
+
         paymentId: {
           type: String,
         },

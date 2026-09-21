@@ -351,7 +351,6 @@ export const eventService = {
             status: "Confirmed",
             paymentStatus: paymentStatus,
             amountPaid: paymentData?.amount || 0,
-            couponApplied: paymentData?.couponApplied || "",
             paymentId: paymentData?.paymentId,
             transactionId: paymentData?.transactionId
           } 

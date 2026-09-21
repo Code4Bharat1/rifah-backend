@@ -28,7 +28,6 @@ export const eventController = {
       } else {
         payload.ticketPrice = 0;
         payload.memberPrice = 0;
-        payload.memberCouponCode = "";
       }
     }
     const created = await eventService.createEvent(payload, req.user);
@@ -51,11 +50,11 @@ export const eventController = {
 
   registerPaidForEvent: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { paymentId, transactionId, amount, couponApplied } = req.body;
+    const { paymentId, transactionId, amount } = req.body;
     if (!paymentId) {
       return ApiResponse.error(res, "Payment details are required for paid events", 400);
     }
-    const event = await eventService.registerUserForEvent(id, req.user.id, { paymentId, transactionId, amount, couponApplied });
+    const event = await eventService.registerUserForEvent(id, req.user.id, { paymentId, transactionId, amount });
     return ApiResponse.success(res, event, "Paid registration for event successful");
   }),
 
@@ -97,7 +96,6 @@ export const eventController = {
       } else {
         payload.ticketPrice = 0;
         payload.memberPrice = 0;
-        payload.memberCouponCode = "";
       }
     }
     const updated = await eventService.updateEvent(id, payload, req.user);
