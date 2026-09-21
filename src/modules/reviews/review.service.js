@@ -10,19 +10,23 @@ export const reviewService = {
   recalculateRating: async (businessId) => {
     const reviews = await Review.find({
       business: businessId,
-      status: { $in: ["approved", "published"] },
+      status: { $in: ["approved", "published", "pending"] },
     });
     const count = reviews.length;
     let avg = 0;
     if (count > 0) {
-      const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
+      const sum = reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0);
       avg = Number((sum / count).toFixed(1));
     }
-    await Business.findByIdAndUpdate(businessId, {
-      rating: avg,
-      reviewsCount: count,
-    });
-    return { rating: avg, reviewsCount: count };
+    const updatedBiz = await Business.findByIdAndUpdate(
+      businessId,
+      {
+        rating: avg,
+        reviewsCount: count,
+      },
+      { new: true }
+    );
+    return { rating: avg, reviewsCount: count, business: updatedBiz };
   },
 
   /**
@@ -37,35 +41,31 @@ export const reviewService = {
     if (user && user.id) {
       const existing = await Review.findOne({ business: data.businessId, author: user.id });
       if (existing) {
-        existing.rating = data.rating;
+        existing.rating = Number(data.rating) || 5;
         existing.title = data.title || "";
         existing.body = data.body.trim();
         existing.status = "approved";
         await existing.save();
 
-        await reviewService.recalculateRating(data.businessId);
-        return existing;
+        const stats = await reviewService.recalculateRating(data.businessId);
+        return { ...existing.toObject(), stats };
       }
     }
-
-    const { Settings } = await import("../settings/settings.model.js");
-    const settings = await Settings.findOne({ isSingleton: "global" });
-    const isModerate = settings ? settings.moderateReviewsBeforePublishing : true;
 
     const review = await Review.create({
       business: data.businessId,
       author: user?.id || null,
       authorName: user?.name || data.authorName || "Guest Reviewer",
       authorRole: user?.role === "business" ? "Chamber Business Member" : (user ? "Verified Member" : "Guest Reviewer"),
-      rating: data.rating,
+      rating: Number(data.rating) || 5,
       title: data.title || "",
       body: data.body.trim(),
-      status: isModerate ? "pending" : "published",
+      status: "approved",
     });
 
-    await reviewService.recalculateRating(data.businessId);
+    const stats = await reviewService.recalculateRating(data.businessId);
 
-    return review;
+    return { ...review.toObject(), stats };
   },
 
   /**

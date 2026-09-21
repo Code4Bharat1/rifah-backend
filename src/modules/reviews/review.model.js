@@ -59,7 +59,8 @@ const reviewSchema = new mongoose.Schema(
   }
 );
 
-reviewSchema.index({ business: 1, author: 1 }, { unique: true, sparse: true });
+// Indexes for quick lookup
+reviewSchema.index({ business: 1, createdAt: -1 });
 
 export const Review = mongoose.model("Review", reviewSchema);
 export default Review;

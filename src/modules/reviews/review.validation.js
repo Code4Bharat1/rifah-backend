@@ -6,8 +6,8 @@ export const validateSubmitReview = (data = {}) => {
   if (!data.rating || typeof data.rating !== "number" || data.rating < 1 || data.rating > 5) {
     errors.push({ field: "rating", message: "Rating must be between 1 and 5" });
   }
-  if (!data.body || typeof data.body !== "string" || data.body.trim().length < 5) {
-    errors.push({ field: "body", message: "Review body must be at least 5 characters" });
+  if (!data.body || typeof data.body !== "string" || data.body.trim().length < 1) {
+    errors.push({ field: "body", message: "Review comments cannot be empty" });
   }
   return { valid: errors.length === 0, errors };
 };
