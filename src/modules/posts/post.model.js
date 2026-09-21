@@ -57,6 +57,21 @@ const postSchema = new mongoose.Schema(
       index: true,
     },
 
+    // Optional Post Title (e.g. for events, announcements)
+    title: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    // Link to an event if auto-generated or related
+    eventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Event",
+      default: null,
+      index: true,
+    },
+
     // Post content
     caption: {
       type: String,

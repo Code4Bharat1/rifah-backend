@@ -10,6 +10,7 @@ import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/err
 import { ROLES } from "../../shared/constants/roles.js";
 import { STATUSES } from "../../shared/constants/statuses.js";
 import { getChapterFilter, enforceBodyChapterScope, preventChapterModification } from "../../shared/utils/chapter-scope.js";
+import { postService } from "../posts/post.service.js";
 
 const broadcastEventToAudience = async (event) => {
   if (!event.targetAudience || event.targetAudience.length === 0 || event.status !== STATUSES.EVENT.UPCOMING) {
@@ -320,6 +321,13 @@ export const eventService = {
 
     const event = await Event.create({ ...data, slug });
 
+    // Automatically create a post in the feed for this event
+    try {
+      await postService.syncEventPost(event, user);
+    } catch (err) {
+      console.error("Failed to auto-create feed post for event:", err);
+    }
+
     if (data.targetAudience && data.targetAudience.length > 0 && event.status === STATUSES.EVENT.UPCOMING) {
       broadcastEventToAudience(event);
     }
@@ -565,6 +573,13 @@ export const eventService = {
 
     const updated = await Event.findByIdAndUpdate(id, updateData, { new: true });
 
+    // Sync updates (poster image, cover, title, description) to the feed post
+    try {
+      await postService.syncEventPost(updated, user);
+    } catch (err) {
+      console.error("Failed to sync feed post for updated event:", err);
+    }
+
     // Only broadcast if status changed to UPCOMING
     if (existing.status !== STATUSES.EVENT.UPCOMING && updated.status === STATUSES.EVENT.UPCOMING) {
       broadcastEventToAudience(updated);
@@ -591,6 +606,15 @@ export const eventService = {
     if (!deleted) {
       throw new NotFoundError("Event not found");
     }
+
+    // Soft delete corresponding feed post
+    try {
+      const { Post } = await import("../posts/post.model.js");
+      await Post.updateMany({ eventId: id }, { isDeleted: true });
+    } catch (err) {
+      // ignore
+    }
+
     return deleted;
   },
 

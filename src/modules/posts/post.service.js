@@ -63,6 +63,8 @@ function formatPost(post, currentUserId) {
           })
           .filter(Boolean)
       : (post.image ? [post.image] : []),
+    title: post.title || "",
+    eventId: post.eventId ? String(post.eventId) : null,
     caption: post.caption || "",
     likesCount: typeof post.likesCount === "number" ? post.likesCount : likedByArr.length,
     likedBy: likedByArr.map((id) => String(id?._id || id)),
@@ -139,12 +141,105 @@ export const postService = {
   },
 
   /**
+   * Automatically create or update a feed post corresponding to an Event
+   */
+  syncEventPost: async (event, user = null) => {
+    if (!event || !event.title) return null;
+    try {
+      let authorId = event.createdBy || user?.id || user?._id;
+      let authorName = user?.name || "";
+      let authorAvatar = user?.avatar || "";
+      let authorRole = user?.role || event.creatorRole || "central_admin";
+
+      if (!authorId || !authorName) {
+        if (authorId) {
+          const u = await User.findById(authorId).select("name avatar role chapter state").lean();
+          if (u) {
+            authorName = u.name || "Event Organizer";
+            authorAvatar = u.avatar || "";
+            authorRole = u.role || "central_admin";
+          }
+        }
+      }
+
+      if (!authorId) {
+        const adminUser = await User.findOne({
+          role: { $in: [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN] },
+        }).select("_id name avatar role chapter state").lean();
+        if (adminUser) {
+          authorId = adminUser._id;
+          authorName = adminUser.name || "RIFAH Central Admin";
+          authorAvatar = adminUser.avatar || "";
+          authorRole = adminUser.role || "central_admin";
+        }
+      }
+
+      const images = [event.posterImage, event.coverImage].filter(Boolean);
+      const title = event.title.trim();
+      const caption = event.description?.trim() || event.summary?.trim() || event.title.trim();
+      const chapter = event.chapter || event.creatorChapter || "";
+      const state = event.creatorState || (event.targetStates && event.targetStates[0] !== "All" ? event.targetStates[0] : "") || "";
+
+      let existing = await Post.findOne({ eventId: event._id, isDeleted: false });
+      if (existing) {
+        existing.title = title;
+        existing.caption = caption;
+        if (images.length > 0) {
+          existing.images = images;
+        }
+        if (chapter) existing.chapter = chapter;
+        if (state) existing.state = state;
+        await existing.save();
+        return existing;
+      }
+
+      const newPost = new Post({
+        title,
+        caption,
+        images,
+        author: authorId,
+        authorName: authorName || "Event Organizer",
+        authorAvatar: authorAvatar || "",
+        authorRole: authorRole || "central_admin",
+        chapter,
+        state,
+        eventId: event._id,
+      });
+
+      await newPost.save();
+      return newPost;
+    } catch (err) {
+      console.error("Error auto-creating post for event:", err);
+      return null;
+    }
+  },
+
+  /**
+   * Sync existing events into feed posts
+   */
+  syncExistingEvents: async () => {
+    try {
+      const { Event } = await import("../events/event.model.js");
+      const events = await Event.find({ status: { $ne: "Cancelled" } }).lean();
+      for (const ev of events) {
+        const existing = await Post.findOne({ eventId: ev._id });
+        if (!existing) {
+          await postService.syncEventPost(ev);
+        }
+      }
+    } catch (err) {
+      // Non-blocking fallback
+    }
+  },
+
+  /**
    * List all posts (with optional chapter/state/search filter)
    * BY DEFAULT, ALL POSTS ARE SHOWN TO ALL USERS!
    */
   listPosts: async (queryParams = {}, user) => {
     // Seed initial posts if empty so the feed is never blank
     await postService.ensureDefaultPosts();
+    await postService.syncExistingEvents();
 
     const filter = { isDeleted: false };
     const { chapter, state, filterMode, search } = queryParams;
@@ -223,6 +318,8 @@ export const postService = {
     }
 
     const post = new Post({
+      title: data.title || "",
+      eventId: data.eventId || null,
       author: user.id || user._id,
       authorName: authorName || "Member",
       authorRole: authorRole || "business_owner",
@@ -322,17 +419,17 @@ export const postService = {
   },
 
   /**
-   * Delete a post — only author or admin can delete
+   * Delete a post — only author or central_admin can delete
    */
   deletePost: async (postId, user) => {
     const post = await Post.findOne({ _id: postId, isDeleted: false });
     if (!post) throw new NotFoundError("Post not found");
 
     const isAuthor = String(post.author) === String(user.id || user._id);
-    const isAdmin = ADMIN_ROLES.includes(user.role);
+    const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
 
-    if (!isAuthor && !isAdmin) {
-      throw new ForbiddenError("You do not have permission to delete this post");
+    if (!isAuthor && !isCentralAdmin) {
+      throw new ForbiddenError("Only the central admin or the creator of the post can delete this post");
     }
 
     post.isDeleted = true;
