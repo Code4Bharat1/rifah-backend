@@ -105,13 +105,12 @@ export const eventService = {
 
       } else {
         // Regular users (business_owner / customer):
-        // Can see all events as long as they are in the targetAudience
-        const roleDisplay = userRole === ROLES.BUSINESS_OWNER ? "Businesses" : "Consumers";
-        visibilityConditions.push({ targetAudience: { $in: ["All", roleDisplay] } });
+        // Can see all events globally (removed targetAudience restriction for public viewing)
+        visibilityConditions.push({});
       }
     } else {
-      // Unauthenticated: see all events globally as long as targetAudience is All
-      visibilityConditions.push({ targetAudience: { $in: ["All"] } });
+      // Unauthenticated: see all events globally (removed targetAudience restriction for public viewing)
+      visibilityConditions.push({});
     }
 
     // Apply visibility filter (empty object = no restriction = see all)
@@ -234,10 +233,8 @@ export const eventService = {
         data.targetChapters  = [user.chapter];
         if (user.state) data.targetStates = [user.state];
 
-        // Chapter admins cannot directly publish; requires state/central approval
-        if (data.status === STATUSES.EVENT.UPCOMING) {
-          data.status = STATUSES.EVENT.PENDING_APPROVAL;
-        }
+        // We are removing the PENDING_APPROVAL requirement as per user request 
+        // to show Chapter Admin events immediately in the public 'All' list.
 
       } else if (user.role === ROLES.STATE_ADMIN) {
         // State admin events: visible to their entire state
