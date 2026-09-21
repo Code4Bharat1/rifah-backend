@@ -37,10 +37,112 @@ export const STAGE_ROLES = [
 // Every role key that may be linked to a real user account via roleAssignments.
 export const ASSIGNABLE_ROLES = [...FUNCTIONAL_ROLES, ...STAGE_ROLES];
 
+export const parseEventTiming = (dateInput, timeInput) => {
+  if (!dateInput) return { start: null, end: null };
+  let year, month, day;
+  if (typeof dateInput === "string") {
+    const isoMatch = dateInput.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (isoMatch) {
+      year = parseInt(isoMatch[1], 10);
+      month = parseInt(isoMatch[2], 10) - 1;
+      day = parseInt(isoMatch[3], 10);
+    } else {
+      const slashMatch = dateInput.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+      if (slashMatch) {
+        year = parseInt(slashMatch[3], 10);
+        month = parseInt(slashMatch[1], 10) - 1;
+        day = parseInt(slashMatch[2], 10);
+      } else {
+        const parsed = new Date(dateInput);
+        if (!isNaN(parsed.getTime())) {
+          year = parsed.getFullYear();
+          month = parsed.getMonth();
+          day = parsed.getDate();
+        }
+      }
+    }
+  } else if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+    year = dateInput.getFullYear();
+    month = dateInput.getMonth();
+    day = dateInput.getDate();
+  }
+
+  if (year === undefined || month === undefined || day === undefined) {
+    return { start: null, end: null };
+  }
+
+  if (!timeInput || typeof timeInput !== "string") {
+    return {
+      start: new Date(year, month, day, 0, 0, 0, 0),
+      end: new Date(year, month, day, 23, 59, 59, 999),
+    };
+  }
+
+  const parts = timeInput.split(/[-–—]|(?:\bto\b)/i).map((s) => s.trim()).filter(Boolean);
+
+  const parseClock = (str) => {
+    if (!str) return null;
+    const m = str.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    const min = m[2] ? parseInt(m[2], 10) : 0;
+    const ampm = m[3] ? m[3].toUpperCase() : null;
+
+    if (ampm === "PM" && h < 12) h += 12;
+    if (ampm === "AM" && h === 12) h = 0;
+
+    return { h, min };
+  };
+
+  const startClock = parseClock(parts[0]);
+  const endClock = parts.length > 1 ? parseClock(parts[1]) : null;
+
+  const start = startClock
+    ? new Date(year, month, day, startClock.h, startClock.min, 0, 0)
+    : new Date(year, month, day, 0, 0, 0, 0);
+
+  let end;
+  if (endClock) {
+    end = new Date(year, month, day, endClock.h, endClock.min, 0, 0);
+    if (end <= start) {
+      end = new Date(year, month, day + 1, endClock.h, endClock.min, 0, 0);
+    }
+  } else if (startClock) {
+    end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  } else {
+    end = new Date(year, month, day, 23, 59, 59, 999);
+  }
+
+  return { start, end };
+};
+
+export const computeEventStatus = (event, now = new Date()) => {
+  if (!event) return "Ended";
+  const rawStatus = (event.status || "").trim();
+  if (["Draft", "Pending Approval", "Cancelled"].includes(rawStatus)) {
+    return rawStatus;
+  }
+  if (rawStatus === "Scheduled" && event.scheduledAt && new Date(event.scheduledAt) > now) {
+    return "Scheduled";
+  }
+  if (["Completed", "Past", "Closed", "Ended"].includes(rawStatus)) {
+    return "Ended";
+  }
+  const { start, end } = parseEventTiming(event.date, event.time);
+  if (!start || !end) return rawStatus || "Upcoming";
+  if ((event.stageStatus === "LIVE" || rawStatus === "Ongoing" || rawStatus === "Live") && now <= new Date(end.getTime() + 60 * 60 * 1000)) {
+    return "Live";
+  }
+  if (now > end) return "Ended";
+  if (now >= start && now <= end) return "Live";
+  if (now < start) return "Upcoming";
+  return "Upcoming";
+};
+
 // An event is "live" for its assigned members when the chapter admin has either taken the
 // stage live from Live Control, or moved the event itself into its Ongoing phase.
 export const isEventLive = (event) =>
-  event?.stageStatus === "LIVE" || event?.status === STATUSES.EVENT.ONGOING;
+  event?.stageStatus === "LIVE" || event?.status === STATUSES.EVENT.ONGOING || computeEventStatus(event) === "Live";
 
 const broadcastEventToAudience = async (event) => {
   if (!event.targetAudience || event.targetAudience.length === 0 || event.status !== STATUSES.EVENT.UPCOMING) {
@@ -858,13 +960,14 @@ export const eventService = {
    * Start the scheduler to publish scheduled events automatically
    */
   startEventScheduler: () => {
-    // Run every minute
-    cron.schedule("* * * * *", async () => {
+    const syncStatuses = async () => {
       try {
         if (mongoose.connection.readyState !== 1) {
-          return; // Database not in connected state, skip this run
+          return;
         }
         const now = new Date();
+
+        // 1. Auto-publish scheduled events
         const scheduledEvents = await Event.find({
           status: STATUSES.EVENT.SCHEDULED,
           scheduledAt: { $lte: now }
@@ -879,13 +982,37 @@ export const eventService = {
             broadcastEventToAudience(event);
           }
         }
+
+        // 2. Real-time transition for Ended and Ongoing/Live events based on Date and Time
+        const candidateEvents = await Event.find({
+          status: { $in: [STATUSES.EVENT.UPCOMING, STATUSES.EVENT.ONGOING, "Upcoming", "Ongoing", "Live"] }
+        });
+
+        for (const ev of candidateEvents) {
+          const comp = computeEventStatus(ev, now);
+          if (comp === "Ended" && ev.status !== STATUSES.EVENT.COMPLETED) {
+            ev.status = STATUSES.EVENT.COMPLETED;
+            await ev.save();
+            console.log(`[EventScheduler] Auto-completed/ended event: ${ev.title}`);
+          } else if (comp === "Live" && ev.status !== STATUSES.EVENT.ONGOING) {
+            ev.status = STATUSES.EVENT.ONGOING;
+            await ev.save();
+            console.log(`[EventScheduler] Auto-started live event: ${ev.title}`);
+          }
+        }
       } catch (error) {
         if (error.name !== "MongoServerSelectionError" && error.name !== "MongoNetworkError") {
-          console.error("[EventScheduler] Error auto-publishing events:", error.message || error);
+          console.error("[EventScheduler] Error syncing event statuses:", error.message || error);
         }
       }
-    });
-    console.log("[EventScheduler] Started checking for scheduled events...");
+    };
+
+    // Run immediately on boot
+    syncStatuses();
+
+    // Run every minute
+    cron.schedule("* * * * *", syncStatuses);
+    console.log("[EventScheduler] Started checking for scheduled and real-time event status transitions...");
   },
 
   // ─── Ask & Give Board ──────────────────────────────────────────────────────
