@@ -114,27 +114,41 @@ export const leadService = {
     ]);
 
     const resolveCustomerName = (enquiry) => {
-      if (!enquiry) return "Raj Sharma";
-      const reqName = enquiry.requester?.name;
-      if (reqName && !reqName.toLowerCase().includes("buyer account") && !reqName.toLowerCase().includes("registered buyer")) {
-        return reqName;
-      }
-      const enqName = enquiry.requesterName;
-      if (enqName && !enqName.toLowerCase().includes("buyer account") && !enqName.toLowerCase().includes("registered buyer")) {
-        return enqName;
-      }
-      const bName = enquiry.buyerName;
-      if (bName && !bName.toLowerCase().includes("buyer account") && !bName.toLowerCase().includes("registered buyer")) {
-        return bName;
-      }
-      if (enquiry.requester?.email) {
-        const prefix = enquiry.requester.email.split("@")[0];
-        const clean = prefix.replace(/[0-9._-]/g, " ").trim();
-        if (clean) {
-          return clean.charAt(0).toUpperCase() + clean.slice(1);
+      if (!enquiry) return "Customer";
+      const candidates = [
+        enquiry.guestName,
+        enquiry.requester?.name,
+        enquiry.requesterName,
+        enquiry.buyerName,
+        enquiry.name,
+      ];
+      for (const name of candidates) {
+        if (name && typeof name === "string") {
+          const lower = name.toLowerCase().trim();
+          if (
+            lower &&
+            !lower.includes("buyer account") &&
+            !lower.includes("registered buyer") &&
+            !lower.includes("demo buyer") &&
+            lower !== "buyer" &&
+            lower !== "guest buyer"
+          ) {
+            return name.trim();
+          }
         }
       }
-      return "Raj Sharma";
+      const email = enquiry.requester?.email || enquiry.guestEmail || enquiry.buyerEmail;
+      if (email && typeof email === "string") {
+        const prefix = email.split("@")[0].replace(/[0-9._-]/g, " ").trim();
+        if (prefix && !prefix.toLowerCase().includes("buyer")) {
+          return prefix
+            .split(" ")
+            .filter(Boolean)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ");
+        }
+      }
+      return "Customer";
     };
 
     const formattedLeads = await Promise.all(
@@ -199,27 +213,41 @@ export const leadService = {
     }
 
     const resolveCustomerName = (enquiry) => {
-      if (!enquiry) return "Raj Sharma";
-      const reqName = enquiry.requester?.name;
-      if (reqName && !reqName.toLowerCase().includes("buyer account") && !reqName.toLowerCase().includes("registered buyer")) {
-        return reqName;
-      }
-      const enqName = enquiry.requesterName;
-      if (enqName && !enqName.toLowerCase().includes("buyer account") && !enqName.toLowerCase().includes("registered buyer")) {
-        return enqName;
-      }
-      const bName = enquiry.buyerName;
-      if (bName && !bName.toLowerCase().includes("buyer account") && !bName.toLowerCase().includes("registered buyer")) {
-        return bName;
-      }
-      if (enquiry.requester?.email) {
-        const prefix = enquiry.requester.email.split("@")[0];
-        const clean = prefix.replace(/[0-9._-]/g, " ").trim();
-        if (clean) {
-          return clean.charAt(0).toUpperCase() + clean.slice(1);
+      if (!enquiry) return "Customer";
+      const candidates = [
+        enquiry.guestName,
+        enquiry.requester?.name,
+        enquiry.requesterName,
+        enquiry.buyerName,
+        enquiry.name,
+      ];
+      for (const name of candidates) {
+        if (name && typeof name === "string") {
+          const lower = name.toLowerCase().trim();
+          if (
+            lower &&
+            !lower.includes("buyer account") &&
+            !lower.includes("registered buyer") &&
+            !lower.includes("demo buyer") &&
+            lower !== "buyer" &&
+            lower !== "guest buyer"
+          ) {
+            return name.trim();
+          }
         }
       }
-      return "Raj Sharma";
+      const email = enquiry.requester?.email || enquiry.guestEmail || enquiry.buyerEmail;
+      if (email && typeof email === "string") {
+        const prefix = email.split("@")[0].replace(/[0-9._-]/g, " ").trim();
+        if (prefix && !prefix.toLowerCase().includes("buyer")) {
+          return prefix
+            .split(" ")
+            .filter(Boolean)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ");
+        }
+      }
+      return "Customer";
     };
 
     const leadObj = lead.toObject ? lead.toObject() : { ...lead };

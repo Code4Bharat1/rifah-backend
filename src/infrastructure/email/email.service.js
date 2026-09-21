@@ -1075,7 +1075,7 @@ RIFAH Chamber of Commerce & Industry
           </div>
 
           <div style="margin-top: 24px;">
-            <a href="http://localhost:3000/biz/leads" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Lead & Send Quotation →</a>
+            <a href="http://localhost:3000/biz/enquiries" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Lead & Send Quotation →</a>
           </div>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
           <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Lead Desk</p>

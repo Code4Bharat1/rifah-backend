@@ -88,7 +88,7 @@ export const notificationService = {
               title,
               body,
               entityId: String(l._id),
-              link: "/biz/leads",
+              link: "/biz/enquiries",
               isRead: false,
               createdAt: l.createdAt,
             });

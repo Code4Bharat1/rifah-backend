@@ -517,7 +517,7 @@ const run = async () => {
       type: "Lead",
       title: "New Lead Assigned",
       body: `You have received a new lead matching your business: "Sourcing requirement".`,
-      link: "/biz/leads",
+      link: "/biz/enquiries",
       isRead: Math.random() > 0.5,
     });
     notifCount++;
