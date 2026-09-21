@@ -6,6 +6,8 @@ import { addDays } from "../../shared/utils/date.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
+import { User } from "../users/user.model.js";
+import { ROLES } from "../../shared/constants/roles.js";
 
 export const membershipService = {
   getPlans: async () => {
@@ -265,6 +267,29 @@ export const membershipService = {
               link: "/biz/membership",
             })
             .catch(() => {});
+        }
+
+        // Send in-app notification to all Chapter Admins for that chapter
+        if (business.chapter) {
+          try {
+            const chapterAdmins = await User.find({
+              chapter: business.chapter,
+              role: ROLES.CHAPTER_ADMIN,
+              status: "Active"
+            }).select("_id");
+            
+            for (const admin of chapterAdmins) {
+              await notificationService.createNotification({
+                recipientId: admin._id,
+                type: "System",
+                title: `Member Expiry: ${business.name}`,
+                body: `Membership for ${business.name} (Plan: ${membership.planName}) is expiring on ${end.toLocaleDateString("en-IN")}. Milestone: ${title}.`,
+                link: "/admin/memberships",
+              }).catch(() => {});
+            }
+          } catch (err) {
+            logger.error(`Failed to notify chapter admins for expiring membership: ${business.name}`, err);
+          }
         }
 
         // Record that this milestone was successfully sent
