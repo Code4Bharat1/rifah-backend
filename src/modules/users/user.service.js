@@ -149,6 +149,13 @@ export const userService = {
     if (role) userToUpdate.role = role;
 
     await userToUpdate.save();
+
+    // Real-time Copilot Knowledge Base Sync
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
     return userToUpdate;
   },
 
@@ -195,6 +202,12 @@ export const userService = {
 
     user.status = "Deactivated";
     await user.save();
+
+    // Real-time Copilot Knowledge Base Sync: automatically purges deactivated user from KB file
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
 
     return { message: "Account has been deactivated successfully" };
   },

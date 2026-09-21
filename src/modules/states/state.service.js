@@ -262,6 +262,12 @@ export const stateService = {
     await emailService.sendStateAdminUpgradeEmail(nominee.email, cleanState, nominee.name);
     await upsertStateProfile();
 
+    // Real-time Copilot Knowledge Base Sync
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
     return nominee;
   },
 
@@ -392,6 +398,12 @@ export const stateService = {
 
     // Delete the state profile
     await StateProfile.deleteMany({ name: stateRegex });
+
+    // Real-time Copilot Knowledge Base Sync: immediately update file
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
 
     return { message: "State deleted (detached) successfully" };
   },

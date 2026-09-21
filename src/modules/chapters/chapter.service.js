@@ -232,6 +232,13 @@ export const chapterService = {
 
     // Send email with generated credentials to the assigned chapter admin email
     await emailService.sendChapterAdminInvite(nominee.email, randomPassword, chapter.name, nominee.name);
+
+    // Real-time Copilot Knowledge Base Sync
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
     return nominee;
   },
 
@@ -249,6 +256,12 @@ export const chapterService = {
     if (!chapter) {
       throw new NotFoundError("Chapter not found");
     }
+
+    // Real-time Copilot Knowledge Base Sync
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
 
     return chapter;
   },

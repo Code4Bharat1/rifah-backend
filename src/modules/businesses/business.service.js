@@ -510,6 +510,12 @@ export const businessService = {
       await User.findByIdAndUpdate(business.owner, userUpdate);
     }
 
+    // Real-time Copilot Knowledge Base Sync
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
     return updated;
   },
 
@@ -684,6 +690,12 @@ export const businessService = {
       console.error("Failed to notify chapter members on admin business creation:", notifErr);
     }
 
+    // Real-time Copilot Knowledge Base Sync
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
     return business;
   },
 
@@ -704,6 +716,13 @@ export const businessService = {
     if (featured !== undefined) updates.featured = featured;
 
     const updated = await Business.findByIdAndUpdate(id, updates, { new: true });
+
+    // Real-time Copilot Knowledge Base Sync: immediately update or purge deactivated business from KB file
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
     return updated;
   },
 

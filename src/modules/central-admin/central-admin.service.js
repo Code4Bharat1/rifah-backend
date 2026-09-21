@@ -40,6 +40,12 @@ export const centralAdminService = {
     nominee.role = ROLES.CENTRAL_ADMIN;
     await nominee.save();
 
+    // Real-time Copilot Knowledge Base Sync
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
     return nominee;
   },
 };
