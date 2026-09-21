@@ -185,5 +185,36 @@ const userSchema = new mongoose.Schema(
   }
 );
 
+// Automatically sync live entities to JSON knowledge base whenever an admin or user is saved, updated, or removed
+userSchema.post("save", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
+userSchema.post("findOneAndUpdate", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
+userSchema.post("findOneAndDelete", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
+userSchema.post("deleteOne", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
+userSchema.post("deleteMany", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
 export const User = mongoose.model("User", userSchema);
 export default User;

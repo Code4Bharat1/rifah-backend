@@ -30,28 +30,36 @@ export async function syncLiveEntitiesToFile(force = false) {
     // 1. Fetch only ACTIVE admins & businesses
     const [centralAdmins, stateAdmins, chapterAdmins, businesses] = await Promise.all([
       User.find({
-        role: ROLES.CENTRAL_ADMIN,
-        status: { $regex: /^active$/i },
+        role: { $in: [ROLES.CENTRAL_ADMIN, "central_admin", "super_admin"] },
+        status: {
+          $nin: ["suspended", "Suspended", "inactive", "Inactive", "deleted", "Deleted", "deactivated", "Deactivated"],
+        },
       })
         .select("_id name email phone role status state chapter organization")
         .lean(),
 
       User.find({
-        role: ROLES.STATE_ADMIN,
-        status: { $regex: /^active$/i },
+        role: { $in: [ROLES.STATE_ADMIN, "state_admin"] },
+        status: {
+          $nin: ["suspended", "Suspended", "inactive", "Inactive", "deleted", "Deleted", "deactivated", "Deactivated"],
+        },
       })
         .select("_id name email phone role status state chapter organization")
         .lean(),
 
       User.find({
-        role: ROLES.CHAPTER_ADMIN,
-        status: { $regex: /^active$/i },
+        role: { $in: [ROLES.CHAPTER_ADMIN, "chapter_admin"] },
+        status: {
+          $nin: ["suspended", "Suspended", "inactive", "Inactive", "deleted", "Deleted", "deactivated", "Deactivated"],
+        },
       })
         .select("_id name email phone role status state chapter organization")
         .lean(),
 
       Business.find({
-        status: { $regex: /^(active|live)$/i },
+        status: {
+          $nin: ["suspended", "Suspended", "inactive", "Inactive", "deleted", "Deleted", "rejected", "Rejected"],
+        },
       })
         .populate("owner", "name email phone")
         .select("_id name slug tagline industry categories city state chapter address status owner isVerified")

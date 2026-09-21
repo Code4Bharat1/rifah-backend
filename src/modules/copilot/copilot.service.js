@@ -98,14 +98,22 @@ export function searchKnowledgeBaseFallback(query, role, liveEntitiesData = null
   if (isCentralAdminQuery) {
     const admins = liveEntities.centralAdmins || [];
     if (admins.length === 0) {
-      return `### 👑 Central Administrators\nNo active Central Admin found in the active records.\n\n👉 Access: [Central Admin Portal](/admin)`;
+      let msg = `### 👑 Central Administrators\nNo active Central Admin found in the active records.`;
+      if (role === "central_admin") {
+        msg += `\n\n👉 Access: [Central Admin Portal](/admin)`;
+      }
+      return msg;
     }
     let res = `### 👑 Active Central Administrators (${admins.length})\n\n`;
     admins.forEach((a) => {
       res += `- **${a.name}** (${a.email})${a.phone ? ` • Tel: ${a.phone}` : ""}\n`;
       res += `  - Role: \`Central Administrator\` | Status: \`${a.status}\`\n`;
     });
-    res += `\n👉 Manage Admins: [Central Admin Desk](/admin/central-admin) | [User Management](/admin/users)`;
+    // Only provide management links if the user is a Central Admin.
+    // For chapter_admin, state_admin, or business_owner: DO NOT give links!
+    if (role === "central_admin") {
+      res += `\n👉 Manage Admins: [Central Admin Desk](/admin/central-admin) | [User Management](/admin/users)`;
+    }
     return res;
   }
 
@@ -213,7 +221,7 @@ export function searchKnowledgeBaseFallback(query, role, liveEntitiesData = null
     if (matchedCentral.length > 0) {
       res += `**Central Admins:**\n`;
       matchedCentral.forEach((a) => {
-        res += `- 👑 **${a.name}** (${a.email}) [Manage](/admin/central-admin)\n`;
+        res += `- 👑 **${a.name}** (${a.email})${role === "central_admin" ? " [Manage](/admin/central-admin)" : ""}\n`;
       });
       res += `\n`;
     }
@@ -319,7 +327,7 @@ export async function askCopilot({ message, conversationHistory = [], user }) {
 
   // Sync live active entities (Central Admins, State Admins, Chapter Admins, Businesses)
   // If an entity was deleted or deactivated, it is automatically purged from the JSON file!
-  const liveEntities = await syncLiveEntitiesToFile();
+  const liveEntities = await syncLiveEntitiesToFile(true);
   const filteredData = getFilteredContext(effectiveRole, liveEntities);
   const apiKey = process.env.GEMINI_API_KEY?.trim();
 
@@ -366,6 +374,7 @@ STRICT PERMISSION & DATA RULES:
 1. You have access to BOTH platform feature modules AND current live active entities (Central Admins, State Admins, Chapter Admins, and Registered Businesses).
 2. Deactivated / Deleted entities: Note that only ACTIVE records exist in your context. If an admin or business does not appear in the context, they do not exist or are deactivated.
 3. Under NO circumstances should you reveal, link to, or suggest administration routes or capabilities that belong to a higher role tier than the user's role.
+   - For Chapter Admins, State Admins, and Business Owners: If asked about Central Admins or apex leadership, share their name and contact details for chamber coordination, but NEVER provide links or routes to Central Admin desks or management routes (/admin, /admin/central-admin, /admin/users). Do not provide any link when they ask about central admin.
    - For example: if a "business_owner" asks how to delete chapters or approve KYC verifications, explain that these actions require Central/Chapter Admin authorization.
 4. Deep Links: Whenever mentioning a page, action, or directory, ALWAYS format it as a clickable Markdown link using the exact authorized route provided. Format: [Page Name](route).
    Examples:

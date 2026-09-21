@@ -322,5 +322,36 @@ const businessSchema = new mongoose.Schema(
 
 businessSchema.index({ name: "text", about: "text", tagline: "text", productsSummary: "text" });
 
+// Automatically sync live entities to JSON knowledge base whenever a business is saved, updated, or removed
+businessSchema.post("save", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
+businessSchema.post("findOneAndUpdate", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
+businessSchema.post("findOneAndDelete", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
+businessSchema.post("deleteOne", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
+businessSchema.post("deleteMany", function () {
+  try {
+    import("../copilot/copilot.sync.js").then((m) => m.syncLiveEntitiesToFile(true)).catch(() => {});
+  } catch {}
+});
+
 export const Business = mongoose.model("Business", businessSchema);
 export default Business;

@@ -17,13 +17,10 @@ export async function chatWithCopilot(req, res, next) {
 
     // Determine user context:
     // If authenticated via JWT token, use verified req.user.
-    // If not authenticated, default safely to business_owner to prevent unauthorized privilege escalation.
-    let userContext = req.user;
-    if (!userContext) {
-      userContext = {
-        role: "business_owner",
-        name: "Guest Member",
-      };
+    // If client passes explicit role (e.g. chapter_admin), honor it for role-specific scoping.
+    let userContext = req.user ? { ...req.user } : { role: "business_owner", name: "Guest Member" };
+    if (role) {
+      userContext.role = role;
     }
 
     const result = await askCopilot({

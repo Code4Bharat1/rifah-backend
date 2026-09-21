@@ -407,7 +407,7 @@ export const businessService = {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
-    return Business.create({
+    const createdBusiness = await Business.create({
       ...sanitizedData,
       slug,
       owner: ownerId,
@@ -418,6 +418,13 @@ export const businessService = {
       featured: false,
       rating: 0,
     });
+
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
+    return createdBusiness;
   },
 
   /**
