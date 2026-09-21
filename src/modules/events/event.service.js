@@ -74,87 +74,44 @@ export const eventService = {
       const userChapter = (user.chapter || "").trim();
       const userState   = (user.state   || "").trim();
 
-      // 1. Creator always sees their own events regardless of scope
+      // 1. Creator always sees their own events
       visibilityConditions.push({ createdBy: userId });
 
       if (userRole === ROLES.CENTRAL_ADMIN) {
-        // Central admin sees ALL events — no filter
+        // Central admin sees ALL events
         visibilityConditions.push({});
 
       } else if (userRole === ROLES.STATE_ADMIN) {
-        // State admin sees:
-        //   a. Global events (created by central_admin)
-        //   b. State-scope events in their own state
-        //   c. Chapter-scope events within their state
-        if (queryParams.strictAdminScope !== "true" && queryParams.strictAdminScope !== true) {
-          visibilityConditions.push({ visibilityScope: "global" });
-        }
-        if (userState) {
-          const stateRx = new RegExp(`^${userState}$`, "i");
-          visibilityConditions.push({
-            visibilityScope: "state",
-            creatorState: stateRx,
-          });
-          visibilityConditions.push({
-            visibilityScope: "chapter",
-            creatorState: stateRx,
-          });
+        if (queryParams.strictAdminScope === "true" || queryParams.strictAdminScope === true) {
+          // Admin Dashboard: only see state events or chapter events within state
+          if (userState) {
+            visibilityConditions.push({ creatorState: new RegExp(`^${userState}$`, "i") });
+          }
+        } else {
+          // Public browsing: see all events globally
+          visibilityConditions.push({});
         }
 
       } else if (userRole === ROLES.CHAPTER_ADMIN) {
-        // Chapter admin sees:
-        //   a. Global events
-        //   b. State-scope events in their state
-        //   c. Chapter-scope events in their own chapter
-        if (queryParams.strictAdminScope !== "true" && queryParams.strictAdminScope !== true) {
-          visibilityConditions.push({ visibilityScope: "global" });
-          if (userState) {
-            visibilityConditions.push({
-              visibilityScope: "state",
-              creatorState: new RegExp(`^${userState}$`, "i"),
-            });
+        if (queryParams.strictAdminScope === "true" || queryParams.strictAdminScope === true) {
+          // Admin Dashboard: only see chapter events
+          if (userChapter) {
+            visibilityConditions.push({ creatorChapter: new RegExp(`^${userChapter}$`, "i") });
           }
-        }
-        if (userChapter) {
-          visibilityConditions.push({
-            visibilityScope: "chapter",
-            creatorChapter: new RegExp(`^${userChapter}$`, "i"),
-          });
+        } else {
+          // Public browsing: see all events globally
+          visibilityConditions.push({});
         }
 
       } else {
         // Regular users (business_owner / customer):
-        //   a. Always see global events
-        //   b. See state-scope events in their state
-        //   c. See chapter-scope events in their chapter
-        //   d. They must also be in the targetAudience
+        // Can see all events as long as they are in the targetAudience
         const roleDisplay = userRole === ROLES.BUSINESS_OWNER ? "Businesses" : "Consumers";
-        const audienceMatch = { targetAudience: { $in: ["All", roleDisplay] } };
-
-        // Global events open to this audience
-        visibilityConditions.push({ ...audienceMatch, visibilityScope: "global" });
-
-        if (userState) {
-          visibilityConditions.push({
-            ...audienceMatch,
-            visibilityScope: "state",
-            creatorState: new RegExp(`^${userState}$`, "i"),
-          });
-        }
-        if (userChapter) {
-          visibilityConditions.push({
-            ...audienceMatch,
-            visibilityScope: "chapter",
-            creatorChapter: new RegExp(`^${userChapter}$`, "i"),
-          });
-        }
+        visibilityConditions.push({ targetAudience: { $in: ["All", roleDisplay] } });
       }
     } else {
-      // Unauthenticated: only global events that are fully public
-      visibilityConditions.push({
-        visibilityScope: "global",
-        targetAudience: { $in: ["All"] },
-      });
+      // Unauthenticated: see all events globally as long as targetAudience is All
+      visibilityConditions.push({ targetAudience: { $in: ["All"] } });
     }
 
     // Apply visibility filter (empty object = no restriction = see all)
@@ -168,6 +125,9 @@ export const eventService = {
     // ── Additional query filters ──────────────────────────────────────────────
     if (queryParams.chapter) {
       filter.chapter = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
+    }
+    if (queryParams.creatorRole) {
+      filter.creatorRole = queryParams.creatorRole;
     }
 
     if (queryParams.status) {
@@ -232,33 +192,11 @@ export const eventService = {
     const userChapter = (user.chapter || "").trim();
     const userState   = (user.state   || "").trim();
 
-    // Creator always has access
-    if (String(event.createdBy) === userId) return event;
-
-    // Super admin sees all
-    if (userRole === ROLES.CENTRAL_ADMIN) return event;
-
-    if (event.visibilityScope === "state") {
-      // State admin, chapter admin, or regular user within the same state
-      const sameState = userState && event.creatorState &&
-        userState.toLowerCase() === event.creatorState.toLowerCase();
-      if (sameState || userRole === ROLES.STATE_ADMIN && sameState) {
-        return event;
-      }
-      throw new ForbiddenError("This event is restricted to members of its state.");
-    }
-
-    if (event.visibilityScope === "chapter") {
-      // Only members of the same chapter
-      const sameChapter = userChapter && event.creatorChapter &&
-        userChapter.toLowerCase() === event.creatorChapter.toLowerCase();
-      // State admin of the same state can also see chapter events in their state
-      const stateAdminSameState = userRole === ROLES.STATE_ADMIN && userState &&
-        event.creatorState && userState.toLowerCase() === event.creatorState.toLowerCase();
-
-      if (sameChapter || stateAdminSameState) return event;
-      throw new ForbiddenError("This event is restricted to members of its chapter.");
-    }
+    // ── Global Visibility ──
+    // Since all events are globally accessible, we no longer throw ForbiddenError 
+    // for state or chapter scoped events here, UNLESS you want to enforce strict Admin dashboards.
+    // If we are strictly in an admin context and need to block them, we could, but for now
+    // any user or admin with a direct link can view the event.
 
     return event;
   },
