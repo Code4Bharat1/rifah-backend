@@ -110,6 +110,7 @@ export const businessService = {
       andConditions.push({
         $or: [
           { name: searchRegex },
+          { contactPerson: searchRegex },
           { tagline: searchRegex },
           { about: searchRegex },
           { categories: { $in: [searchRegex] } },
