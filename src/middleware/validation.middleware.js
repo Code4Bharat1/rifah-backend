@@ -8,7 +8,7 @@ import { ValidationError } from "../shared/errors/errors.js";
 export const validateRequest = (validatorFn, target = "body") => {
   return (req, res, next) => {
     const data = req[target] || {};
-    const result = validatorFn(data);
+    const result = validatorFn(data, req);
 
     if (result && !result.valid) {
       return next(new ValidationError("Validation error", result.errors));

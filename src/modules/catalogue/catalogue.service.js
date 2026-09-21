@@ -262,6 +262,13 @@ export const catalogueService = {
   },
 
   /**
+   * Record a view on a catalogue item (Public Buyer View)
+   */
+  recordItemView: async (itemId) => {
+    return Catalogue.findByIdAndUpdate(itemId, { $inc: { views: 1 } }, { new: true });
+  },
+
+  /**
    * Create catalogue item (Business Owner)
    * Enforces maxCatalogueItems and maxImagesPerItem from global Settings.
    */

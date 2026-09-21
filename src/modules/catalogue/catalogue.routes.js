@@ -14,6 +14,7 @@ const router = Router();
 // Public catalogue discovery
 router.get("/", catalogueController.searchCatalogue);
 router.get("/business/:businessId", validateObjectIdParam("businessId"), catalogueController.listByBusiness);
+router.post("/:id/view", validateObjectIdParam("id"), catalogueController.recordView);
 
 // Business Owner catalogue management
 router.post(

@@ -132,6 +132,11 @@ const businessSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    views: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     employees: {
       type: String,
       default: "10–50",

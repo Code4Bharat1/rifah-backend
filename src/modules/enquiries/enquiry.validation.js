@@ -1,4 +1,4 @@
-export const validateCreateEnquiry = (data = {}) => {
+export const validateCreateEnquiry = (data = {}, req = null) => {
   const errors = [];
   if (!data.title || typeof data.title !== "string" || !data.title.trim()) {
     errors.push({ field: "title", message: "Requirement title is required" });
@@ -29,11 +29,16 @@ export const validateCreateEnquiry = (data = {}) => {
   }
   // Guest contact validation — when targeting a business without auth, guest must provide name + email
   if (data.targetType === "business" && data.targetBusiness) {
-    if (!data.guestName || typeof data.guestName !== "string" || !data.guestName.trim()) {
-      errors.push({ field: "guestName", message: "Your name is required for direct business enquiries" });
-    }
-    if (!data.guestEmail || typeof data.guestEmail !== "string" || !data.guestEmail.trim()) {
-      errors.push({ field: "guestEmail", message: "Your email is required for direct business enquiries" });
+    const isAuthenticated = Boolean(req?.user);
+    if (!isAuthenticated) {
+      const hasName = data.guestName?.trim() || data.name?.trim() || data.senderName?.trim();
+      const hasEmail = data.guestEmail?.trim() || data.email?.trim() || data.senderEmail?.trim();
+      if (!hasName) {
+        errors.push({ field: "guestName", message: "Your name is required for direct business enquiries" });
+      }
+      if (!hasEmail) {
+        errors.push({ field: "guestEmail", message: "Your email is required for direct business enquiries" });
+      }
     }
   }
   return { valid: errors.length === 0, errors };

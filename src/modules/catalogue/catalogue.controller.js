@@ -16,6 +16,12 @@ export const catalogueController = {
     return ApiResponse.success(res, items, "Business catalogue items retrieved");
   }),
 
+  recordView: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updated = await catalogueService.recordItemView(id);
+    return ApiResponse.success(res, { views: updated?.views || 0 }, "Item view recorded");
+  }),
+
   createItem: asyncHandler(async (req, res) => {
     const item = await catalogueService.createItem(req.body, req.user);
     return ApiResponse.created(res, item, "Catalogue item created successfully");

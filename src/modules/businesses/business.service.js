@@ -324,6 +324,9 @@ export const businessService = {
       }
     }
 
+    // Increment public profile views count
+    Business.findByIdAndUpdate(business._id, { $inc: { views: 1 } }).catch(() => {});
+
     return business;
   },
 
@@ -332,14 +335,25 @@ export const businessService = {
    */
   getBusinessByOwnerId: async (ownerId) => {
     const business = await Business.findOne({ owner: ownerId });
-    if (business && Array.isArray(business.verificationHistory)) {
-      const hasEverBeenApproved = business.verificationHistory.some(
-        (h) => h.action === "verified" || h.action === "approved"
-      );
-      if (hasEverBeenApproved && business.verification !== "verified" && business.verification !== "rejected") {
+    if (business) {
+      const hasEverBeenApproved =
+        Array.isArray(business.verificationHistory) &&
+        business.verificationHistory.some(
+          (h) => h.action === "verified" || h.action === "approved"
+        );
+      if (
+        (hasEverBeenApproved || business.status === "Active") &&
+        business.verification !== "verified" &&
+        business.verification !== "rejected"
+      ) {
         business.verification = "verified";
+        business.verificationStatus = "verified";
         business.isVerified = true;
-        await Business.findByIdAndUpdate(business._id, { verification: "verified", isVerified: true });
+        await Business.findByIdAndUpdate(business._id, {
+          verification: "verified",
+          verificationStatus: "verified",
+          isVerified: true,
+        });
       }
     }
     return business;

@@ -60,6 +60,12 @@ const catalogueSchema = new mongoose.Schema(
       default: "Active",
       index: true,
     },
+    views: {
+      type: Number,
+      default: 0,
+      min: 0,
+      index: true,
+    },
   },
   {
     timestamps: true,
