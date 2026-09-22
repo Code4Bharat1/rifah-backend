@@ -87,10 +87,28 @@ export const chapterService = {
       throw new ConflictError("Chapter already exists");
     }
 
-    return Chapter.create({
-      ...data,
+    const chapter = await Chapter.create({
+      name: data.name,
+      city: data.city,
+      state: data.state,
       slug,
+      status: data.status || "Active",
     });
+
+    // If businessId or manual admin credentials are provided, optionally allocate the Chapter Admin
+    if (data.businessId || (data.adminName && data.adminEmail)) {
+      await chapterService.assignAdmin(
+        chapter._id,
+        {
+          businessId: data.businessId,
+          name: data.adminName,
+          email: data.adminEmail,
+        },
+        user
+      );
+    }
+
+    return chapter;
   },
 
   updateChapter: async (id, data, user) => {
@@ -138,7 +156,7 @@ export const chapterService = {
     return chapter;
   },
 
-  assignAdmin: async (chapterId, { businessId }, requester) => {
+  assignAdmin: async (chapterId, { businessId, name, email }, requester) => {
     // STRICT DELEGATION: Super Admin cannot assign Chapter Admins directly
     if (requester && requester.role === ROLES.CENTRAL_ADMIN) {
       throw new ForbiddenError("Super Admin cannot assign Chapter Admins directly. Only the State Admin for this state can assign Chapter Admins.");
@@ -189,11 +207,23 @@ export const chapterService = {
       throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requesterState}`);
     }
 
-    // SECURITY: only a business with an active paid membership and verified
-    // status may be assigned as an admin — closes the loophole where a fresh,
-    // unpaid, unverified account could become a Chapter Admin.
-    const business = await resolveEligibleAdminBusiness(businessId);
-    const nominee = business.owner;
+    let nominee;
+    if (businessId) {
+      const business = await resolveEligibleAdminBusiness(businessId);
+      nominee = business.owner;
+    } else if (email && name) {
+      nominee = await User.findOne({ email: email.toLowerCase().trim() });
+      if (!nominee) {
+        nominee = await User.create({
+          name: name.trim(),
+          email: email.toLowerCase().trim(),
+          role: ROLES.CUSTOMER,
+          isProfileComplete: true,
+        });
+      }
+    } else {
+      throw new BadRequestError("Please select a business owner or provide name and email to appoint a Chapter Admin.");
+    }
 
     if (nominee.role === ROLES.CENTRAL_ADMIN || nominee.role === ROLES.STATE_ADMIN) {
       throw new ConflictError("Cannot assign a Central Admin or State Admin as a Chapter Admin");
