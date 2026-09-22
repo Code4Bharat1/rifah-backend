@@ -103,4 +103,32 @@ export const chapterController = {
     const updated = await chapterService.updateChapterStatus(id, status);
     return ApiResponse.success(res, updated, "Chapter status updated successfully");
   }),
+
+  removeAdmin: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const removedAdmin = await chapterService.removeAdmin(id, req.user);
+    await auditService.logAction({
+      actor: req.user,
+      action: "UPDATE",
+      targetModel: "User",
+      targetId: removedAdmin._id,
+      summary: `Revoked Chapter Admin role from ${removedAdmin.name}`,
+      ipAddress: req.ip,
+    });
+    return ApiResponse.success(res, removedAdmin, "Chapter Admin revoked successfully");
+  }),
+
+  deleteChapter: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const result = await chapterService.deleteChapter(id, req.user);
+    await auditService.logAction({
+      actor: req.user,
+      action: "DELETE",
+      targetModel: "Chapter",
+      targetId: id,
+      summary: `Deleted chapter ${id}`,
+      ipAddress: req.ip,
+    });
+    return ApiResponse.success(res, result, "Chapter deleted successfully");
+  }),
 };

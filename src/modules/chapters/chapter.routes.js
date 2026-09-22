@@ -79,5 +79,23 @@ router.post(
   chapterController.assignAdmin
 );
 
+// Revoke Chapter Admin
+router.delete(
+  "/:id/admins",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  validateObjectIdParam("id"),
+  chapterController.removeAdmin
+);
+
+// Delete Chapter
+router.delete(
+  "/:id",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  validateObjectIdParam("id"),
+  chapterController.deleteChapter
+);
+
 export { router as chapterRoutes };
 export default router;

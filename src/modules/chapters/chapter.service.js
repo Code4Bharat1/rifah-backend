@@ -28,7 +28,35 @@ export const chapterService = {
       }
     }
 
-    return Chapter.find(query).sort({ name: 1 });
+    const chapters = await Chapter.find(query).sort({ name: 1 });
+    const chapterIds = chapters.map((c) => c._id);
+    const [chapterAdmins, businessesCounts] = await Promise.all([
+      User.find({ role: ROLES.CHAPTER_ADMIN, chapterId: { $in: chapterIds } }).select("_id name email phone chapterId chapter"),
+      Business.aggregate([
+        { $match: { chapterId: { $in: chapterIds } } },
+        { $group: { _id: "$chapterId", count: { $sum: 1 } } }
+      ])
+    ]);
+
+    const adminByChapterId = new Map();
+    chapterAdmins.forEach((ca) => {
+      adminByChapterId.set(String(ca.chapterId), ca);
+    });
+    const countByChapterId = new Map();
+    businessesCounts.forEach((b) => {
+      countByChapterId.set(String(b._id), b.count);
+    });
+
+    return chapters.map((ch) => {
+      const obj = ch.toObject();
+      const admin = adminByChapterId.get(String(ch._id)) || null;
+      return {
+        ...obj,
+        chapterAdmin: admin,
+        hasAdmin: Boolean(admin),
+        businessesCount: countByChapterId.get(String(ch._id)) || obj.businessesCount || 0,
+      };
+    });
   },
 
   getChapterById: async (id) => {
@@ -129,8 +157,12 @@ export const chapterService = {
       delete data.state;
     }
 
-    if (data.name) {
+    if (data.name && data.name !== chapter.name) {
       data.slug = generateSlug(data.name);
+      await Promise.all([
+        User.updateMany({ chapterId: chapter._id }, { chapter: data.name }),
+        Business.updateMany({ chapterId: chapter._id }, { chapter: data.name }),
+      ]);
     }
     const updated = await Chapter.findByIdAndUpdate(id, data, { new: true });
     return updated;
@@ -294,5 +326,96 @@ export const chapterService = {
     } catch {}
 
     return chapter;
+  },
+
+  removeAdmin: async (chapterId, requester) => {
+    if (!requester || (requester.role !== ROLES.STATE_ADMIN && requester.role !== ROLES.CENTRAL_ADMIN)) {
+      throw new ForbiddenError("Only State Admins or Central Admins can revoke Chapter Admins.");
+    }
+    const chapter = await Chapter.findById(chapterId);
+    if (!chapter) {
+      throw new NotFoundError("Chapter not found");
+    }
+    if (requester.role === ROLES.STATE_ADMIN) {
+      let requesterState = requester.state;
+      if (!requesterState && requester.id) {
+        const userDoc = await User.findById(requester.id).select("state");
+        requesterState = userDoc?.state;
+      }
+      if (requesterState && chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
+        throw new ForbiddenError(`You can only manage chapters within ${requesterState}`);
+      }
+    }
+
+    const admin = await User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN });
+    if (!admin) {
+      throw new NotFoundError(`No active Chapter Admin found for ${chapter.name}`);
+    }
+
+    admin.role = admin.previousRole || ROLES.CUSTOMER;
+    admin.previousRole = "";
+    admin.chapterId = null;
+    admin.chapter = "";
+    await admin.save();
+
+    if (admin.email) {
+      await emailService.sendChapterAdminRemovalEmail(admin.email, admin.name, chapter.name);
+    }
+
+    // Real-time Copilot Knowledge Base Sync
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
+    return admin;
+  },
+
+  deleteChapter: async (chapterId, requester) => {
+    if (!requester || (requester.role !== ROLES.STATE_ADMIN && requester.role !== ROLES.CENTRAL_ADMIN)) {
+      throw new ForbiddenError("Only State Admins or Central Admins can delete chapters.");
+    }
+    const chapter = await Chapter.findById(chapterId);
+    if (!chapter) {
+      throw new NotFoundError("Chapter not found");
+    }
+    if (requester.role === ROLES.STATE_ADMIN) {
+      let requesterState = requester.state;
+      if (!requesterState && requester.id) {
+        const userDoc = await User.findById(requester.id).select("state");
+        requesterState = userDoc?.state;
+      }
+      if (requesterState && chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
+        throw new ForbiddenError(`You can only manage chapters within ${requesterState}`);
+      }
+    }
+
+    // Demote any active Chapter Admin
+    const admin = await User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN });
+    if (admin) {
+      admin.role = admin.previousRole || ROLES.CUSTOMER;
+      admin.previousRole = "";
+      admin.chapterId = null;
+      admin.chapter = "";
+      await admin.save();
+      if (admin.email) {
+        await emailService.sendChapterAdminRemovalEmail(admin.email, admin.name, chapter.name);
+      }
+    }
+
+    // Safely detach users and businesses to 'Unassigned'
+    await Promise.all([
+      User.updateMany({ chapterId: chapter._id }, { $set: { chapterId: null, chapter: "Unassigned" } }),
+      Business.updateMany({ chapterId: chapter._id }, { $set: { chapterId: null, chapter: "Unassigned" } }),
+      Chapter.findByIdAndDelete(chapter._id),
+    ]);
+
+    // Real-time Copilot Knowledge Base Sync
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
+    return { success: true, message: `Chapter ${chapter.name} deleted successfully` };
   },
 };
