@@ -362,10 +362,10 @@ RIFAH Chamber of Commerce & Industry
    * Sends an upgrade email to an existing user becoming a Chapter Admin
    */
   sendChapterAdminUpgradeEmail: async (email, password, chapterName, adminName) => {
-    const subject = `Welcome to RIFAH: ${chapterName} Admin Access`;
+    const subject = `Welcome to RIFAH : ${chapterName} Admin Access`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #0284c7;">Welcome to RIFAH Administration</h2>
+        <h2 style="color: #0284c7;">Administration</h2>
         <p>Dear ${adminName},</p>
         <p>Congratulations! You have been appointed as the <strong>Chapter Admin</strong> for <strong>${chapterName}</strong>.</p>
         <p>Your login credentials (email and password) remain exactly the same. The next time you log in, you will have the option to log in as Chapter Admin or switch to your existing profile directly from your dashboard.</p>
@@ -399,11 +399,10 @@ RIFAH Chamber of Commerce & Industry
       <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
         <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
         <div style="padding: 32px;">
-          ${
-            hasLogo
-              ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />`
-              : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`
-          }
+          ${hasLogo
+        ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />`
+        : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`
+      }
           <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">Role Update Notification</h2>
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${name}</strong>,</p>
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">This email is to inform you that your administrative privileges for the <strong>${chapterName}</strong> chapter have been successfully transitioned to a new administrator.</p>
@@ -452,7 +451,7 @@ RIFAH Chamber of Commerce & Industry
   sendAdminCreatedWelcomeEmail: async ({ email, name, password, businessName }) => {
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
-    const subject = `Welcome to RIFAH: Action Required`;
+    const subject = `Welcome to RIFAH : Action Required`;
     const html = `
       <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
         <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
@@ -571,7 +570,7 @@ RIFAH Chamber of Commerce & Industry
     const hasLogo = fs.existsSync(logoPath);
 
     const subject = `OFFICIAL INVOICE #${invoiceNumber} - RIFAH Chamber Membership`;
-    
+
     // 3. Exact HTML match of website Image 2 invoice layout
     const html = `
       <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; background-color: #ffffff; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);">
@@ -583,11 +582,10 @@ RIFAH Chamber of Commerce & Industry
           <table style="width: 100%; border-collapse: collapse; margin-bottom: 28px;">
             <tr>
               <td style="vertical-align: top;">
-                ${
-                  hasLogo
-                    ? `<img src="cid:rifahlogo" alt="RIFAH Chamber of Commerce & Industry" style="height: 48px; width: auto; max-width: 240px; display: block;" />`
-                    : `<h1 style="margin: 0; font-size: 22px; font-weight: 800; color: #0b192c; letter-spacing: -0.5px;">RIFAH CONNECT</h1>`
-                }
+                ${hasLogo
+        ? `<img src="cid:rifahlogo" alt="RIFAH Chamber of Commerce & Industry" style="height: 48px; width: auto; max-width: 240px; display: block;" />`
+        : `<h1 style="margin: 0; font-size: 22px; font-weight: 800; color: #0b192c; letter-spacing: -0.5px;">RIFAH CONNECT</h1>`
+      }
                 <p style="margin: 4px 0 0 0; font-size: 11px; font-weight: 600; color: #64748b;">Chamber of Commerce & Business Network</p>
               </td>
               <td style="vertical-align: top; text-align: right;">
@@ -756,11 +754,10 @@ RIFAH Chamber of Commerce & Industry
           <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
             <tr>
               <td style="vertical-align: top;">
-                ${
-                  hasLogo
-                    ? `<img src="cid:rifahlogo" alt="RIFAH Chamber" style="height: 44px; width: auto; display: block;" />`
-                    : `<h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #0b192c;">RIFAH CONNECT</h1>`
-                }
+                ${hasLogo
+        ? `<img src="cid:rifahlogo" alt="RIFAH Chamber" style="height: 44px; width: auto; display: block;" />`
+        : `<h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #0b192c;">RIFAH CONNECT</h1>`
+      }
                 <p style="margin: 4px 0 0 0; font-size: 11px; font-weight: 600; color: #64748b;">Chamber Central Administration</p>
               </td>
               <td style="vertical-align: top; text-align: right;">
@@ -852,8 +849,8 @@ RIFAH Chamber of Commerce & Industry
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
     const subject = businessName
-      ? `🎉 Welcome to RIFAH Chamber of Commerce & Industry, ${businessName}!`
-      : `Welcome to RIFAH Chamber of Commerce & Industry! 🎉`;
+      ? `🎉 Chamber of Commerce & Industry, ${businessName}!`
+      : `Chamber of Commerce & Industry! 🎉`;
     const portalUrl = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
 
     const html = `
@@ -1157,30 +1154,27 @@ RIFAH Chamber of Commerce & Industry
           </table>
 
           <h2 style="color: #0f172a; font-size: 19px; font-weight: 700; margin: 16px 0 8px 0;">
-            ${
-              isVerified
-                ? `Congratulations! ${businessName} is now Verified`
-                : isRejected
-                ? `Verification Application Decision: ${businessName}`
-                : `Action Required for ${businessName}`
-            }
+            ${isVerified
+        ? `Congratulations! ${businessName} is now Verified`
+        : isRejected
+          ? `Verification Application Decision: ${businessName}`
+          : `Action Required for ${businessName}`
+      }
           </h2>
 
           <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">Dear <strong>${ownerName || "Member"}</strong>,</p>
 
           <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
-            ${
-              isVerified
-                ? `We are pleased to inform you that your business <strong>${businessName}</strong> has been officially vetted and approved by the RIFAH Chamber Central Admin. Your listing is now active with the official verified badge.`
-                : isRejected
-                ? `Following document and compliance evaluation, the RIFAH Chamber Central Admin has <strong>declined</strong> the current verification submission for <strong>${businessName}</strong>.`
-                : `The RIFAH Chamber Central Admin has reviewed your application for <strong>${businessName}</strong> and requested specific updates or document replacements before verification can be approved.`
-            }
+            ${isVerified
+        ? `We are pleased to inform you that your business <strong>${businessName}</strong> has been officially vetted and approved by the RIFAH Chamber Central Admin. Your listing is now active with the official verified badge.`
+        : isRejected
+          ? `Following document and compliance evaluation, the RIFAH Chamber Central Admin has <strong>declined</strong> the current verification submission for <strong>${businessName}</strong>.`
+          : `The RIFAH Chamber Central Admin has reviewed your application for <strong>${businessName}</strong> and requested specific updates or document replacements before verification can be approved.`
+      }
           </p>
 
-          ${
-            notes
-              ? `
+          ${notes
+        ? `
               <div style="background-color: ${isRejected ? "#fff1f2" : isCorrection ? "#fffbeb" : "#f8fafc"}; border: 1px solid ${isRejected ? "#fecdd3" : isCorrection ? "#fde68a" : "#e2e8f0"}; border-left: 4px solid ${isRejected ? "#e11d48" : isCorrection ? "#d97706" : "#0284c7"}; border-radius: 8px; padding: 16px; margin: 20px 0;">
                 <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: ${isRejected ? "#9f1239" : isCorrection ? "#92400e" : "#0369a1"};">
                   ${isRejected ? "Reason for Rejection / Central Admin Decision:" : "Central Admin Instructions & Feedback:"}
@@ -1190,18 +1184,17 @@ RIFAH Chamber of Commerce & Industry
                 </p>
               </div>
             `
-              : ""
-          }
+        : ""
+      }
 
-          ${
-            !isVerified
-              ? `
+          ${!isVerified
+        ? `
               <p style="color: #475569; font-size: 13px; line-height: 1.6; margin: 16px 0 20px 0;">
                 You can upload revised documents, fix company details, and <strong>re-submit your application for immediate re-evaluation</strong> directly from your RIFAH workspace.
               </p>
             `
-              : ""
-          }
+        : ""
+      }
 
           <div style="margin-top: 24px; margin-bottom: 24px;">
             <a href="http://localhost:3000/biz/verification" style="background-color: ${buttonBg}; color: #ffffff; padding: 13px 28px; border-radius: 10px; font-weight: 700; text-decoration: none; display: inline-block; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
@@ -1271,8 +1264,8 @@ RIFAH Chamber of Commerce & Industry
           <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">${isPaid ? "Event Pass & Payment Receipt" : "Event Ticket Confirmed"}</h2>
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${userName || "Member"}</strong>,</p>
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">${isPaid
-            ? `Your payment has been received and your seat for the following RIFAH Chamber event is confirmed:`
-            : `Your registration for the following RIFAH Chamber event has been confirmed:`}</p>
+        ? `Your payment has been received and your seat for the following RIFAH Chamber event is confirmed:`
+        : `Your registration for the following RIFAH Chamber event has been confirmed:`}</p>
           
           <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
             <h3 style="margin: 0 0 12px 0; color: #0f172a; font-size: 16px;">${eventTitle}</h3>
@@ -1419,14 +1412,13 @@ RIFAH Chamber of Commerce & Industry
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${ownerName || "Member"}</strong>,</p>
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">${description}</p>
 
-          ${
-            notes
-              ? `<div style="background-color: #f8fafc; border-left: 4px solid ${badgeColor}; border-radius: 8px; padding: 16px 20px; margin: 20px 0;">
+          ${notes
+        ? `<div style="background-color: #f8fafc; border-left: 4px solid ${badgeColor}; border-radius: 8px; padding: 16px 20px; margin: 20px 0;">
                   <p style="margin: 0 0 6px 0; font-size: 11px; font-weight: 700; color: #64748b; letter-spacing: 0.5px; text-transform: uppercase;">CENTRAL ADMIN REMARKS / REASON</p>
                   <p style="margin: 0; font-size: 14px; color: #1e293b; line-height: 1.5; font-weight: 500;">${notes}</p>
                 </div>`
-              : ""
-          }
+        : ""
+      }
 
           <div style="margin-top: 28px; text-align: center;">
             <a href="${actionUrl}" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; display: inline-block; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);">
@@ -1590,10 +1582,10 @@ RIFAH Chamber of Commerce & Industry
 
     const formattedDate = endDate
       ? new Date(endDate).toLocaleDateString("en-IN", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
       : "Upcoming";
 
     // Configure milestone-specific messaging & styling
