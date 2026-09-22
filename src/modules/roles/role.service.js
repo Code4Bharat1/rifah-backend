@@ -61,7 +61,7 @@ export const roleService = {
   getPublicRoles: async (queryParams = {}) => {
     const filter = { status: "Active" };
     if (queryParams.level && queryParams.level !== "all") filter.level = queryParams.level;
-    if (queryParams.state && queryParams.state !== "all") filter.state = queryParams.state;
+    if (queryParams.state && queryParams.state !== "all") filter.state = new RegExp(`^${queryParams.state}$`, "i");
     if (queryParams.chapterId && queryParams.chapterId !== "all") filter.chapterId = queryParams.chapterId;
 
     const roles = await Role.find(filter)
