@@ -239,18 +239,34 @@ export const catalogueService = {
 
     const filter = andClauses.length > 1 ? { $and: andClauses } : andClauses[0];
 
-    const [items, total] = await Promise.all([
+    const [rawItems, total] = await Promise.all([
       Catalogue.find(filter)
-        .populate("business", "name slug chapter city rating verification isVerified verificationStatus membership industry")
+        .populate("business", "name slug chapter city rating verification isVerified verificationStatus membership industry status")
         .sort(sort)
         .skip(skip)
         .limit(limit),
       Catalogue.countDocuments(filter),
     ]);
 
+    const items = rawItems.filter((item) => {
+      if (!item.business) return false;
+      const b = item.business;
+      const v = String(b.verification || "").toLowerCase();
+      const s = String(b.status || "").toLowerCase();
+      const isVerified = v === "verified" || v === "approved" || b.isVerified === true;
+      const isPendingOrRejected =
+        v === "rejected" ||
+        v === "pending" ||
+        v === "under_review" ||
+        v === "unverified" ||
+        s === "rejected" ||
+        s === "suspended";
+      return isVerified && !isPendingOrRejected;
+    });
+
     return {
       items,
-      meta: buildPaginationMeta(total, page, limit),
+      meta: buildPaginationMeta(items.length, page, limit),
     };
   },
 

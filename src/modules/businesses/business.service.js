@@ -63,9 +63,16 @@ export const businessService = {
     const { page, limit, skip } = parsePagination(queryParams);
     const andConditions = [];
 
-    // Allow Active or unset status for public users
+    // For public users (non-admins), strictly show ONLY verified and active businesses
     if (!user || ![ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user.role)) {
-      andConditions.push({ status: { $ne: "Suspended" } });
+      andConditions.push({
+        $or: [
+          { verification: { $in: ["verified", "Verified", "approved", "Approved"] } },
+          { isVerified: true },
+        ],
+        verification: { $nin: ["rejected", "Rejected", "pending", "Pending", "under_review", "Correction Requested", "unverified"] },
+        status: { $nin: ["Suspended", "suspended", "Rejected", "rejected", "Pending", "pending", "Pending Verification", "pending_verification", "Draft", "draft"] },
+      });
     }
 
     // RBAC: Chapter Admin Scope Enforcement
@@ -222,15 +229,32 @@ export const businessService = {
           { verification: { $in: ["verified", "Verified", "approved", "Approved"] } },
           { isVerified: true },
         ],
+        verification: { $nin: ["rejected", "Rejected", "pending", "Pending", "under_review", "Correction Requested", "unverified"] },
+        status: { $nin: ["Suspended", "suspended", "Rejected", "rejected", "Pending", "pending", "Pending Verification", "pending_verification"] },
       });
     }
 
-    // 8. Featured Only Filter
+    // 8. Featured Only Filter - Only strictly verified & active businesses appear as Featured
     if (queryParams.featured === "true" || queryParams.featured === true) {
       andConditions.push({
         $or: [
           { featured: true },
           { membership: { $in: ["Enterprise", "Premium"] } },
+        ],
+        // Must be verified and approved, never rejected or pending
+        $and: [
+          {
+            $or: [
+              { verification: { $in: ["verified", "Verified", "approved", "Approved"] } },
+              { isVerified: true },
+            ],
+          },
+          {
+            verification: { $nin: ["rejected", "Rejected", "pending", "Pending", "under_review", "Correction Requested", "unverified"] },
+          },
+          {
+            status: { $nin: ["Suspended", "suspended", "Rejected", "rejected", "Pending", "pending", "Pending Verification", "pending_verification", "Draft", "draft"] },
+          },
         ],
       });
     }
