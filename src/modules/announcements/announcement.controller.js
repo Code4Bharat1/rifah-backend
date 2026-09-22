@@ -14,7 +14,7 @@ export const announcementController = {
       ...req.body,
       author: req.user.id,
     };
-    if (req.user.role === "chapter_admin" && req.user.chapter) {
+    if (!["central_admin", "state_admin"].includes(req.user.role) && req.user.chapter) {
       announcementData.chapter = req.user.chapter;
     }
 
