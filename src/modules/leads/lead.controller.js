@@ -25,8 +25,8 @@ export const leadController = {
 
   getMyLeads: asyncHandler(async (req, res) => {
     let business = await businessService.getBusinessByOwnerId(req.user.id);
-    if (!business) {
-      business = (await Business.findOne({ email: req.user.email })) || (await Business.findOne());
+    if (!business && req.user.email) {
+      business = await Business.findOne({ email: req.user.email });
     }
     if (!business) {
       return ApiResponse.success(res, [], "No business profile found", 200, { total: 0 });

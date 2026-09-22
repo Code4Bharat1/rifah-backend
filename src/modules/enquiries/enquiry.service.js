@@ -358,31 +358,23 @@ export const enquiryService = {
       Enquiry.countDocuments(filter),
     ]);
 
-    // Ensure an associated Lead record exists for each visible enquiry,
-    // so the business owner can immediately Accept or Submit a Quotation!
-    const enrichedEnquiries = await Promise.all(
-      enquiries.map(async (enq) => {
-        const enqObj = enq.toObject ? enq.toObject() : { ...enq };
-        let lead = userLeadMap.get(enq._id.toString());
-        if (!lead) {
-          try {
-            lead = await Lead.create({
-              enquiry: enq._id,
-              business: userBusiness._id,
-              status: "New",
-            });
-            userLeadMap.set(enq._id.toString(), lead);
-          } catch (createErr) {
-            lead = await Lead.findOne({ enquiry: enq._id, business: userBusiness._id });
-          }
-        }
-        const hasValidQuotation = Boolean(lead?.quotation?.amount && Number(lead.quotation.amount) > 0);
-        enqObj.leadId = lead?._id ? lead._id.toString() : null;
-        enqObj.leadStatus = hasValidQuotation ? (lead?.status || "Responded") : (lead?.status === "Responded" ? "New" : (lead?.status || "New"));
-        enqObj.myQuotation = hasValidQuotation ? lead.quotation : null;
-        return enqObj;
-      })
-    );
+    // Only associate an existing Lead record if one was genuinely routed or already created.
+    // Do NOT auto-create leads for broadcast enquiries; leads are created only when the business explicitly responds or quotes.
+    const enrichedEnquiries = enquiries.map((enq) => {
+      const enqObj = enq.toObject ? enq.toObject() : { ...enq };
+      const lead = userLeadMap.get(enq._id.toString());
+      const hasValidQuotation = Boolean(lead?.quotation?.amount && Number(lead.quotation.amount) > 0);
+      enqObj.leadId = lead?._id ? lead._id.toString() : null;
+      enqObj.leadStatus = hasValidQuotation
+        ? (lead?.status || "Responded")
+        : (lead?.status || enq.status || "New");
+      enqObj.myQuotation = hasValidQuotation ? lead.quotation : null;
+      enqObj.isMarketplace =
+        (enq.targetType === "all" || enq.targetType === "chamber") &&
+        !lead &&
+        String(enq.targetBusiness?._id || enq.targetBusiness || "") !== String(userBusiness._id);
+      return enqObj;
+    });
 
     return {
       enquiries: enrichedEnquiries,

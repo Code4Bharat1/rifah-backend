@@ -266,9 +266,31 @@ export const leadService = {
    * HARDENED SECURITY: Quotation is sent strictly and directly to the customer who owns this lead/enquiry.
    */
   submitQuotation: async (leadId, quotationData, user) => {
-    const lead = await Lead.findById(leadId).populate("business").populate("enquiry");
+    let lead = await Lead.findById(leadId).populate("business").populate("enquiry");
     if (!lead) {
-      throw new NotFoundError("Lead not found");
+      // Check if leadId is an Enquiry ID where the user is quoting on an open broadcast enquiry
+      const enquiry = await Enquiry.findById(leadId);
+      if (enquiry) {
+        let userBusiness = await Business.findOne({ owner: user.id });
+        if (!userBusiness && user.email) {
+          userBusiness = await Business.findOne({ email: user.email });
+        }
+        if (!userBusiness) {
+          throw new NotFoundError("No business profile found for this user");
+        }
+        lead = await Lead.findOne({ enquiry: enquiry._id, business: userBusiness._id });
+        if (!lead) {
+          lead = await Lead.create({
+            enquiry: enquiry._id,
+            business: userBusiness._id,
+            status: "Responded",
+          });
+        }
+        await lead.populate("business");
+        await lead.populate("enquiry");
+      } else {
+        throw new NotFoundError("Lead or Enquiry not found");
+      }
     }
 
     // 1. SENDER PERMISSION CHECK: Must be owner of the assigned business or authorized member
@@ -453,9 +475,31 @@ export const leadService = {
    * Update lead CRM pipeline stage
    */
   updateLeadStatus: async (leadId, { status, notes }, user) => {
-    const lead = await Lead.findById(leadId).populate("business").populate("enquiry");
+    let lead = await Lead.findById(leadId).populate("business").populate("enquiry");
     if (!lead) {
-      throw new NotFoundError("Lead not found");
+      // Check if leadId is an Enquiry ID where the user is accepting an open enquiry
+      const enquiry = await Enquiry.findById(leadId);
+      if (enquiry) {
+        let userBusiness = await Business.findOne({ owner: user.id });
+        if (!userBusiness && user.email) {
+          userBusiness = await Business.findOne({ email: user.email });
+        }
+        if (!userBusiness) {
+          throw new NotFoundError("No business profile found for this user");
+        }
+        lead = await Lead.findOne({ enquiry: enquiry._id, business: userBusiness._id });
+        if (!lead) {
+          lead = await Lead.create({
+            enquiry: enquiry._id,
+            business: userBusiness._id,
+            status: status || "In Progress",
+          });
+        }
+        await lead.populate("business");
+        await lead.populate("enquiry");
+      } else {
+        throw new NotFoundError("Lead or Enquiry not found");
+      }
     }
 
     if (user) {
