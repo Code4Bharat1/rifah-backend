@@ -470,7 +470,7 @@ export const reportService = {
       filter.status = queryFilters.status;
     }
 
-    const events = await Event.find(filter).populate("registeredUsers.user", "role").lean().sort({ date: -1 });
+    const events = await Event.find(filter).populate("registeredUsers.user", "role").lean().sort({ createdAt: -1 });
 
     let totalEvents = 0;
     let totalRegisteredOverall = 0;

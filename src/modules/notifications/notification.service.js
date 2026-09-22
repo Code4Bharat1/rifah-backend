@@ -33,6 +33,7 @@ export const notificationService = {
     if (targetRole && targetRole !== "all") {
       if (targetRole === "business_owner") query.role = "business_owner";
       else if (targetRole === "customer") query.role = "customer";
+      else if (targetRole === "members") query.role = { $ne: "customer" };
       else query.role = targetRole;
     }
 
