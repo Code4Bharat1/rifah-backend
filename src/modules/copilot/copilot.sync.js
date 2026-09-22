@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
+import { Chapter } from "../chapters/chapter.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 
 const KB_PATH = path.resolve(process.cwd(), "../rifah_features_knowledge_base.json");
@@ -10,7 +11,7 @@ let lastSyncTimestamp = 0;
 const SYNC_THROTTLE_MS = 10000; // 10s query throttle
 
 /**
- * Synchronizes active Central Admins, State Admins, Chapter Admins, and Businesses
+ * Synchronizes active Central Admins, State Admins, Chapter Admins, Chapters, and Businesses
  * from MongoDB into rifah_features_knowledge_base.json.
  *
  * CRITICAL RULE:
@@ -27,8 +28,8 @@ export async function syncLiveEntitiesToFile(force = false) {
   }
 
   try {
-    // 1. Fetch only ACTIVE admins & businesses
-    const [centralAdmins, stateAdmins, chapterAdmins, businesses] = await Promise.all([
+    // 1. Fetch only ACTIVE admins, chapters & businesses
+    const [centralAdmins, stateAdmins, chapterAdmins, chapters, businesses] = await Promise.all([
       User.find({
         role: { $in: [ROLES.CENTRAL_ADMIN, "central_admin", "super_admin"] },
         status: {
@@ -56,15 +57,31 @@ export async function syncLiveEntitiesToFile(force = false) {
         .select("_id name email phone role status state chapter organization")
         .lean(),
 
+      Chapter.find({
+        status: {
+          $nin: ["suspended", "Suspended", "inactive", "Inactive", "deleted", "Deleted"],
+        },
+      })
+        .select("_id name slug city state lead membersCount businessesCount status")
+        .lean(),
+
       Business.find({
         status: {
           $nin: ["suspended", "Suspended", "inactive", "Inactive", "deleted", "Deleted", "rejected", "Rejected"],
         },
       })
         .populate("owner", "name email phone")
-        .select("_id name slug tagline industry categories city state chapter address status owner isVerified")
+        .populate("chapterId", "name state city")
+        .select("_id name slug tagline industry categories city state chapter chapterId address status owner isVerified")
         .lean(),
     ]);
+
+    // Build chapter lookup map (by name lowercase and id string)
+    const chapterLookup = {};
+    chapters.forEach((c) => {
+      if (c.name) chapterLookup[c.name.toLowerCase().trim()] = c;
+      if (c._id) chapterLookup[String(c._id)] = c;
+    });
 
     const liveEntities = {
       lastSyncedAt: new Date().toISOString(),
@@ -72,6 +89,7 @@ export async function syncLiveEntitiesToFile(force = false) {
         centralAdmins: centralAdmins.length,
         stateAdmins: stateAdmins.length,
         chapterAdmins: chapterAdmins.length,
+        chapters: chapters.length,
         businesses: businesses.length,
       },
       centralAdmins: centralAdmins.map((u) => ({
@@ -91,30 +109,54 @@ export async function syncLiveEntitiesToFile(force = false) {
         role: "state_admin",
         status: u.status,
       })),
-      chapterAdmins: chapterAdmins.map((u) => ({
-        id: String(u._id),
-        name: u.name,
-        email: u.email,
-        phone: u.phone || "",
-        chapter: u.chapter || "Unassigned Chapter",
-        state: u.state || "",
-        role: "chapter_admin",
-        status: u.status,
+      chapterAdmins: chapterAdmins.map((u) => {
+        const chapName = u.chapter || "Unassigned Chapter";
+        const chapObj = chapterLookup[chapName.toLowerCase().trim()] || {};
+        return {
+          id: String(u._id),
+          name: u.name,
+          email: u.email,
+          phone: u.phone || "",
+          chapter: chapName,
+          state: u.state || chapObj.state || "",
+          role: "chapter_admin",
+          status: u.status,
+        };
+      }),
+      chapters: chapters.map((c) => ({
+        id: String(c._id),
+        name: c.name,
+        slug: c.slug,
+        city: c.city || "",
+        state: c.state || "",
+        lead: c.lead || "",
+        businessesCount: c.businessesCount || 0,
+        membersCount: c.membersCount || 0,
+        status: c.status || "Active",
       })),
-      businesses: businesses.map((b) => ({
-        id: String(b._id),
-        name: b.name,
-        slug: b.slug,
-        industry: b.industry || (b.categories && b.categories[0]) || "General Business",
-        categories: b.categories || [],
-        city: b.city || "",
-        state: b.state || "",
-        chapter: b.chapter || "",
-        ownerName: b.owner?.name || "Business Member",
-        ownerEmail: b.owner?.email || "",
-        status: b.status,
-        isVerified: Boolean(b.isVerified),
-      })),
+      businesses: businesses.map((b) => {
+        const chapName = b.chapter || b.chapterId?.name || "";
+        const chapObj =
+          (chapName ? chapterLookup[chapName.toLowerCase().trim()] : null) ||
+          (b.chapterId ? chapterLookup[String(b.chapterId?._id || b.chapterId)] : null) ||
+          {};
+        const state = b.state || b.chapterId?.state || chapObj.state || "";
+        const city = b.city || b.chapterId?.city || chapObj.city || "";
+        return {
+          id: String(b._id),
+          name: b.name,
+          slug: b.slug,
+          industry: b.industry || (b.categories && b.categories[0]) || "General Business",
+          categories: b.categories || [],
+          city: city,
+          state: state,
+          chapter: chapName || chapObj.name || "",
+          ownerName: b.owner?.name || "Business Member",
+          ownerEmail: b.owner?.email || "",
+          status: b.status,
+          isVerified: Boolean(b.isVerified),
+        };
+      }),
     };
 
     lastSyncTimestamp = now;
@@ -142,12 +184,15 @@ export function getCachedLiveEntities() {
     if (fs.existsSync(KB_PATH)) {
       const raw = fs.readFileSync(KB_PATH, "utf8");
       const kbData = JSON.parse(raw);
-      return kbData.liveEntities || {
-        centralAdmins: [],
-        stateAdmins: [],
-        chapterAdmins: [],
-        businesses: [],
-      };
+      return (
+        kbData.liveEntities || {
+          centralAdmins: [],
+          stateAdmins: [],
+          chapterAdmins: [],
+          chapters: [],
+          businesses: [],
+        }
+      );
     }
   } catch (err) {
     console.error("[CopilotSync] Error reading cached entities:", err.message);
@@ -156,6 +201,7 @@ export function getCachedLiveEntities() {
     centralAdmins: [],
     stateAdmins: [],
     chapterAdmins: [],
+    chapters: [],
     businesses: [],
   };
 }

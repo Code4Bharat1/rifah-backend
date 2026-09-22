@@ -50,15 +50,22 @@ export const getChapterFilter = async (user, entityType = "direct") => {
     }
 
     // Direct text name match
-    if (chapterNames.length === 0) {
-      return { state: stateRegex };
+    const globalChapters = ["all", "All", "All Chapters", "ALL", "dummy", "Statewide"];
+    const orConditions = [
+      { chapter: { $in: globalChapters } },
+      { chapter: /all/i },
+      { state: stateRegex },
+    ];
+    if (user._id || user.id) {
+      orConditions.push({ author: user._id || user.id });
     }
-    return {
-      $or: [
-        { chapter: { $in: chapterNames } },
-        { state: stateRegex },
-      ],
-    };
+    if (user.state) {
+      orConditions.push({ chapter: stateRegex });
+    }
+    if (chapterNames.length > 0) {
+      orConditions.push({ chapter: { $in: chapterNames } });
+    }
+    return { $or: orConditions };
   }
 
   // Only Chapter Admins are restricted by chapter admin filter logic
@@ -93,10 +100,18 @@ export const getChapterFilter = async (user, entityType = "direct") => {
   }
 
   // Legacy 'direct': models that only carry the free-text `chapter` name (e.g. Announcement, Event)
-  if (!chapterRegex) {
-    return { _id: null };
+  const globalChapters = ["all", "All", "All Chapters", "ALL", "dummy"];
+  const orConditions = [
+    { chapter: { $in: globalChapters } },
+    { chapter: /all/i },
+  ];
+  if (user._id || user.id) {
+    orConditions.push({ author: user._id || user.id });
   }
-  return { chapter: chapterRegex };
+  if (chapterRegex) {
+    orConditions.push({ chapter: chapterRegex });
+  }
+  return { $or: orConditions };
 };
 
 /**
