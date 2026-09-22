@@ -492,8 +492,26 @@ export const leadService = {
       throw new NotFoundError("Enquiry not found");
     }
     
-    // Verify requester is the one asking
-    if (String(enquiry.requester) !== String(userId)) {
+    // Verify authorization: enquiry requester, target business owner, or admin
+    const requesterId = String(enquiry.requester?._id || enquiry.requester || "");
+    let isAuthorized = requesterId === String(userId);
+
+    if (!isAuthorized) {
+      const { Business } = await import("../businesses/business.model.js");
+      const userBiz = await Business.findOne({ owner: userId });
+      if (userBiz && String(enquiry.targetBusiness) === String(userBiz._id)) {
+        isAuthorized = true;
+      }
+      if (!isAuthorized) {
+        const { User } = await import("../users/user.model.js");
+        const userDoc = await User.findById(userId);
+        if (userDoc && ["central_admin", "state_admin", "chapter_admin"].includes(userDoc.role)) {
+          isAuthorized = true;
+        }
+      }
+    }
+
+    if (!isAuthorized) {
       throw new ForbiddenError("You can only view quotations for your own enquiries");
     }
 

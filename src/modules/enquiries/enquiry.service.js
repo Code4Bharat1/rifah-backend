@@ -80,10 +80,26 @@ export const enquiryService = {
       }
     }
 
+    // Explicit classification of enquiry source:
+    // 1. "b2b": Sent by an authenticated business member
+    // 2. "guest": Sent without login directly to a specific business
+    // 3. "general": Sent via homepage RFQ / public broadcast
+    let sourceType = data.sourceType;
+    if (!sourceType || !["b2b", "guest", "general"].includes(sourceType)) {
+      if (user && (user.role === "business" || userBusiness)) {
+        sourceType = "b2b";
+      } else if (!user && targetType === "business") {
+        sourceType = "guest";
+      } else {
+        sourceType = "general";
+      }
+    }
+
     const enquiry = await Enquiry.create({
       ...data,
       referenceId,
       targetType,
+      sourceType,
       targetBusiness,
       requester: user ? user.id : null,
       requesterName,
@@ -160,7 +176,8 @@ export const enquiryService = {
             ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
           };
 
-          if (resolvedChapterId) {
+          // Restrict to chapter only when explicitly targeting a single chamber
+          if (targetType === "chamber" && resolvedChapterId) {
             query.chapterId = resolvedChapterId;
           }
 
@@ -280,10 +297,22 @@ export const enquiryService = {
     });
     const routedEnquiryIds = Array.from(userLeadMap.keys());
 
+    const bizCategories = [
+      ...(Array.isArray(userBusiness.categories) ? userBusiness.categories : []),
+      userBusiness.industry,
+    ].filter(Boolean);
+
+    const categoryCondition = bizCategories.length > 0
+      ? { category: { $in: bizCategories } }
+      : {};
+
     // Build filter matching:
-    // 1. Direct enquiries to this business (targetBusiness === userBusiness._id)
+    // 1. Direct enquiries to this business (targetBusiness === userBusiness._id) - includes B2B Direct & Guest Direct
     // 2. Enquiries explicitly routed to this business by admin/lead routing (_id in routedEnquiryIds)
-    // STRICT RULE: Exclude user's own posted enquiries (which are in My Enquiries)
+    // 3. Chamber-specific enquiries matching this business's chapter
+    // 4. Pan-Chamber B2B enquiries from fellow chamber members
+    // 5. General RFQs from public buyers matching business category
+    // STRICT RULE: Exclude user's own posted enquiries (which belong in My Enquiries)
     const filter = {
       $and: [
         { requester: { $ne: userId } },
@@ -291,8 +320,13 @@ export const enquiryService = {
           $or: [
             { targetBusiness: userBusiness._id },
             { _id: { $in: routedEnquiryIds } },
-            { targetType: "all" },
             { targetType: "chamber", chapterId: userBusiness.chapterId },
+            { targetType: "all", sourceType: "b2b" },
+            {
+              targetType: "all",
+              sourceType: { $ne: "b2b" },
+              ...categoryCondition,
+            },
             { targetType: { $exists: false }, targetBusiness: userBusiness._id },
           ],
         },

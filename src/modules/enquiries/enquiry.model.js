@@ -61,6 +61,12 @@ const enquirySchema = new mongoose.Schema(
       default: "all",
       index: true,
     },
+    sourceType: {
+      type: String,
+      enum: ["b2b", "guest", "general"],
+      default: "general",
+      index: true,
+    },
     targetBusiness: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Business",
