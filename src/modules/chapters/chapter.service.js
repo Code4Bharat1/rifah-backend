@@ -7,6 +7,7 @@ import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { resolveEligibleAdminBusiness } from "../../shared/utils/admin-eligibility.js";
 import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
+import { logger } from "../../infrastructure/logger/logger.js";
 import crypto from "crypto";
 
 export const chapterService = {
@@ -189,14 +190,9 @@ export const chapterService = {
   },
 
   assignAdmin: async (chapterId, { businessId, name, email }, requester) => {
-    // STRICT DELEGATION: Super Admin cannot assign Chapter Admins directly
-    if (requester && requester.role === ROLES.CENTRAL_ADMIN) {
-      throw new ForbiddenError("Super Admin cannot assign Chapter Admins directly. Only the State Admin for this state can assign Chapter Admins.");
-    }
-
-    // STRICT ROLE CONSTRAINT: Only State Admin can assign Chapter Admins
-    if (!requester || requester.role !== ROLES.STATE_ADMIN) {
-      throw new ForbiddenError("Only State Admins within their state can assign Chapter Admins.");
+    // RBAC: Central Admin or State Admin can assign Chapter Admins
+    if (!requester || (requester.role !== ROLES.STATE_ADMIN && requester.role !== ROLES.CENTRAL_ADMIN)) {
+      throw new ForbiddenError("Only State Admins within their state or Central Admins can assign Chapter Admins.");
     }
 
     const chapter = await Chapter.findById(chapterId);
@@ -204,57 +200,76 @@ export const chapterService = {
       throw new NotFoundError("Chapter not found");
     }
 
-    // Resolve State Admin's state reliably
-    let requesterState = requester.state;
-    if (!requesterState && requester.id) {
-      const userDoc = await User.findById(requester.id).select("state chapter chapterId city");
-      requesterState = userDoc?.state;
+    if (requester.role === ROLES.STATE_ADMIN) {
+      // Resolve State Admin's state reliably
+      let requesterState = requester.state;
+      if (!requesterState && requester.id) {
+        const userDoc = await User.findById(requester.id).select("state chapter chapterId city");
+        requesterState = userDoc?.state;
 
-      // If state is not set on userDoc, check user's chapter
-      if (!requesterState && userDoc?.chapterId) {
-        const userChapter = await Chapter.findById(userDoc.chapterId).select("state");
-        if (userChapter?.state) {
-          requesterState = userChapter.state;
-          userDoc.state = requesterState;
-          await userDoc.save();
+        // If state is not set on userDoc, check user's chapter
+        if (!requesterState && userDoc?.chapterId) {
+          const userChapter = await Chapter.findById(userDoc.chapterId).select("state");
+          if (userChapter?.state) {
+            requesterState = userChapter.state;
+            userDoc.state = requesterState;
+            await userDoc.save();
+          }
+        }
+
+        // If still missing state, and managing this chapter, auto-bind to this chapter's state
+        if (!requesterState && chapter.state) {
+          requesterState = chapter.state;
+          if (userDoc) {
+            userDoc.state = chapter.state;
+            await userDoc.save();
+          }
         }
       }
 
-      // If still missing state, and managing this chapter, auto-bind to this chapter's state
-      if (!requesterState && chapter.state) {
-        requesterState = chapter.state;
-        if (userDoc) {
-          userDoc.state = chapter.state;
-          await userDoc.save();
-        }
+      if (!requesterState) {
+        throw new ForbiddenError("Your State Admin account is not associated with any state region.");
       }
-    }
 
-    if (!requesterState) {
-      throw new ForbiddenError("Your State Admin account is not associated with any state region.");
-    }
-
-    // Strict boundary: Only State Admin within their state can assign Chapter Admins
-    if (chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
-      throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requesterState}`);
+      // Strict boundary: Only State Admin within their state can assign Chapter Admins
+      if (chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
+        throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requesterState}`);
+      }
     }
 
     let nominee;
     if (businessId) {
       const business = await resolveEligibleAdminBusiness(businessId);
-      nominee = business.owner;
-    } else if (email && name) {
-      nominee = await User.findOne({ email: email.toLowerCase().trim() });
+      const nomineeId = business.owner?._id || business.owner;
+      nominee = await User.findById(nomineeId).select("+passwordHash");
+      if (!nominee && (business.ownerEmail || business.email)) {
+        nominee = await User.findOne({ email: (business.ownerEmail || business.email).toLowerCase().trim() }).select("+passwordHash");
+      }
+    } else if (email) {
+      const cleanEmail = email.toLowerCase().trim();
+      nominee = await User.findOne({ email: cleanEmail }).select("+passwordHash");
       if (!nominee) {
         nominee = await User.create({
-          name: name.trim(),
-          email: email.toLowerCase().trim(),
+          name: name ? name.trim() : "Chapter Admin",
+          email: cleanEmail,
           role: ROLES.CUSTOMER,
           isProfileComplete: true,
         });
       }
     } else {
       throw new BadRequestError("Please select a business owner or provide name and email to appoint a Chapter Admin.");
+    }
+
+    if (!nominee) {
+      throw new BadRequestError("Could not resolve nominated user account for Chapter Admin appointment.");
+    }
+
+    // Update name or email if supplied
+    if (name && name.trim()) {
+      nominee.name = name.trim();
+    }
+    if (email && email.trim() && !nominee.email) {
+      nominee.email = email.toLowerCase().trim();
     }
 
     if (nominee.role === ROLES.CENTRAL_ADMIN || nominee.role === ROLES.STATE_ADMIN) {
@@ -271,11 +286,15 @@ export const chapterService = {
       await oldAdmin.save();
       // Send removal notice
       if (oldAdmin.email) {
-        await emailService.sendChapterAdminRemovalEmail(oldAdmin.email, oldAdmin.name, chapter.name);
+        try {
+          await emailService.sendChapterAdminRemovalEmail(oldAdmin.email, oldAdmin.name, chapter.name);
+        } catch (err) {
+          logger.warn(`Failed to send chapter admin removal email to ${oldAdmin.email}: ${err.message}`);
+        }
       }
     }
 
-    // Generate a secure random password for the Chapter Admin
+    // Generate a secure random password for the Chapter Admin (refreshed upon creation or re-allocation)
     const randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
     const passwordHash = await hashPassword(randomPassword);
 
@@ -292,8 +311,13 @@ export const chapterService = {
     nominee.forcePasswordChange = true;
     await nominee.save();
 
-    // Send email with generated credentials to the assigned chapter admin email
-    await emailService.sendChapterAdminInvite(nominee.email, randomPassword, chapter.name, nominee.name);
+    // Send email with generated credentials & password to the assigned chapter admin email
+    try {
+      await emailService.sendChapterAdminInvite(nominee.email, randomPassword, chapter.name, nominee.name);
+      logger.info(`[CHAPTER ADMIN APPOINTMENT] Password credentials sent to ${nominee.email} for chapter ${chapter.name}`);
+    } catch (mailErr) {
+      logger.error(`[CHAPTER ADMIN APPOINTMENT] Failed to send email credentials to ${nominee.email}:`, mailErr);
+    }
 
     // Real-time Copilot Knowledge Base Sync
     try {

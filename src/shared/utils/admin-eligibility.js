@@ -1,4 +1,5 @@
 import { Business } from "../../modules/businesses/business.model.js";
+import { User } from "../../modules/users/user.model.js";
 import { NotFoundError, ForbiddenError } from "../errors/errors.js";
 
 const VERIFIED_VALUES = ["verified", "Verified", "approved", "Approved"];
@@ -19,6 +20,18 @@ export const resolveEligibleAdminBusiness = async (businessId) => {
   if (!business) {
     throw new NotFoundError("Business not found");
   }
+
+  if (!business.owner && (business.ownerEmail || business.email)) {
+    const ownerEmail = (business.ownerEmail || business.email).toLowerCase().trim();
+    const user = await User.findOne({ email: ownerEmail });
+    if (user) {
+      business.owner = user;
+
+
+      
+    }
+  }
+
   if (!business.owner) {
     throw new ForbiddenError("This business has no owner account and cannot be assigned as admin.");
   }

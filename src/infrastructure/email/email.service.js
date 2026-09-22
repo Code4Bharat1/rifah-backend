@@ -382,7 +382,15 @@ RIFAH Chamber of Commerce & Industry
     return emailService.sendEmail({ to: email, subject, html });
   },
 
-  sendChapterAdminRemovalEmail: async (email, name, chapterName) => {
+  sendChapterAdminRemovalEmail: async (emailOrOptions, nameArg, chapterNameArg) => {
+    let email = emailOrOptions;
+    let name = nameArg;
+    let chapterName = chapterNameArg;
+    if (typeof emailOrOptions === "object" && emailOrOptions !== null) {
+      email = emailOrOptions.to || emailOrOptions.email;
+      name = emailOrOptions.name || "Member";
+      chapterName = emailOrOptions.chapterName || "Chapter";
+    }
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
     const subject = `Update regarding your Administrative Role for ${chapterName}`;
