@@ -1,3 +1,5 @@
+import crypto from "crypto";
+import { hashPassword } from "../../infrastructure/auth/password.js";
 import { User } from "../users/user.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
 import { Business } from "../businesses/business.model.js";
@@ -199,17 +201,12 @@ export const stateService = {
       }
     } else if (email && name) {
       // Manual entry: find user by email or create new user
-      const User = (await import("../../modules/users/user.model.js")).User;
       nominee = await User.findOne({ email: email.toLowerCase().trim() });
       if (!nominee) {
-        const crypto = await import("crypto");
-        const { hashPassword } = await import("../../infrastructure/auth/password.js");
-        const passwordHash = await hashPassword(crypto.randomBytes(8).toString("hex"));
         nominee = await User.create({
           name: name.trim(),
           email: email.toLowerCase().trim(),
           phone: phone ? phone.trim() : "",
-          passwordHash,
           role: ROLES.CUSTOMER,
           isProfileComplete: true
         });
@@ -252,14 +249,20 @@ export const stateService = {
       );
     };
 
+    // Generate a secure random password for the State Admin
+    const randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
+    const passwordHash = await hashPassword(randomPassword);
+
     if (nominee.role !== ROLES.STATE_ADMIN) {
       nominee.previousRole = nominee.role;
     }
     nominee.role = ROLES.STATE_ADMIN;
     nominee.state = cleanState;
+    nominee.passwordHash = passwordHash;
+    nominee.forcePasswordChange = true;
     await nominee.save();
 
-    await emailService.sendStateAdminUpgradeEmail(nominee.email, cleanState, nominee.name);
+    await emailService.sendStateAdminInvite(nominee.email, randomPassword, cleanState, nominee.name);
     await upsertStateProfile();
 
     // Real-time Copilot Knowledge Base Sync
@@ -274,7 +277,7 @@ export const stateService = {
   /**
    * Create a State Profile (optionally assigning an admin)
    */
-  createState: async ({ name, businessId, image, address, contactEmail, contactPhone }) => {
+  createState: async ({ name, businessId, image, address, contactEmail, contactPhone, adminName, adminEmail, adminPhone }) => {
     if (!name || typeof name !== "string" || !name.trim()) {
       throw new BadRequestError("State name is required");
     }
@@ -293,9 +296,19 @@ export const stateService = {
       { upsert: true, new: true, runValidators: true }
     );
 
-    // If businessId is provided, also allocate the admin
-    if (businessId) {
-      await stateService.assignStateAdmin({ businessId, image, address, explicitStateName: cleanState, contactEmail, contactPhone });
+    // If businessId or manual admin credentials are provided, also allocate the admin
+    if (businessId || (adminName && adminEmail)) {
+      await stateService.assignStateAdmin({
+        businessId,
+        image,
+        address,
+        explicitStateName: cleanState,
+        contactEmail,
+        contactPhone,
+        name: adminName,
+        email: adminEmail,
+        phone: adminPhone,
+      });
     }
 
     return profile;
