@@ -167,6 +167,17 @@ const broadcastEventToAudience = async (event) => {
         title: "New Event: " + event.title,
         body: `You're invited to ${event.title} on ${event.date}`,
         entityId: event._id,
+        eventDate: event.date,
+        eventCity: event.city,
+        eventTime: event.time,
+        eventVenue: event.venue || event.location,
+        metadata: {
+          eventDate: event.date,
+          eventCity: event.city,
+          eventTime: event.time,
+          eventVenue: event.venue || event.location,
+          eventTitle: event.title,
+        },
         link: "/events",
       });
 
@@ -482,14 +493,26 @@ export const eventService = {
           });
         }
 
+        const dateCityInfo = [updatedEvent.date, updatedEvent.city].filter(Boolean).join(" • ");
         await notificationService.createNotification({
           recipientId: userId,
           type: "Event",
           title: "Event Registration Confirmed",
           body: event.isPaid
-            ? `Your payment of ₹${event.ticketPrice} for "${updatedEvent.title}" is confirmed!`
-            : `Your registration for "${updatedEvent.title}" is confirmed!`,
+            ? `Your payment of ₹${event.ticketPrice} for "${updatedEvent.title}" is confirmed!${dateCityInfo ? ` (${dateCityInfo})` : ""}`
+            : `Your registration for "${updatedEvent.title}" is confirmed!${dateCityInfo ? ` (${dateCityInfo})` : ""}`,
           entityId: updatedEvent._id,
+          eventDate: updatedEvent.date,
+          eventCity: updatedEvent.city,
+          eventTime: updatedEvent.time,
+          eventVenue: updatedEvent.venue || updatedEvent.location,
+          metadata: {
+            eventDate: updatedEvent.date,
+            eventCity: updatedEvent.city,
+            eventTime: updatedEvent.time,
+            eventVenue: updatedEvent.venue || updatedEvent.location,
+            eventTitle: updatedEvent.title,
+          },
           link: "/events"
         });
       } catch (err) {

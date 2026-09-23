@@ -13,6 +13,8 @@ export const createCourse = async (courseData, user) => {
   
   const course = new Course({
     ...courseData,
+    category: courseData.category ? String(courseData.category).trim() : "",
+    subcategory: courseData.subcategory ? String(courseData.subcategory).trim() : "",
     createdBy: user.id || user._id,
     scope,
     state: scope === 'state' ? (user.state || user.stateId) : null,
@@ -35,6 +37,12 @@ export const updateCourse = async (courseId, courseData, user) => {
 
   // Prevent tampering with scope or target bindings via update
   const safeData = { ...courseData };
+  if (safeData.category !== undefined) {
+    safeData.category = safeData.category ? String(safeData.category).trim() : "";
+  }
+  if (safeData.subcategory !== undefined) {
+    safeData.subcategory = safeData.subcategory ? String(safeData.subcategory).trim() : "";
+  }
   delete safeData.scope;
   delete safeData.state;
   delete safeData.chapterId;
@@ -65,6 +73,14 @@ export const deleteCourse = async (courseId, user) => {
  */
 export const getCourses = async (user, query = {}) => {
   let filter = { ...query };
+
+  // Handle category / subcategory filters if provided
+  if (filter.category === 'all' || !filter.category) {
+    delete filter.category;
+  }
+  if (filter.subcategory === 'all' || !filter.subcategory) {
+    delete filter.subcategory;
+  }
 
   // Admins only see and manage their OWN scope's courses in their respective panel
   if (user.role === ROLES.CENTRAL_ADMIN) {

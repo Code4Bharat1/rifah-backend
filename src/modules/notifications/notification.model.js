@@ -43,6 +43,26 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    eventDate: {
+      type: String,
+      default: "",
+    },
+    eventCity: {
+      type: String,
+      default: "",
+    },
+    eventTime: {
+      type: String,
+      default: "",
+    },
+    eventVenue: {
+      type: String,
+      default: "",
+    },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
   {
     timestamps: true,
