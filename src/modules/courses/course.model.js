@@ -51,6 +51,18 @@ const courseSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    category: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
+    subcategory: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
