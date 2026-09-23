@@ -8,7 +8,7 @@ import { ROLES } from "../../shared/constants/roles.js";
 import { Payment } from "../payments/payment.model.js";
 import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
-import { getChapterFilter, resolveChapterIdByName } from "../../shared/utils/chapter-scope.js";
+import { getChapterFilter, resolveChapterIdByName, resolveChapterIdForLocation } from "../../shared/utils/chapter-scope.js";
 import { User } from "../users/user.model.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -377,6 +377,45 @@ export const businessService = {
           verification: "verified",
           verificationStatus: "verified",
           isVerified: true,
+        });
+      }
+
+      // Auto-heal Unassigned or missing chapter in backend
+      const rawCh = (business.chapter || "").trim().toLowerCase();
+      if (!rawCh || rawCh === "unassigned" || rawCh === "none") {
+        let resolvedChapter = "";
+        let resolvedChapterId = null;
+
+        if (business.chapterId) {
+          const ch = await Chapter.findById(business.chapterId);
+          if (ch) {
+            resolvedChapter = ch.name;
+            resolvedChapterId = ch._id;
+          }
+        }
+
+        if (!resolvedChapter && (business.city || business.state)) {
+          const chId = await resolveChapterIdForLocation(business.city || business.state);
+          if (chId) {
+            const ch = await Chapter.findById(chId);
+            if (ch) {
+              resolvedChapter = ch.name;
+              resolvedChapterId = ch._id;
+            }
+          }
+        }
+
+        if (!resolvedChapter) {
+          const firstCh = await Chapter.findOne({ status: { $ne: "Inactive" } }).sort({ name: 1 });
+          resolvedChapter = firstCh?.name || "Hyderabad Chapter";
+          resolvedChapterId = firstCh?._id || null;
+        }
+
+        business.chapter = resolvedChapter;
+        if (resolvedChapterId) business.chapterId = resolvedChapterId;
+        await Business.findByIdAndUpdate(business._id, {
+          chapter: resolvedChapter,
+          ...(resolvedChapterId ? { chapterId: resolvedChapterId } : {}),
         });
       }
     }

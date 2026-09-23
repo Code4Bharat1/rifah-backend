@@ -67,6 +67,9 @@ export const verificationService = {
       reviewer: user.id,
       createdAt: new Date(),
     });
+    if (business.documents !== undefined) {
+      business.documents = documents;
+    }
     await business.save();
 
     // Send in-app notification strictly to the Chapter Admin(s) of the business's chapter
@@ -82,8 +85,12 @@ export const verificationService = {
           ...(targetChapter ? [{ chapter: new RegExp(`^${targetChapter}$`, "i") }] : []),
         ],
       };
+      let chapterAdmins = [];
       if (targetChapterId || cleanChapter) {
-        const chapterAdmins = await User.find(chapterAdminFilter);
+        chapterAdmins = await User.find(chapterAdminFilter);
+      }
+
+      if (chapterAdmins && chapterAdmins.length > 0) {
         for (const admin of chapterAdmins) {
           await notificationService.createNotification({
             recipientId: admin._id,
@@ -94,9 +101,22 @@ export const verificationService = {
             link: "/chapter-admin/verification",
           });
         }
+      } else {
+        // Fallback: Notify Central Admins if chapter has no specific Chapter Admin assigned
+        const centralAdmins = await User.find({ role: { $in: [ROLES.CENTRAL_ADMIN, "central_admin", "admin"] } });
+        for (const admin of centralAdmins) {
+          await notificationService.createNotification({
+            recipientId: admin._id,
+            type: "Verification",
+            title: "New Verification Submission",
+            body: `Business "${business.name}" (${targetChapter || "Unassigned Chapter"}) has submitted verification documents for approval.`,
+            entityId: verification._id,
+            link: "/admin/verification",
+          });
+        }
       }
     } catch (notifErr) {
-      console.error("Failed to notify chapter admins on verification submission:", notifErr);
+      console.error("Failed to notify admins on verification submission:", notifErr);
     }
 
     return verification;
