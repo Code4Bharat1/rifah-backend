@@ -24,12 +24,30 @@ const planSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    durationYears: {
+      type: Number,
+      default: 1,
+    },
+    gstRate: {
+      type: Number,
+      default: 18,
+    },
+    isRecommended: {
+      type: Boolean,
+      default: false,
+    },
     summary: {
       type: String,
       trim: true,
       default: "",
     },
     features: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    missingFeatures: [
       {
         type: String,
         trim: true,

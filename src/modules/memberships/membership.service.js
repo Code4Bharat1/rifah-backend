@@ -9,6 +9,98 @@ import { logger } from "../../infrastructure/logger/logger.js";
 import { User } from "../users/user.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 
+export const DEFAULT_MEMBERSHIP_PLANS = {
+  silver: {
+    name: "Silver",
+    price: 3000,
+    priceUsd: 39,
+    durationYears: 1,
+    gstRate: 18,
+    isRecommended: false,
+    summary: "1-Year Verified Chamber Membership",
+    features: [
+      "Directory listing with Verified Chamber Badge",
+      "Up to 15 matched buyer lead enquiries / mo",
+      "Standard catalogue listing (up to 5 items)",
+      "Chamber community & chapter networking access",
+    ],
+    missingFeatures: [
+      "Direct B2B buyer messaging",
+      "Priority RFQ & high-value lead routing",
+      "Chamber summit & event delegate passes",
+      "Secretariat & Trade Advisory Desk",
+      "Global Chapter & International Network Access",
+      "Custom expo pavilion & sponsor showcase",
+    ],
+  },
+  gold: {
+    name: "Gold",
+    price: 5000,
+    priceUsd: 65,
+    durationYears: 2,
+    gstRate: 18,
+    isRecommended: false,
+    summary: "2-Year Chamber Access & Direct Messaging",
+    features: [
+      "Directory listing with Verified Chamber Badge",
+      "Up to 35 matched buyer lead enquiries / mo",
+      "Expanded catalogue listing (up to 15 items)",
+      "Direct B2B buyer messaging",
+      "Priority RFQ & high-value lead routing",
+    ],
+    missingFeatures: [
+      "Chamber summit & event delegate passes",
+      "Secretariat & Trade Advisory Desk",
+      "Global Chapter & International Network Access",
+      "Custom expo pavilion & sponsor showcase",
+    ],
+  },
+  platinum: {
+    name: "Platinum",
+    price: 25000,
+    priceUsd: 325,
+    durationYears: 10,
+    gstRate: 18,
+    isRecommended: true,
+    summary: "10-Year Enterprise Patronage (Recommended)",
+    features: [
+      "Featured placement across Directory & Homepage",
+      "Unlimited matched buyer lead enquiries",
+      "Full commercial product & service catalogue",
+      "Direct B2B buyer messaging",
+      "Priority RFQ & high-value lead routing",
+      "4 Annual Chamber Summit & Networking delegate passes",
+      "Secretariat & Trade Advisory Desk",
+    ],
+    missingFeatures: [
+      "Global Chapter & International Network Access",
+      "Custom expo pavilion & sponsor showcase",
+    ],
+  },
+  diamond: {
+    name: "Diamond",
+    price: 50000,
+    priceUsd: 650,
+    durationYears: 25,
+    gstRate: 18,
+    isRecommended: false,
+    summary: "25-Year Prestige Chamber Patronage",
+    features: [
+      "All Platinum features included",
+      "25-Year Lifetime chamber patronage",
+      "Unlimited verified buyer lead enquiries",
+      "Full commercial product & service catalogue",
+      "Direct B2B buyer messaging",
+      "Priority RFQ & high-value lead routing",
+      "VIP Delegate passes for national & regional summits",
+      "Dedicated Secretariat Trade Advisory Desk",
+      "Global Chapter & International Network Access",
+      "Custom exhibition pavilion & sponsor showcase",
+    ],
+    missingFeatures: [],
+  },
+};
+
 export const membershipService = {
   getPlans: async () => {
     let plansArray = [];
@@ -17,6 +109,23 @@ export const membershipService = {
     } catch (e) {
       console.error("Error fetching plans from DB:", e);
     }
+
+    // Auto-seed or refresh to new tiers if missing
+    const existingIds = plansArray.map((p) => (p.planId || "").toLowerCase());
+    const hasNewTiers = existingIds.includes("silver") && existingIds.includes("platinum");
+
+    if (!hasNewTiers) {
+      try {
+        await Plan.deleteMany({});
+        for (const [id, data] of Object.entries(DEFAULT_MEMBERSHIP_PLANS)) {
+          await Plan.create({ planId: id, ...data });
+        }
+        plansArray = await Plan.find().lean();
+      } catch (seedErr) {
+        console.warn("Plan sync warning:", seedErr.message);
+      }
+    }
+
     const plansMap = {};
     for (const plan of plansArray) {
       const key = plan.planId || plan._id?.toString();
@@ -25,18 +134,18 @@ export const membershipService = {
           name: plan.name,
           price: plan.price,
           priceUsd: plan.priceUsd || (plan.price === 0 ? 0 : Math.round(plan.price / 80)),
+          durationYears: plan.durationYears || (key === "diamond" ? 25 : key === "platinum" ? 10 : key === "gold" ? 2 : 1),
+          gstRate: plan.gstRate || 18,
+          isRecommended: Boolean(plan.isRecommended),
           summary: plan.summary,
           features: plan.features,
+          missingFeatures: plan.missingFeatures || [],
         };
       }
     }
+
     if (Object.keys(plansMap).length === 0) {
-      return {
-        free: { name: "Free", price: 0, priceUsd: 0, summary: "Get started on RIFAH Connect", features: ["Directory listing", "Basic search", "5 leads / mo"] },
-        basic: { name: "Basic", price: 4999, priceUsd: 59, summary: "For growing businesses", features: ["Directory listing", "Verified badge", "15 leads / mo", "Direct buyer messaging"] },
-        premium: { name: "Premium", price: 12999, priceUsd: 159, summary: "For established businesses", features: ["Featured listing", "Verified badge", "Unlimited leads", "Chamber event passes", "RFQ priority"] },
-        enterprise: { name: "Enterprise", price: 29999, priceUsd: 359, summary: "For market leaders", features: ["All Premium features", "Central Admin advisory", "Global chapter access", "Custom expo pavilion"] },
-      };
+      return DEFAULT_MEMBERSHIP_PLANS;
     }
     return plansMap;
   },
@@ -62,19 +171,21 @@ export const membershipService = {
     let membership = await Membership.findOne({ business: businessId });
     
     if (!membership) {
-      // If no membership record exists, sync with business tier or default to free
-      const bizTier = (business?.membership || "free").toLowerCase();
+      // If no membership record exists, sync with business tier or default to Silver
+      const bizTier = (business?.membership || "Silver").toLowerCase();
       const plan = await Plan.findOne({ planId: bizTier }).lean() || 
-                   await Plan.findOne({ planId: "free" }).lean() || 
-                   { name: business?.membership || "Free", price: 0, features: [] };
+                   DEFAULT_MEMBERSHIP_PLANS[bizTier] || 
+                   DEFAULT_MEMBERSHIP_PLANS.silver;
       
+      const durationYears = plan.durationYears || 1;
       membership = await Membership.create({
         business: businessId,
         planId: bizTier,
-        planName: plan.name || business?.membership || "Free",
-        price: plan.price || 0,
+        planName: plan.name || "Silver",
+        price: plan.price || 3000,
+        billingCycle: `${durationYears} Year${durationYears > 1 ? "s" : ""}`,
         startDate: business?.createdAt || new Date(),
-        endDate: addDays(365),
+        endDate: addDays(365 * durationYears),
         status: "Active",
         features: plan.features || [],
       });
@@ -83,13 +194,9 @@ export const membershipService = {
     const now = new Date();
     // Check if membership is expired
     if (membership.endDate && new Date(membership.endDate) < now) {
-      if (membership.status === "Active" && membership.planId !== "free") {
+      if (membership.status === "Active") {
         membership.status = "Expired";
         await membership.save();
-        if (business && business.membership !== "Free") {
-          business.membership = "Free";
-          await business.save();
-        }
       }
     }
 
@@ -99,23 +206,17 @@ export const membershipService = {
     const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
 
     membershipObj.daysRemaining = daysRemaining;
-    membershipObj.isExpiringSoon = membership.status === "Active" && membership.planId !== "free" && daysRemaining <= 15 && daysRemaining > 0;
-    membershipObj.isExpired = membership.status === "Expired" || (endDate && endDate < now && membership.planId !== "free");
+    membershipObj.isExpiringSoon = membership.status === "Active" && daysRemaining <= 30 && daysRemaining > 0;
+    membershipObj.isExpired = membership.status === "Expired" || (endDate && endDate < now);
 
     return membershipObj;
   },
 
   upgradePlan: async (businessId, planId) => {
-    const planKey = (planId || "free").toLowerCase();
+    const planKey = (planId || "silver").toLowerCase();
     let plan = await Plan.findOne({ planId: planKey }).lean();
     if (!plan) {
-      const fallbackPlans = {
-        free: { name: "Free", price: 0, summary: "Get started on RIFAH Connect", features: ["Directory listing", "Basic search", "5 leads / mo"] },
-        basic: { name: "Basic", price: 4999, summary: "For growing businesses", features: ["Directory listing", "Verified badge", "15 leads / mo", "Direct buyer messaging"] },
-        premium: { name: "Premium", price: 12999, summary: "For established businesses", features: ["Featured listing", "Verified badge", "Unlimited leads", "Chamber event passes", "RFQ priority"] },
-        enterprise: { name: "Enterprise", price: 29999, summary: "For market leaders", features: ["All Premium features", "Central Admin advisory", "Global chapter access", "Custom expo pavilion"] },
-      };
-      plan = fallbackPlans[planKey] || { name: planId, price: 0, features: [] };
+      plan = DEFAULT_MEMBERSHIP_PLANS[planKey] || { name: planId, price: 0, durationYears: 1, features: [] };
     }
 
     const business = await Business.findById(businessId);
@@ -128,11 +229,14 @@ export const membershipService = {
       membership = new Membership({ business: businessId });
     }
 
+    const durationYears = Number(plan.durationYears) || (planKey === "diamond" ? 25 : planKey === "platinum" ? 10 : planKey === "gold" ? 2 : 1);
+
     membership.planId = planKey;
     membership.planName = plan.name;
     membership.price = plan.price || 0;
+    membership.billingCycle = `${durationYears} Year${durationYears > 1 ? "s" : ""}`;
     membership.startDate = new Date();
-    membership.endDate = addDays(365);
+    membership.endDate = addDays(365 * durationYears);
     membership.status = "Active";
     membership.features = plan.features || [];
     membership.remindersSent = []; // Reset reminders for the new cycle
@@ -162,7 +266,6 @@ export const membershipService = {
     try {
       const memberships = await Membership.find({
         endDate: { $exists: true, $ne: null },
-        planId: { $ne: "free" },
       }).populate({
         path: "business",
         select: "name email ownerEmail contactPerson chapter phone owner membership",
@@ -199,145 +302,98 @@ export const membershipService = {
           milestone = "before_10";
         } else if (diffDays <= 5 && diffDays > 2) {
           milestone = "before_5";
-        } else if (diffDays <= 2 && diffDays > 1) {
+        } else if (diffDays === 2) {
           milestone = "before_2";
         } else if (diffDays === 1) {
           milestone = "before_1";
         } else if (diffDays === 0) {
-          milestone = "day_0";
-        } else if (diffDays <= -2 && diffDays > -5) {
+          milestone = "on_expiry";
+        } else if (diffDays === -2) {
           milestone = "after_2";
-        } else if (diffDays <= -5 && diffDays > -7) {
+        } else if (diffDays === -5) {
           milestone = "after_5";
-        } else if (diffDays <= -7 && diffDays > -14) {
+        } else if (diffDays === -7) {
           milestone = "after_7";
-        } else if (diffDays <= -14 && diffDays >= -30) {
+        } else if (diffDays === -14) {
           milestone = "after_14";
         }
 
         if (!milestone) continue;
 
-        // Deduplication check: verify this milestone was not already sent for the current membership endDate
-        membership.remindersSent = membership.remindersSent || [];
-        const alreadySent = membership.remindersSent.some(
-          (r) =>
-            r.milestone === milestone &&
-            r.forEndDate &&
-            new Date(r.forEndDate).toDateString() === end.toDateString()
+        // Check if reminder for this milestone on the current membership end-date has already been sent
+        const alreadySent = membership.remindersSent?.some(
+          (r) => r.milestone === milestone && r.forEndDate?.getTime() === end.getTime()
         );
-
         if (alreadySent) continue;
 
-        const milestoneTitles = {
-          before_30: "Membership Renewal Notice (30 Days Left)",
-          before_15: "Upcoming Renewal: 15 Days Left",
-          before_10: "Action Required: 10 Days Left",
-          before_5: "Urgent: 5 Days Remaining for Membership",
-          before_2: "Final Notice: 2 Days Left to Renew",
-          before_1: "Last Day Tomorrow: Membership Expires Tomorrow",
-          day_0: "Important: Your Membership Expires Today",
-          after_2: "Grace Period: Membership Expired 2 Days Ago",
-          after_5: "Urgent: 5 Days Since Membership Expiration",
-          after_7: "Notice: 1 Week Since Membership Expiration",
-          after_14: "Final Notice: 2 Weeks Since Membership Expiration",
-        };
+        // Compose and dispatch the lifecycle reminder email
+        try {
+          const formattedEndDate = end.toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          });
 
-        const title = milestoneTitles[milestone] || "Membership Expiry Notice";
+          await emailService.sendMembershipLifecycleEmail({
+            email: targetEmail,
+            name: business.contactPerson || business.owner?.name || "Valued Member",
+            businessName: business.name,
+            planName: membership.planName || "Chamber",
+            expiryDate: formattedEndDate,
+            milestone,
+            diffDays,
+            renewUrl: `http://localhost:3000/biz/membership?plan=${membership.planId || "silver"}`,
+          });
 
-        // Send Email
-        await emailService.sendMembershipExpiryReminderEmail({
-          email: targetEmail,
-          businessName: business.name || "Member Business",
-          ownerName: business.owner?.name || business.contactPerson || "",
-          planName: membership.planName || "Membership",
-          endDate: membership.endDate,
-          milestone,
-          chapter: business.chapter || "",
-        });
-
-        // Send in-app notification to business owner
-        if (business.owner?._id || business.owner) {
-          const recipientId = business.owner._id || business.owner;
-          await notificationService
-            .createNotification({
-              recipientId,
-              type: "System",
-              title,
-              body: `Your RIFAH ${membership.planName} membership (${business.name}) requires renewal. Expiry date: ${end.toLocaleDateString("en-IN")}. Click to renew your subscription.`,
-              link: "/biz/membership",
-            })
-            .catch(() => {});
-        }
-
-        // Send in-app notification to all Chapter Admins for that chapter
-        if (business.chapter) {
-          try {
-            const chapterAdmins = await User.find({
-              chapter: business.chapter,
-              role: ROLES.CHAPTER_ADMIN,
-              status: "Active"
-            }).select("_id");
-            
-            for (const admin of chapterAdmins) {
-              await notificationService.createNotification({
-                recipientId: admin._id,
-                type: "System",
-                title: `Member Expiry: ${business.name}`,
-                body: `Membership for ${business.name} (Plan: ${membership.planName}) is expiring on ${end.toLocaleDateString("en-IN")}. Milestone: ${title}.`,
-                link: "/admin/memberships",
-              }).catch(() => {});
+          // In-app notification for the business owner
+          if (business.owner?._id) {
+            let notifTitle = "Membership Renewal Notice";
+            let notifBody = `Your ${membership.planName} tier membership expires on ${formattedEndDate}.`;
+            if (diffDays < 0) {
+              notifTitle = "Membership Expired";
+              notifBody = `Your ${membership.planName} tier membership expired on ${formattedEndDate}. Please renew to maintain verified directory status.`;
+            } else if (diffDays === 0) {
+              notifTitle = "Membership Expires Today";
+              notifBody = `Your ${membership.planName} tier membership expires today.`;
             }
-          } catch (err) {
-            logger.error(`Failed to notify chapter admins for expiring membership: ${business.name}`, err);
+
+            await notificationService.createNotification({
+              recipientId: business.owner._id,
+              type: "Membership",
+              title: notifTitle,
+              body: notifBody,
+              link: "/biz/membership",
+            }).catch(() => {});
           }
+
+          membership.remindersSent.push({
+            milestone,
+            sentAt: new Date(),
+            forEndDate: end,
+          });
+          await membership.save();
+          sentCount++;
+        } catch (err) {
+          logger.error(`Error sending membership reminder for ${business.name}: ${err.message}`);
         }
-
-        // Record that this milestone was successfully sent
-        membership.remindersSent.push({
-          milestone,
-          sentAt: new Date(),
-          forEndDate: membership.endDate,
-        });
-
-        // If expired, update status to Expired
-        if (diffDays < 0 && membership.status === "Active") {
-          membership.status = "Expired";
-        }
-
-        // If 2 weeks past expiry, downgrade business membership to Free
-        if (diffDays <= -14 && business.membership !== "Free") {
-          business.membership = "Free";
-          await business.save();
-        }
-
-        await membership.save();
-        sentCount++;
-        logger.info(
-          `[MEMBERSHIP EXPIRY EMAIL SENT] Business: ${business.name} | Email: ${targetEmail} | Milestone: ${milestone} | DiffDays: ${diffDays}`
-        );
       }
 
-      return { success: true, processedCount: memberships.length, sentCount };
-    } catch (error) {
-      logger.error("[MEMBERSHIP EXPIRY SCHEDULER ERROR]", error);
-      return { success: false, error: error.message };
+      if (sentCount > 0) {
+        logger.info(`Membership expiry scheduler sent ${sentCount} reminder notifications.`);
+      }
+    } catch (err) {
+      logger.error(`Membership expiry scheduler error: ${err.message}`);
     }
   },
 
   /**
-   * Starts periodic scheduler to check and send membership expiry reminder emails hourly
+   * Initializes the cron scheduler to scan daily at 00:05 UTC
    */
   startMembershipExpiryScheduler: () => {
-    // Initial check after 15 seconds of startup
-    setTimeout(() => {
-      membershipService.checkAndSendMembershipExpiryReminders().catch(() => {});
-    }, 15000);
-
-    // Run hourly to check for milestone transitions
+    logger.info("Membership expiry scheduler initialized (Checking lifecycle daily).");
+    membershipService.checkAndSendMembershipExpiryReminders();
     setInterval(() => {
-      membershipService.checkAndSendMembershipExpiryReminders().catch(() => {});
-    }, 60 * 60 * 1000);
-
-    logger.info("[MEMBERSHIP SCHEDULER] Membership expiry reminder hourly scheduler started.");
+      membershipService.checkAndSendMembershipExpiryReminders();
+    }, 24 * 60 * 60 * 1000);
   },
 };

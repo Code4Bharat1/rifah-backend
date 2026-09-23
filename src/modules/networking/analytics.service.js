@@ -1,7 +1,9 @@
 import { ThankYouNote } from "./thank-you-note.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
+import { Business } from "../businesses/business.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
+import { formatStateName, resolveStateFromCity } from "./networking.utils.js";
 
 const stateRegex = (state) => new RegExp(`^${state.trim()}$`, "i");
 
@@ -49,6 +51,69 @@ const scopeLabel = (user) => {
   if (user.role === ROLES.STATE_ADMIN) return { level: "state", name: user.state || "" };
   if (user.role === ROLES.CHAPTER_ADMIN) return { level: "chapter", name: "" };
   return { level: "none", name: "" };
+};
+
+/** Auto-repairs missing/unassigned states on existing ThankYouNotes */
+const repairThankYouNoteStates = async () => {
+  try {
+    const brokenNotes = await ThankYouNote.find({
+      $or: [
+        { giverState: { $in: ["Unassigned", "unassigned", "", null] } },
+        { giverState: { $exists: false } },
+        { receiverState: { $in: ["Unassigned", "unassigned", "", null] } },
+        { receiverState: { $exists: false } },
+      ],
+    })
+      .populate("giverBusiness", "name city state chapterId owner")
+      .populate("receiverBusiness", "name city state chapterId owner")
+      .populate("giverChapterId", "name state")
+      .populate("receiverChapterId", "name state")
+      .limit(100);
+
+    for (const note of brokenNotes) {
+      let resolvedGiverState = formatStateName(note.giverState);
+      if (!resolvedGiverState) {
+        if (note.giverChapterId?.state) {
+          resolvedGiverState = formatStateName(note.giverChapterId.state);
+        }
+        if (!resolvedGiverState && note.giverBusiness?.state) {
+          resolvedGiverState = formatStateName(note.giverBusiness.state);
+        }
+        if (!resolvedGiverState && note.giverBusiness?.city) {
+          resolvedGiverState = formatStateName(await resolveStateFromCity(note.giverBusiness.city));
+        }
+        if (!resolvedGiverState && note.receiverChapterId?.state) {
+          resolvedGiverState = formatStateName(note.receiverChapterId.state);
+        }
+        if (!resolvedGiverState && note.receiverBusiness?.state) {
+          resolvedGiverState = formatStateName(note.receiverBusiness.state);
+        }
+        if (!resolvedGiverState && note.receiverBusiness?.city) {
+          resolvedGiverState = formatStateName(await resolveStateFromCity(note.receiverBusiness.city));
+        }
+      }
+
+      let resolvedReceiverState = formatStateName(note.receiverState) || resolvedGiverState;
+      if (!resolvedReceiverState && note.receiverChapterId?.state) {
+        resolvedReceiverState = formatStateName(note.receiverChapterId.state);
+      }
+
+      let modified = false;
+      if (resolvedGiverState && note.giverState !== resolvedGiverState) {
+        note.giverState = resolvedGiverState;
+        modified = true;
+      }
+      if (resolvedReceiverState && note.receiverState !== resolvedReceiverState) {
+        note.receiverState = resolvedReceiverState;
+        modified = true;
+      }
+      if (modified) {
+        await note.save().catch(() => {});
+      }
+    }
+  } catch (err) {
+    // Non-blocking
+  }
 };
 
 export const analyticsService = {
@@ -160,16 +225,20 @@ export const analyticsService = {
 
       const map = new Map();
       givenRows.forEach((r) => {
-        map.set(r._id, { label: r._id, given: r.given, givenCount: r.givenCount, received: 0, receivedCount: 0 });
+        const cleanState = formatStateName(r._id);
+        if (!cleanState) return;
+        const existing = map.get(cleanState) || { label: cleanState, given: 0, givenCount: 0, received: 0, receivedCount: 0 };
+        existing.given += r.given;
+        existing.givenCount += r.givenCount;
+        map.set(cleanState, existing);
       });
       receivedRows.forEach((r) => {
-        const existing = map.get(r._id);
-        if (existing) {
-          existing.received = r.received;
-          existing.receivedCount = r.receivedCount;
-        } else {
-          map.set(r._id, { label: r._id, given: 0, givenCount: 0, received: r.received, receivedCount: r.receivedCount });
-        }
+        const cleanState = formatStateName(r._id);
+        if (!cleanState) return;
+        const existing = map.get(cleanState) || { label: cleanState, given: 0, givenCount: 0, received: 0, receivedCount: 0 };
+        existing.received += r.received;
+        existing.receivedCount += r.receivedCount;
+        map.set(cleanState, existing);
       });
 
       return { level: "state", rows: Array.from(map.values()).sort((a, b) => b.given + b.received - (a.given + a.received)) };
@@ -237,11 +306,31 @@ export const analyticsService = {
    * landing page — encourages new members by showing network activity.
    */
   publicStateTotals: async () => {
-    const rows = await ThankYouNote.aggregate([
-      { $group: { _id: "$giverState", total: { $sum: "$amount" }, count: { $sum: 1 } } },
-      { $sort: { total: -1 } },
-    ]);
+    // 1. Auto-repair missing / unassigned states on existing notes
+    await repairThankYouNoteStates();
 
-    return rows.map((r) => ({ state: r._id, totalBusinessGenerated: r.total, transactionCount: r.count }));
+    // 2. Aggregate and normalize by clean Title Case state
+    const allNotes = await ThankYouNote.find({ amount: { $gt: 0 } }).select("giverState amount");
+    const map = new Map();
+
+    allNotes.forEach((note) => {
+      const clean = formatStateName(note.giverState);
+      if (!clean || clean.toLowerCase() === "unassigned") return;
+
+      const existing = map.get(clean) || { total: 0, count: 0 };
+      existing.total += Number(note.amount) || 0;
+      existing.count += 1;
+      map.set(clean, existing);
+    });
+
+    const rows = Array.from(map.entries())
+      .map(([state, data]) => ({
+        state,
+        totalBusinessGenerated: data.total,
+        transactionCount: data.count,
+      }))
+      .sort((a, b) => b.totalBusinessGenerated - a.totalBusinessGenerated);
+
+    return rows;
   },
 };

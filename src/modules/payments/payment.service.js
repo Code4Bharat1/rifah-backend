@@ -197,7 +197,7 @@ export const paymentService = {
           city: bizCity,
           pincode: (payload.postalCode && payload.postalCode.trim()) || "",
           state: bizState,
-          phone: userDoc.phone || "",
+          phone: payload.billingPhone || payload.phone || userDoc.phone || "",
           email: payload.billingEmail || userDoc.email || "",
           chapter: bizChapter,
           chapterId: bizChapterId,
@@ -220,6 +220,13 @@ export const paymentService = {
         businessDoc.membership = formattedTier;
         businessDoc.paymentStatus = "Paid";
         businessDoc.isPaid = true;
+        if (payload.billingPhone && !businessDoc.phone) {
+          businessDoc.phone = payload.billingPhone;
+        }
+        if (payload.billingPhone && !userDoc.phone) {
+          userDoc.phone = payload.billingPhone;
+          await userDoc.save();
+        }
         if (!businessDoc.chapter && (userDoc.chapter || businessDoc.city || payload.city)) {
           const targetCity = (businessDoc.city || payload.city || userDoc.city || "").trim();
           if (userDoc.chapter) {
@@ -292,6 +299,7 @@ export const paymentService = {
       business: finalBusinessId || null,
       eventId: payload.eventId || null,
       itemType: itemType || "Membership",
+      planTier: planId || "",
       description: description || `Payment for ${planId || "Membership"} tier`,
       amount: Number(amount) || (payload.currency === "USD" ? 59 : 4999),
       currency: payload.currency || "INR",
@@ -300,6 +308,26 @@ export const paymentService = {
       transactionId: razorpay_payment_id,
       paidAt: new Date(),
     });
+
+    // Compute GST breakdown for receipt
+    const baseAmount = payment.amount;
+    const gstRate = 18;
+    const computedGst = Math.round(baseAmount * gstRate / 100);
+    const totalWithGst = baseAmount + computedGst;
+    // Look up plan duration and backfill GST + duration fields on the payment record
+    let planDurationYears = 1;
+    try {
+      const planDoc = await (await import("../memberships/plan.model.js")).Plan.findOne({ planId: (planId || "").toLowerCase() }).lean();
+      if (planDoc?.durationYears) planDurationYears = planDoc.durationYears;
+    } catch (_) {}
+    if (computedGst > 0 || planDurationYears > 1) {
+      payment.subtotal = baseAmount;
+      payment.gstRate = gstRate;
+      payment.gstAmount = computedGst;
+      payment.amount = totalWithGst;
+      payment.durationYears = planDurationYears;
+      await payment.save();
+    }
 
     let updatedMembership = null;
     if (planId && finalBusinessId) {
@@ -325,6 +353,9 @@ export const paymentService = {
             businessName: businessDoc?.name || payload.businessName || "Member Business",
             planName: (planId || "Membership").toUpperCase(),
             amount: payment.amount,
+            subtotal: payment.subtotal || payment.amount,
+            gstAmount: payment.gstAmount || 0,
+            gstRate: payment.gstRate || 18,
             currency: payment.currency,
             invoiceNumber: payment.invoiceNumber,
             paidAt: payment.paidAt,
@@ -562,11 +593,23 @@ export const paymentService = {
       ...data,
       business: finalBusinessId || null,
       invoiceNumber,
+      planTier: data.planId || "",
       payer: user.id,
       transactionId: `TXN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
       status: "Paid",
       paidAt: new Date(),
     });
+
+    // GST breakdown
+    if (payment.amount) {
+      const base = payment.amount;
+      const gst = Math.round(base * 18 / 100);
+      payment.subtotal = base;
+      payment.gstRate = 18;
+      payment.gstAmount = gst;
+      payment.amount = base + gst;
+      await payment.save();
+    }
 
     try {
       await notificationService.createNotification({

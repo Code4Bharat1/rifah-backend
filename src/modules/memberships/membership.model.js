@@ -25,7 +25,6 @@ const membershipSchema = new mongoose.Schema(
     },
     billingCycle: {
       type: String,
-      enum: ["Monthly", "Annual", "Lifetime"],
       default: "Annual",
     },
     startDate: {

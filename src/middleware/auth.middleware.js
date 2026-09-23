@@ -17,7 +17,7 @@ export const authMiddleware = async (req, res, next) => {
   }
   
   if (!token) {
-    return next(new UnauthorizedError("Authentication token is required", ERROR_CODES.UNAUTHORIZED));
+    return next(new UnauthorizedError("Please log in to continue", ERROR_CODES.UNAUTHORIZED));
   }
 
   try {
@@ -39,9 +39,9 @@ export const authMiddleware = async (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === "TokenExpiredError") {
-      return next(new UnauthorizedError("Authentication token has expired", ERROR_CODES.TOKEN_EXPIRED));
+      return next(new UnauthorizedError("Your session has expired. Please log in again", ERROR_CODES.TOKEN_EXPIRED));
     }
-    return next(new UnauthorizedError("Invalid authentication token", ERROR_CODES.TOKEN_INVALID));
+    return next(new UnauthorizedError("Please log in to continue", ERROR_CODES.TOKEN_INVALID));
   }
 };
 

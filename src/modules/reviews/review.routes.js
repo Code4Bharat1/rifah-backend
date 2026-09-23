@@ -19,10 +19,10 @@ router.get(
   reviewController.listBusinessReviews
 );
 
-// Public / Authenticated: Submit review (guests or members)
+// Authenticated: Submit review (Only logged in users can submit review)
 router.post(
   "/",
-  optionalAuthMiddleware,
+  authMiddleware,
   validateRequest(validateSubmitReview),
   reviewController.submitReview
 );

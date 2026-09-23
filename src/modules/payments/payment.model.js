@@ -31,13 +31,33 @@ const paymentSchema = new mongoose.Schema(
       enum: ["Membership", "Event Pass", "Sponsorship", "Directory Addon"],
       default: "Membership",
     },
+    planTier: {
+      type: String,
+      default: "",
+    },
+    durationYears: {
+      type: Number,
+      default: 1,
+    },
     description: {
       type: String,
-      default: "Annual Membership Fee",
+      default: "Membership Subscription",
+    },
+    subtotal: {
+      type: Number,
+      default: 0,
+    },
+    gstRate: {
+      type: Number,
+      default: 18,
+    },
+    gstAmount: {
+      type: Number,
+      default: 0,
     },
     amount: {
       type: Number,
-      required: true,
+      required: true, // Total amount including GST
     },
     currency: {
       type: String,
@@ -62,9 +82,7 @@ const paymentSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 export const Payment = mongoose.model("Payment", paymentSchema);
