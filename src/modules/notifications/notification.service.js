@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Notification } from "./notification.model.js";
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
@@ -12,7 +13,7 @@ export const notificationService = {
   /**
    * Create an in-app notification
    */
-  createNotification: async ({ recipientId, type, title, body, entityId, link }) => {
+  createNotification: async ({ recipientId, type, title, body, entityId, link, eventDate, eventCity, eventTime, eventVenue, metadata }) => {
     return Notification.create({
       recipient: recipientId,
       type: type || "System",
@@ -20,6 +21,11 @@ export const notificationService = {
       body,
       entityId: entityId || "",
       link: link || "",
+      eventDate: eventDate || metadata?.eventDate || "",
+      eventCity: eventCity || metadata?.eventCity || "",
+      eventTime: eventTime || metadata?.eventTime || "",
+      eventVenue: eventVenue || metadata?.eventVenue || "",
+      metadata: metadata || {},
     });
   },
 
@@ -214,11 +220,53 @@ export const notificationService = {
       filter.isRead = false;
     }
 
-    const [notifications, total, unreadCount] = await Promise.all([
-      Notification.find(filter).sort(sort).skip(skip).limit(limit),
+    const [rawNotifications, total, unreadCount] = await Promise.all([
+      Notification.find(filter).sort(sort).skip(skip).limit(limit).lean(),
       Notification.countDocuments(filter),
       Notification.countDocuments({ recipient: userId, isRead: false }),
     ]);
+
+    // Populate event details (date, city, venue, time) for event notifications
+    const eventNotifs = rawNotifications.filter(
+      (n) => n.type === "Event" || n.title?.toLowerCase().includes("event")
+    );
+
+    let notifications = rawNotifications;
+    if (eventNotifs.length > 0) {
+      const eventIds = eventNotifs
+        .map((n) => n.entityId)
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+
+      const EventModel = mongoose.model("Event");
+      const events = eventIds.length > 0 ? await EventModel.find({ _id: { $in: eventIds } }).lean() : [];
+      const eventMap = new Map(events.map((e) => [String(e._id), e]));
+
+      notifications = rawNotifications.map((n) => {
+        if (n.type === "Event" || n.title?.toLowerCase().includes("event")) {
+          const matchedEvent = n.entityId ? eventMap.get(String(n.entityId)) : null;
+          const eventDate = n.eventDate || n.metadata?.eventDate || matchedEvent?.date || "";
+          const eventCity = n.eventCity || n.metadata?.eventCity || matchedEvent?.city || "";
+          const eventTime = n.eventTime || n.metadata?.eventTime || matchedEvent?.time || "";
+          const eventVenue = n.eventVenue || n.metadata?.eventVenue || matchedEvent?.venue || "";
+          return {
+            ...n,
+            eventDate,
+            eventCity,
+            eventTime,
+            eventVenue,
+            metadata: {
+              ...(n.metadata || {}),
+              eventDate,
+              eventCity,
+              eventTime,
+              eventVenue,
+            },
+          };
+        }
+        return n;
+      });
+    }
 
     return {
       notifications,
