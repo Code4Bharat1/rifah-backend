@@ -1,3 +1,4 @@
+
 import { ThankYouNote } from "./thank-you-note.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
 import { Business } from "../businesses/business.model.js";
@@ -283,16 +284,33 @@ export const analyticsService = {
         }
       });
 
-      const chapterIds = Array.from(map.keys());
+      const chapterIds = Array.from(map.keys()).filter((id) => id && id !== "null" && id !== "undefined");
       const chapters = await Chapter.find({ _id: { $in: chapterIds } }).select("name state");
       const chapterById = new Map(chapters.map((c) => [String(c._id), c]));
 
-      const rows = Array.from(map.values())
-        .map((r) => ({
-          ...r,
-          label: chapterById.get(String(r.chapterId))?.name || "Unknown chapter",
-          state: chapterById.get(String(r.chapterId))?.state || "",
-        }))
+      // Group rows by resolved chapter name / label so multiple unknown or deleted chapters are aggregated into a single entry
+      const consolidated = new Map();
+      Array.from(map.values()).forEach((r) => {
+        const chapter = chapterById.get(String(r.chapterId));
+        const label = chapter?.name || "Unassigned / Other";
+        const state = chapter?.state || "";
+        const existing = consolidated.get(label) || {
+          chapterId: chapter?._id || r.chapterId || "unassigned",
+          label,
+          state,
+          given: 0,
+          givenCount: 0,
+          received: 0,
+          receivedCount: 0,
+        };
+        existing.given += r.given;
+        existing.givenCount += r.givenCount;
+        existing.received += r.received;
+        existing.receivedCount += r.receivedCount;
+        consolidated.set(label, existing);
+      });
+
+      const rows = Array.from(consolidated.values())
         .sort((a, b) => b.given + b.received - (a.given + a.received));
 
       return { level: "chapter", rows };
