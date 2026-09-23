@@ -2,6 +2,7 @@ import { createCourse, updateCourse, getCourses, getCourseById, deleteCourse } f
 import { markContentWatched, getCourseProgress } from "./watchProgress.service.js";
 import { getBusinessCertificates, generateCertificate } from "./certificate.service.js";
 import { Certificate } from "./certificate.model.js";
+import { CourseProgress } from "./courseProgress.model.js";
 import { Business } from "../businesses/business.model.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
@@ -88,6 +89,26 @@ export const courseController = {
     }
     const certificates = await getBusinessCertificates(businessId);
     return ApiResponse.success(res, certificates, "Certificates retrieved");
+  }),
+
+  toggleStar: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const businessId = await resolveBusinessId(req.user, req.body?.businessId);
+    if (!businessId) {
+      return ApiResponse.error(res, "Business ID required", 400);
+    }
+    let progress = await CourseProgress.findOne({ businessId, courseId: id });
+    if (!progress) {
+      progress = new CourseProgress({ businessId, courseId: id, completedContents: [] });
+    }
+    progress.isStarred = !progress.isStarred;
+    progress.starredAt = progress.isStarred ? new Date() : null;
+    await progress.save();
+    return ApiResponse.success(
+      res,
+      { isStarred: progress.isStarred },
+      progress.isStarred ? "Course saved for later" : "Course removed from saved"
+    );
   })
 };
 

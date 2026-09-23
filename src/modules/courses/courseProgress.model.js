@@ -34,6 +34,14 @@ const courseProgressSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    isStarred: {
+      type: Boolean,
+      default: false,
+    },
+    starredAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

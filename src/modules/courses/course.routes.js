@@ -43,6 +43,7 @@ router.post(
 );
 
 router.get("/certificates", courseController.getCertificates);
+router.patch("/:id/toggle-star", courseController.toggleStar);
 
 // Common Routes (List, View Details)
 router.get("/", courseController.getCourses);
