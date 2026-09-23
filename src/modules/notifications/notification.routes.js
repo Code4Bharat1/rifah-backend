@@ -16,18 +16,18 @@ router.patch("/mark-read", authMiddleware, notificationController.markAllAsRead)
 router.delete("/clear-all", authMiddleware, notificationController.clearAllNotifications);
 router.delete("/:id", authMiddleware, validateObjectIdParam("id"), notificationController.deleteNotification);
 
-// Admin broadcast notification
+// Admin broadcast notification (Central Admin, State Admin, Chapter Admin)
 router.post(
   "/broadcast",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   notificationController.broadcast
 );
 
 router.delete(
   "/broadcast/:broadcastId",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   notificationController.deleteBroadcast
 );
 
