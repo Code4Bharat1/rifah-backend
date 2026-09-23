@@ -17,6 +17,7 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     priceUsd: 39,
     durationYears: 1,
     gstRate: 18,
+    displayOrder: 1,
     isRecommended: false,
     summary: "1-Year Verified Chamber Membership",
     features: [
@@ -40,6 +41,7 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     priceUsd: 65,
     durationYears: 2,
     gstRate: 18,
+    displayOrder: 2,
     isRecommended: false,
     summary: "2-Year Chamber Access & Direct Messaging",
     features: [
@@ -62,6 +64,7 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     priceUsd: 325,
     durationYears: 10,
     gstRate: 18,
+    displayOrder: 3,
     isRecommended: true,
     summary: "10-Year Enterprise Patronage (Recommended)",
     features: [
@@ -84,6 +87,7 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     priceUsd: 650,
     durationYears: 25,
     gstRate: 18,
+    displayOrder: 4,
     isRecommended: false,
     summary: "25-Year Prestige Chamber Patronage",
     features: [
@@ -115,10 +119,21 @@ export const membershipService = {
       plansArray = await Plan.find().sort({ displayOrder: 1, createdAt: 1 }).lean();
     }
 
+    const CANONICAL_ORDER = { silver: 1, gold: 2, platinum: 3, diamond: 4 };
+    plansArray.sort((a, b) => {
+      const orderA = a.displayOrder && Number(a.displayOrder) > 0 ? Number(a.displayOrder) : (CANONICAL_ORDER[a.planId?.toLowerCase()] || null);
+      const orderB = b.displayOrder && Number(b.displayOrder) > 0 ? Number(b.displayOrder) : (CANONICAL_ORDER[b.planId?.toLowerCase()] || null);
+      if (orderA && orderB && orderA !== orderB) return orderA - orderB;
+      if (orderA) return -1;
+      if (orderB) return 1;
+      return (Number(a.price) || 0) - (Number(b.price) || 0);
+    });
+
     const plansMap = {};
     for (const plan of plansArray) {
       const key = plan.planId || plan._id?.toString();
       if (key) {
+        const canonicalRank = CANONICAL_ORDER[plan.planId?.toLowerCase()] || 0;
         plansMap[key] = {
           _id: plan._id?.toString(),
           id: plan.planId || key,
@@ -128,7 +143,7 @@ export const membershipService = {
           priceUsd: plan.priceUsd,
           durationYears: plan.durationYears,
           gstRate: plan.gstRate,
-          displayOrder: plan.displayOrder,
+          displayOrder: (plan.displayOrder && Number(plan.displayOrder) > 0) ? plan.displayOrder : canonicalRank,
           isActive: plan.isActive !== false,
           isRecommended: Boolean(plan.isRecommended),
           summary: plan.summary || "",
