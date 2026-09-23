@@ -1,9 +1,11 @@
+import mongoose from "mongoose";
 import crypto from "crypto";
 import { Payment } from "./payment.model.js";
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
 import { env } from "../../config/env.js";
 import { membershipService } from "../memberships/membership.service.js";
+import { Plan } from "../memberships/plan.model.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateReferenceId, generateSlug } from "../../shared/utils/generate-id.js";
@@ -13,11 +15,40 @@ import { ROLES } from "../../shared/constants/roles.js";
 import { signAccessToken, signRefreshToken } from "../../infrastructure/auth/jwt.js";
 import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
+async function getActivePlan(planId) {
+  const cleanId = String(planId || "").trim();
+  const query = {
+    $and: [
+      { isActive: { $ne: false } },
+      {
+        $or: [
+          { planId: cleanId.toLowerCase() },
+          { name: { $regex: new RegExp(`^${cleanId}$`, "i") } },
+          ...(mongoose.Types.ObjectId.isValid(cleanId) ? [{ _id: cleanId }] : [])
+        ]
+      }
+    ]
+  };
+  const plan = await Plan.findOne(query).lean();
+  if (!plan) throw new BadRequestError("Selected membership plan is unavailable");
+  return plan;
+}
+
+function getPlanCharge(plan, currency) {
+  const isInternational = String(currency || "INR").toUpperCase() === "USD";
+  const baseAmount = isInternational
+    ? Number(plan.priceUsd ?? (Number(plan.price) ? Math.round(Number(plan.price) / 80) : 0))
+    : Number(plan.price || 0);
+  const gstRate = Number(plan.gstRate ?? 0);
+  const gstAmount = isInternational ? 0 : Math.round(baseAmount * gstRate / 100);
+  return { baseAmount, gstRate, gstAmount, totalAmount: baseAmount + gstAmount };
+}
+
 export const paymentService = {
   /**
    * Create Razorpay Order
    */
-  createRazorpayOrder: async ({ amount, planId, currency = "INR" }, user) => {
+  createRazorpayOrder: async ({ planId, currency = "INR" }, user) => {
     let invoiceNumber = generateReferenceId("INV", 4);
     while (await Payment.findOne({ invoiceNumber })) {
       invoiceNumber = generateReferenceId("INV", 4);
@@ -31,7 +62,9 @@ export const paymentService = {
       ? env.RAZORPAY_INTERNATIONAL
       : env.RAZORPAY;
 
-    const numericAmount = Number(amount) || (isInternational ? 59 : 4999);
+    const plan = await getActivePlan(planId);
+    const { totalAmount: numericAmount } = getPlanCharge(plan, selectedCurrency);
+    if (numericAmount <= 0) throw new BadRequestError("Free membership plans do not require a payment order");
     const amountInSubunits = Math.round(numericAmount * 100);
     const authString = Buffer.from(`${gatewayConfig.KEY_ID}:${gatewayConfig.KEY_SECRET}`).toString("base64");
 
@@ -47,7 +80,7 @@ export const paymentService = {
         receipt: invoiceNumber,
         notes: {
           payerId: user.id,
-          planId: planId || "basic",
+          planId: plan.planId,
           currency: selectedCurrency,
           accountType: isInternational ? "international_foreign" : "national_domestic",
         },
@@ -133,6 +166,8 @@ export const paymentService = {
     }
 
     const isMembership = itemType === "Membership" || Boolean(planId);
+    const membershipPlan = isMembership ? await getActivePlan(planId) : null;
+    const planCharge = membershipPlan ? getPlanCharge(membershipPlan, currency) : null;
 
     // If upgrading or purchasing a membership
     if (isMembership) {
@@ -161,10 +196,7 @@ export const paymentService = {
           slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
         }
 
-        const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
-        const formattedTier =
-          validTiers.find((t) => t.toLowerCase() === (planId || "basic").toLowerCase()) ||
-          (planId ? planId.charAt(0).toUpperCase() + planId.slice(1) : "Basic");
+        const formattedTier = membershipPlan.name;
 
         const bizCity = (payload.city && payload.city.trim()) || userDoc.city || "";
         const bizState = (payload.state && payload.state.trim()) || userDoc.state || "";
@@ -212,10 +244,7 @@ export const paymentService = {
         finalBusinessId = businessDoc._id;
       } else {
         // Business exists: update membership & reset verification state to pending for Chapter Admin review
-        const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
-        const formattedTier =
-          validTiers.find((t) => t.toLowerCase() === (planId || "basic").toLowerCase()) ||
-          (planId ? planId.charAt(0).toUpperCase() + planId.slice(1) : "Basic");
+        const formattedTier = membershipPlan.name;
 
         businessDoc.membership = formattedTier;
         businessDoc.paymentStatus = "Paid";
@@ -301,7 +330,7 @@ export const paymentService = {
       itemType: itemType || "Membership",
       planTier: planId || "",
       description: description || `Payment for ${planId || "Membership"} tier`,
-      amount: Number(amount) || (payload.currency === "USD" ? 59 : 4999),
+      amount: planCharge ? planCharge.baseAmount : Number(amount),
       currency: payload.currency || "INR",
       method: payload.currency === "USD" ? "International Card" : "UPI",
       status: "Paid",
@@ -311,15 +340,10 @@ export const paymentService = {
 
     // Compute GST breakdown for receipt
     const baseAmount = payment.amount;
-    const gstRate = 18;
-    const computedGst = Math.round(baseAmount * gstRate / 100);
-    const totalWithGst = baseAmount + computedGst;
-    // Look up plan duration and backfill GST + duration fields on the payment record
-    let planDurationYears = 1;
-    try {
-      const planDoc = await (await import("../memberships/plan.model.js")).Plan.findOne({ planId: (planId || "").toLowerCase() }).lean();
-      if (planDoc?.durationYears) planDurationYears = planDoc.durationYears;
-    } catch (_) {}
+    const gstRate = planCharge?.gstRate ?? 0;
+    const computedGst = planCharge?.gstAmount ?? 0;
+    const totalWithGst = planCharge?.totalAmount ?? baseAmount;
+    const planDurationYears = Number(membershipPlan?.durationYears) || 1;
     if (computedGst > 0 || planDurationYears > 1) {
       payment.subtotal = baseAmount;
       payment.gstRate = gstRate;
@@ -351,7 +375,7 @@ export const paymentService = {
             email: targetEmail,
             name: userDoc?.name || "Member",
             businessName: businessDoc?.name || payload.businessName || "Member Business",
-            planName: (planId || "Membership").toUpperCase(),
+            planName: membershipPlan?.name || "Membership",
             amount: payment.amount,
             subtotal: payment.subtotal || payment.amount,
             gstAmount: payment.gstAmount || 0,
@@ -411,7 +435,7 @@ export const paymentService = {
             adminEmail: adminMail,
             name: userDoc?.name || "Member",
             businessName: businessDoc?.name || payload.businessName || "Member Business",
-            planName: isMembership ? (planId || "Membership").toUpperCase() : "EVENT PASS",
+            planName: isMembership ? membershipPlan?.name : "EVENT PASS",
             amount: payment.amount,
             currency: payment.currency,
             invoiceNumber: payment.invoiceNumber,
@@ -487,6 +511,8 @@ export const paymentService = {
     }
 
     const isMembership = data.itemType === "Membership" || Boolean(data.planId);
+    const membershipPlan = isMembership ? await getActivePlan(data.planId) : null;
+    const planCharge = membershipPlan ? getPlanCharge(membershipPlan, data.currency) : null;
     if (isMembership && userDoc) {
       if (userDoc.role === ROLES.CUSTOMER) {
         userDoc.role = ROLES.BUSINESS_OWNER;
@@ -504,10 +530,7 @@ export const paymentService = {
           slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
         }
 
-        const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
-        const formattedTier =
-          validTiers.find((t) => t.toLowerCase() === (data.planId || "basic").toLowerCase()) ||
-          (data.planId ? data.planId.charAt(0).toUpperCase() + data.planId.slice(1) : "Basic");
+        const formattedTier = membershipPlan.name;
 
         const bizCity = (data.city && data.city.trim()) || userDoc.city || "";
         const bizState = (data.state && data.state.trim()) || userDoc.state || "";
@@ -535,10 +558,7 @@ export const paymentService = {
         });
         finalBusinessId = businessDoc._id;
       } else {
-        const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
-        const formattedTier =
-          validTiers.find((t) => t.toLowerCase() === (data.planId || "basic").toLowerCase()) ||
-          (data.planId ? data.planId.charAt(0).toUpperCase() + data.planId.slice(1) : "Basic");
+        const formattedTier = membershipPlan.name;
 
         businessDoc.membership = formattedTier;
         if (!businessDoc.isVerified) {
@@ -594,20 +614,19 @@ export const paymentService = {
       business: finalBusinessId || null,
       invoiceNumber,
       planTier: data.planId || "",
+      amount: planCharge ? planCharge.baseAmount : data.amount,
       payer: user.id,
       transactionId: `TXN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
       status: "Paid",
       paidAt: new Date(),
     });
 
-    // GST breakdown
-    if (payment.amount) {
-      const base = payment.amount;
-      const gst = Math.round(base * 18 / 100);
-      payment.subtotal = base;
-      payment.gstRate = 18;
-      payment.gstAmount = gst;
-      payment.amount = base + gst;
+    // Keep invoice totals tied to the same editable plan record used for checkout.
+    if (planCharge) {
+      payment.subtotal = planCharge.baseAmount;
+      payment.gstRate = planCharge.gstRate;
+      payment.gstAmount = planCharge.gstAmount;
+      payment.amount = planCharge.totalAmount;
       await payment.save();
     }
 

@@ -2,6 +2,7 @@ import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
 import { Verification } from "../verification/verification.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
+import { Plan } from "../memberships/plan.model.js";
 import { categoryService } from "../categories/category.service.js";
 import { OtpVerification } from "./otp.model.js";
 import crypto from "crypto";
@@ -277,9 +278,9 @@ export const authService = {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
-    // Normalize membership tier (e.g. 'premium' -> 'Premium')
+    // Normalize membership tier
     const cleanMembership = membership
-      ? membership.charAt(0).toUpperCase() + membership.slice(1).toLowerCase()
+      ? ((await Plan.findOne({ $or: [{ planId: String(membership).toLowerCase().trim() }, { name: { $regex: new RegExp(`^${String(membership).trim()}$`, "i") } }] }).lean())?.name || (membership.charAt(0).toUpperCase() + membership.slice(1).toLowerCase()))
       : "Free";
 
     // Categories are grown organically: the category/sub-category typed here
@@ -1087,11 +1088,14 @@ export const authService = {
       const existingBiz = await Business.findOne({ owner: user._id });
       const finalBizName = (businessName && businessName.trim()) || `${user.name}'s Enterprise`;
 
-      // Standardize membership tier to enum format ("Free", "Basic", "Premium", "Enterprise")
-      const validTiers = ["Free", "Basic", "Premium", "Enterprise"];
-      const formattedTier =
-        validTiers.find((t) => t.toLowerCase() === (membershipTier || "free").toLowerCase()) ||
-        "Free";
+      const selectedPlanId = String(membershipTier || "").trim().toLowerCase();
+      const selectedPlan = selectedPlanId
+        ? await Plan.findOne({ planId: selectedPlanId, isActive: { $ne: false } }).lean()
+        : null;
+      if (selectedPlanId && !selectedPlan) {
+        throw new BadRequestError("Selected membership plan is unavailable");
+      }
+      const formattedTier = selectedPlan?.name || "Free";
 
       if (existingBiz) {
         existingBiz.name = finalBizName;

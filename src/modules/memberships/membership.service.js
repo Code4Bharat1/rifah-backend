@@ -1,7 +1,8 @@
+import mongoose from "mongoose";
 import { Membership } from "./membership.model.js";
 import { Plan } from "./plan.model.js";
 import { Business } from "../businesses/business.model.js";
-import { NotFoundError } from "../../shared/errors/errors.js";
+import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
 import { addDays } from "../../shared/utils/date.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
@@ -103,27 +104,15 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
 
 export const membershipService = {
   getPlans: async () => {
-    let plansArray = [];
-    try {
-      plansArray = await Plan.find().lean();
-    } catch (e) {
-      console.error("Error fetching plans from DB:", e);
-    }
+    let plansArray = await Plan.find().sort({ displayOrder: 1, createdAt: 1 }).lean();
 
-    // Auto-seed or refresh to new tiers if missing
-    const existingIds = plansArray.map((p) => (p.planId || "").toLowerCase());
-    const hasNewTiers = existingIds.includes("silver") && existingIds.includes("platinum");
-
-    if (!hasNewTiers) {
-      try {
-        await Plan.deleteMany({});
-        for (const [id, data] of Object.entries(DEFAULT_MEMBERSHIP_PLANS)) {
-          await Plan.create({ planId: id, ...data });
-        }
-        plansArray = await Plan.find().lean();
-      } catch (seedErr) {
-        console.warn("Plan sync warning:", seedErr.message);
+    // Seed defaults only for a brand-new database. Never replace plans an admin has
+    // already created or edited.
+    if (plansArray.length === 0) {
+      for (const [id, data] of Object.entries(DEFAULT_MEMBERSHIP_PLANS)) {
+        await Plan.create({ planId: id, ...data });
       }
+      plansArray = await Plan.find().sort({ displayOrder: 1, createdAt: 1 }).lean();
     }
 
     const plansMap = {};
@@ -131,37 +120,83 @@ export const membershipService = {
       const key = plan.planId || plan._id?.toString();
       if (key) {
         plansMap[key] = {
+          _id: plan._id?.toString(),
+          id: plan.planId || key,
+          planId: plan.planId || key,
           name: plan.name,
           price: plan.price,
-          priceUsd: plan.priceUsd || (plan.price === 0 ? 0 : Math.round(plan.price / 80)),
-          durationYears: plan.durationYears || (key === "diamond" ? 25 : key === "platinum" ? 10 : key === "gold" ? 2 : 1),
-          gstRate: plan.gstRate || 18,
+          priceUsd: plan.priceUsd,
+          durationYears: plan.durationYears,
+          gstRate: plan.gstRate,
+          displayOrder: plan.displayOrder,
+          isActive: plan.isActive !== false,
           isRecommended: Boolean(plan.isRecommended),
-          summary: plan.summary,
-          features: plan.features,
-          missingFeatures: plan.missingFeatures || [],
+          summary: plan.summary || "",
+          features: Array.isArray(plan.features) ? plan.features : [],
+          missingFeatures: Array.isArray(plan.missingFeatures) ? plan.missingFeatures : [],
         };
       }
     }
 
-    if (Object.keys(plansMap).length === 0) {
-      return DEFAULT_MEMBERSHIP_PLANS;
-    }
     return plansMap;
   },
 
   createPlan: async (data) => {
-    return await Plan.create(data);
+    const rawId = (data.planId || data.name || "").toLowerCase().trim().replace(/[^a-z0-9_-]/g, "-");
+    if (!rawId) throw new BadRequestError("A valid Plan ID is required");
+
+    const existing = await Plan.findOne({
+      $or: [
+        { planId: rawId },
+        { name: { $regex: new RegExp(`^${data.name?.trim()}$`, "i") } }
+      ]
+    });
+    if (existing) {
+      throw new BadRequestError(`A membership plan with ID "${rawId}" or name "${data.name}" already exists`);
+    }
+
+    return await Plan.create({
+      ...data,
+      planId: rawId,
+    });
   },
 
   updatePlan: async (planId, data) => {
-    const plan = await Plan.findOneAndUpdate({ planId }, data, { new: true, runValidators: true });
+    const cleanId = String(planId || "").trim();
+    const query = {
+      $or: [
+        { planId: cleanId.toLowerCase() },
+        { planId: cleanId },
+        ...(mongoose.Types.ObjectId.isValid(cleanId) ? [{ _id: cleanId }] : [])
+      ]
+    };
+
+    let plan = await Plan.findOneAndUpdate(query, data, { new: true, runValidators: true });
+
+    // Fallback: If not found in DB but exists in default fallback config, create it now!
+    if (!plan && DEFAULT_MEMBERSHIP_PLANS[cleanId.toLowerCase()]) {
+      const defaultData = DEFAULT_MEMBERSHIP_PLANS[cleanId.toLowerCase()];
+      plan = await Plan.create({
+        planId: cleanId.toLowerCase(),
+        ...defaultData,
+        ...data,
+      });
+    }
+
     if (!plan) throw new NotFoundError("Plan not found");
     return plan;
   },
 
   deletePlan: async (planId) => {
-    const plan = await Plan.findOneAndDelete({ planId });
+    const cleanId = String(planId || "").trim();
+    const query = {
+      $or: [
+        { planId: cleanId.toLowerCase() },
+        { planId: cleanId },
+        ...(mongoose.Types.ObjectId.isValid(cleanId) ? [{ _id: cleanId }] : [])
+      ]
+    };
+    const plan = await Plan.findOneAndDelete(query);
     if (!plan) throw new NotFoundError("Plan not found");
     return plan;
   },
@@ -214,9 +249,9 @@ export const membershipService = {
 
   upgradePlan: async (businessId, planId) => {
     const planKey = (planId || "silver").toLowerCase();
-    let plan = await Plan.findOne({ planId: planKey }).lean();
+    const plan = await Plan.findOne({ planId: planKey, isActive: { $ne: false } }).lean();
     if (!plan) {
-      plan = DEFAULT_MEMBERSHIP_PLANS[planKey] || { name: planId, price: 0, durationYears: 1, features: [] };
+      throw new NotFoundError("Selected membership plan is unavailable");
     }
 
     const business = await Business.findById(businessId);
@@ -229,7 +264,7 @@ export const membershipService = {
       membership = new Membership({ business: businessId });
     }
 
-    const durationYears = Number(plan.durationYears) || (planKey === "diamond" ? 25 : planKey === "platinum" ? 10 : planKey === "gold" ? 2 : 1);
+    const durationYears = Number(plan.durationYears) || 1;
 
     membership.planId = planKey;
     membership.planName = plan.name;

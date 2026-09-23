@@ -32,6 +32,14 @@ const planSchema = new mongoose.Schema(
       type: Number,
       default: 18,
     },
+    displayOrder: {
+      type: Number,
+      default: 0,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
     isRecommended: {
       type: Boolean,
       default: false,
