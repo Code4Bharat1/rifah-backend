@@ -12,7 +12,7 @@ export const catalogueController = {
 
   listByBusiness: asyncHandler(async (req, res) => {
     const { businessId } = req.params;
-    const items = await catalogueService.listByBusiness(businessId);
+    const items = await catalogueService.listByBusiness(businessId, req.user);
     return ApiResponse.success(res, items, "Business catalogue items retrieved");
   }),
 

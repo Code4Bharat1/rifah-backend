@@ -142,7 +142,7 @@ export const catalogueService = {
   searchCatalogue: async (queryParams = {}) => {
     await ensureSeedCatalogue();
     const { page, limit, skip, sort } = parsePagination(queryParams);
-    const andClauses = [{ status: { $ne: "Archived" } }];
+    const andClauses = [{ status: "Active" }];
 
     // 1. Keyword search (Item name, description, category or matching business)
     const searchTerm = queryParams.search || queryParams.q;
@@ -273,8 +273,25 @@ export const catalogueService = {
   /**
    * List catalogue items for a specific business
    */
-  listByBusiness: async (businessId) => {
-    return Catalogue.find({ business: businessId, status: "Active" });
+  listByBusiness: async (businessId, user = null) => {
+    let isOwner = false;
+    if (user) {
+      if (user.role === "central_admin") {
+        isOwner = true;
+      } else if (user.businessId?.toString() === businessId.toString()) {
+        isOwner = true;
+      } else {
+        const biz = await Business.findById(businessId).select("owner");
+        if (biz && biz.owner?.toString() === user.id?.toString()) {
+          isOwner = true;
+        }
+      }
+    }
+    const filter = { business: businessId };
+    if (!isOwner) {
+      filter.status = "Active";
+    }
+    return Catalogue.find(filter);
   },
 
   /**

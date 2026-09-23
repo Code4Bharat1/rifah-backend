@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { catalogueController } from "./catalogue.controller.js";
-import { authMiddleware } from "../../middleware/auth.middleware.js";
+import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
 import { upload } from "../../middleware/upload.middleware.js";
 import {
@@ -13,7 +13,7 @@ const router = Router();
 
 // Public catalogue discovery
 router.get("/", catalogueController.searchCatalogue);
-router.get("/business/:businessId", validateObjectIdParam("businessId"), catalogueController.listByBusiness);
+router.get("/business/:businessId", optionalAuthMiddleware, validateObjectIdParam("businessId"), catalogueController.listByBusiness);
 router.post("/:id/view", validateObjectIdParam("id"), catalogueController.recordView);
 
 // Business Owner catalogue management
