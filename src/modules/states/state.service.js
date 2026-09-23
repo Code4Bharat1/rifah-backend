@@ -382,25 +382,69 @@ export const stateService = {
       await admin.save();
     }
 
-    // 2. Set all related users' state to Unassigned (including chapter admins, members, etc.)
-    await User.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
-    
-    // 2.5 Set all related roles' state to Unassigned
+    // 2. Find all Chapters in this state to delete
+    const chaptersToDelete = await Chapter.find({ state: stateRegex });
+    const chapterIds = chaptersToDelete.map((c) => c._id);
+    const chapterNames = chaptersToDelete.map((c) => c.name);
+
+    // 3. Demote and unassign Chapter Admins of those chapters
+    const chapterAdmins = await User.find({
+      $or: [
+        { chapterId: { $in: chapterIds } },
+        { chapter: { $in: chapterNames } },
+        { role: ROLES.CHAPTER_ADMIN, state: stateRegex },
+      ],
+    });
+    for (const cAdmin of chapterAdmins) {
+      cAdmin.role = cAdmin.previousRole || ROLES.CUSTOMER;
+      cAdmin.previousRole = "";
+      cAdmin.chapterId = null;
+      cAdmin.chapter = "Unassigned";
+      cAdmin.state = "Unassigned";
+      await cAdmin.save();
+      if (cAdmin.email) {
+        try {
+          await emailService.sendChapterAdminRemovalEmail(cAdmin.email, cAdmin.name, cAdmin.chapter || stateName);
+        } catch (e) {}
+      }
+    }
+
+    // 4. Detach related users from state and deleted chapters to 'Unassigned'
+    await User.updateMany(
+      { $or: [{ state: stateRegex }, { chapterId: { $in: chapterIds } }, { chapter: { $in: chapterNames } }] },
+      { $set: { state: "Unassigned", chapterId: null, chapter: "Unassigned" } }
+    );
+
+    // 4.5 Set all related roles' state to Unassigned
     await Role.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
 
-    // 3. Set all Chapters' state to Unassigned
-    await Chapter.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
+    // 5. Delete all chapters inside that state
+    await Chapter.deleteMany({
+      $or: [
+        { state: stateRegex },
+        { _id: { $in: chapterIds } },
+      ],
+    });
 
-    // 4. Set all Businesses' state to Unassigned
-    await Business.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
+    // 6. Set all Businesses' state to Unassigned and detach deleted chapters
+    await Business.updateMany(
+      { $or: [{ state: stateRegex }, { chapterId: { $in: chapterIds } }, { chapter: { $in: chapterNames } }] },
+      { $set: { state: "Unassigned", chapterId: null, chapter: "Unassigned" } }
+    );
 
-    // (TargetStates in events could also be handled, or left as is, removing it from targetStates might be safer)
+    // 7. Delete events specifically tied to deleted chapters & pull state from targetStates
+    await Event.deleteMany({
+      $or: [
+        { chapterId: { $in: chapterIds } },
+        { chapter: { $in: chapterNames } },
+      ],
+    });
     await Event.updateMany(
       { targetStates: stateRegex },
       { $pull: { targetStates: stateRegex } }
     );
 
-    // Update Networking Modules to Unassigned
+    // 8. Update Networking Modules to Unassigned
     const unassigned = "Unassigned";
     await Referral.updateMany({ referrerState: stateRegex }, { $set: { referrerState: unassigned } });
     await Referral.updateMany({ referredState: stateRegex }, { $set: { referredState: unassigned } });
@@ -409,7 +453,7 @@ export const stateService = {
     await ThankYouNote.updateMany({ giverState: stateRegex }, { $set: { giverState: unassigned } });
     await ThankYouNote.updateMany({ receiverState: stateRegex }, { $set: { receiverState: unassigned } });
 
-    // Delete the state profile
+    // 9. Delete the state profile
     await StateProfile.deleteMany({ name: stateRegex });
 
     // Real-time Copilot Knowledge Base Sync: immediately update file
@@ -418,7 +462,7 @@ export const stateService = {
       syncLiveEntitiesToFile(true).catch(() => {});
     } catch {}
 
-    return { message: "State deleted (detached) successfully" };
+    return { message: "State and all associated chapters deleted successfully" };
   },
 
   /**

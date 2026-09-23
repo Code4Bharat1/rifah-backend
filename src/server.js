@@ -89,6 +89,11 @@ const ensureChapters = async () => {
       },
     ];
 
+    const existingCount = await Chapter.countDocuments();
+    if (existingCount > 0) {
+      return;
+    }
+
     let upserted = 0;
     for (const ch of SEED_CHAPTERS) {
       await Chapter.findOneAndUpdate(

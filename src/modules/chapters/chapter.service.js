@@ -111,9 +111,23 @@ export const chapterService = {
       }
     }
     const slug = generateSlug(data.name);
-    const existing = await Chapter.findOne({ slug });
+    const existing = await Chapter.findOne({
+      $or: [
+        { slug },
+        { name: new RegExp(`^${data.name.trim()}$`, "i") },
+      ],
+    });
     if (existing) {
-      throw new ConflictError("Chapter already exists");
+      if (!existing.state || existing.state === "Unassigned") {
+        // Orphaned chapter from a previously deleted state — safely detach and delete it
+        await Promise.all([
+          User.updateMany({ chapterId: existing._id }, { $set: { chapterId: null, chapter: "Unassigned" } }),
+          Business.updateMany({ chapterId: existing._id }, { $set: { chapterId: null, chapter: "Unassigned" } }),
+          Chapter.deleteOne({ _id: existing._id }),
+        ]);
+      } else {
+        throw new ConflictError("Chapter already exists");
+      }
     }
 
     const chapter = await Chapter.create({
