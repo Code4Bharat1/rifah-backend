@@ -531,31 +531,6 @@ export const authService = {
       throw new UnauthorizedError(`Account is ${user.status.toLowerCase()}. Please contact support.`);
     }
 
-    // Dynamic Business Auto-Healing: link business to user and ensure it's verified & live
-    try {
-      const { Business } = await import("../businesses/business.model.js");
-      let biz = await Business.findOne({
-        $or: [
-          { owner: user._id },
-          { email: user.email },
-        ],
-      });
-      if (biz) {
-        if (!biz.owner || String(biz.owner) !== String(user._id)) {
-          biz.owner = user._id;
-        }
-        if (biz.status !== "Deactivated" && biz.status !== "Suspended") {
-          biz.status = "Live";
-          biz.verification = "verified";
-          biz.verificationStatus = "approved";
-          biz.isVerified = true;
-        }
-        await biz.save();
-      }
-    } catch (bizErr) {
-      console.error("Error dynamically auto-healing business on login:", bizErr);
-    }
-
     let isMatch = false;
     if (user.passwordHash && typeof user.passwordHash === "string" && user.passwordHash.startsWith("$2")) {
       try {
@@ -567,6 +542,37 @@ export const authService = {
 
     if (!isMatch) {
       throw new UnauthorizedError("Invalid email or password", ERROR_CODES.INVALID_CREDENTIALS);
+    }
+
+    // Workspace switching (switchRole) persists the active role to user.role and stashes the
+    // prior one in previousRole. Restore the higher-ranked role as the default identity on every
+    // fresh login, so picking the "Business" workspace once doesn't permanently demote an admin —
+    // they still have to explicitly switch to the business workspace each session if they want it.
+    if (user.previousRole && (ROLE_HIERARCHY[user.previousRole] || 0) > (ROLE_HIERARCHY[user.role] || 0)) {
+      const demoted = user.role;
+      user.role = user.previousRole;
+      user.previousRole = demoted;
+      await user.save();
+    }
+
+    // Business Auto-Healing: reattach an orphaned business (no owner) that was registered with
+    // this exact account email. Never reassigns a business away from its existing owner — that
+    // would let anyone hijack another business just by sharing/matching its contact email.
+    try {
+      const { Business } = await import("../businesses/business.model.js");
+      const biz = await Business.findOne({ owner: null, email: user.email });
+      if (biz) {
+        biz.owner = user._id;
+        if (biz.status !== "Deactivated" && biz.status !== "Suspended") {
+          biz.status = "Live";
+          biz.verification = "verified";
+          biz.verificationStatus = "approved";
+          biz.isVerified = true;
+        }
+        await biz.save();
+      }
+    } catch (bizErr) {
+      console.error("Error dynamically auto-healing business on login:", bizErr);
     }
 
     // Check chapter status if user is associated with a chapter and is not Super Admin / State Admin
