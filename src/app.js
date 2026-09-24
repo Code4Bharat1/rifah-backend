@@ -24,6 +24,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// Behind nginx (one hop) — use X-Forwarded-For for req.ip so rate limiting is per client
+app.set("trust proxy", 1);
+
 // Security HTTP headers
 app.use(helmet(securityConfig.helmet));
 
