@@ -1,5 +1,5 @@
 import { ForbiddenError, UnauthorizedError } from "../shared/errors/errors.js";
-import { ROLE_HIERARCHY } from "../shared/constants/roles.js";
+import { ROLE_HIERARCHY, ROLES } from "../shared/constants/roles.js";
 
 /**
  * Restricts route access to specific roles
@@ -12,7 +12,8 @@ export const requireRole = (...allowedRoles) => {
       return next(new UnauthorizedError("Authentication required"));
     }
 
-    const userRole = req.user.role;
+    // secretariat is central_admin's equal everywhere - see roles.js
+    const userRole = req.user.role === ROLES.SECRETARIAT ? ROLES.CENTRAL_ADMIN : req.user.role;
 
     if (roles.includes(userRole)) {
       return next();
