@@ -604,11 +604,11 @@ export const authService = {
       userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
     }
 
-    // Only add business_owner as available role if the admin actually has a registered business
+    // Only add business_owner as available role if the admin actually has a registered business.
+    // previousRole is not consulted here - it belongs to the admin-assignment/revocation flows,
+    // not to workspace choice (see switchRole above).
     const candidateRoles = new Set([userObj.role]);
-    if (userObj.previousRole) candidateRoles.add(userObj.previousRole);
-    if (["central_admin", "state_admin", "chapter_admin"].includes(userObj.role) ||
-        ["central_admin", "state_admin", "chapter_admin"].includes(userObj.previousRole)) {
+    if (["central_admin", "state_admin", "chapter_admin"].includes(userObj.role)) {
       // Check if user actually has a business profile
       const ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
       if (ownedBusiness) {
@@ -688,13 +688,17 @@ export const authService = {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User not found");
 
+    // Workspace switching is a per-session choice, not a change of identity - it must never
+    // persist to user.role/previousRole. previousRole is load-bearing elsewhere (chapter/state/
+    // central-admin services use it to remember what a person was before being appointed an
+    // admin, so revocation can restore them); a switchRole write here previously stomped that
+    // bookkeeping, and also meant the account's real role could get permanently stuck as
+    // business_owner after a single workspace switch.
     const validRoles = new Set([user.role]);
-    if (user.previousRole) validRoles.add(user.previousRole);
 
     // An admin can switch to business_owner ONLY if they have a registered business
     let ownedBusiness = null;
-    if (["central_admin", "state_admin", "chapter_admin"].includes(user.role) ||
-        ["central_admin", "state_admin", "chapter_admin"].includes(user.previousRole)) {
+    if (["central_admin", "state_admin", "chapter_admin"].includes(user.role)) {
       ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
       if (ownedBusiness) {
         validRoles.add("business_owner");
@@ -709,16 +713,10 @@ export const authService = {
       throw new BadRequestError("Invalid target role");
     }
 
-    if (user.role !== targetRole) {
-      user.previousRole = user.role;
-      user.role = targetRole;
-      await user.save();
-    }
-
     const tokenPayload = {
       id: user._id,
       email: user.email,
-      role: user.role,
+      role: targetRole,
       chapter: user.chapter,
       chapterId: user.chapterId,
       state: user.state || "",
@@ -728,8 +726,10 @@ export const authService = {
     const accessToken = signAccessToken(tokenPayload);
     const refreshToken = signRefreshToken(tokenPayload);
 
-    // Include business info so frontend can route to the correct business workspace
+    // The returned/token role reflects the chosen workspace for this session only;
+    // user.role in the database is left exactly as it was.
     const userObj = user.toJSON ? user.toJSON() : { ...user._doc };
+    userObj.role = targetRole;
     if (targetRole === "business_owner" && ownedBusiness) {
       userObj.businessId = ownedBusiness._id;
       userObj.businessSlug = ownedBusiness.slug;
