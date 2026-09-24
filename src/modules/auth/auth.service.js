@@ -523,20 +523,6 @@ export const authService = {
       }
     }
 
-    // 4. In development mode, auto-provision user if not found so login is never blocked
-    if (!user && env.isDevelopment()) {
-      const passwordHash = await hashPassword(password);
-      const isCentralAdminEmail = normalizedEmail.includes("admin") || normalizedEmail === "rs9940806@gmail.com";
-      user = await User.create({
-        name: normalizedEmail.includes("@") ? normalizedEmail.split("@")[0] : `Member ${digitsOnly || "User"}`,
-        email: normalizedEmail.includes("@") ? normalizedEmail : `${digitsOnly || "user"}@rifah.org`,
-        phone: digitsOnly ? rawInput : "",
-        passwordHash,
-        role: isCentralAdminEmail ? ROLES.CENTRAL_ADMIN : ROLES.BUSINESS_OWNER,
-        isProfileComplete: true,
-      });
-    }
-
     if (!user) {
       throw new UnauthorizedError("Invalid email or password", ERROR_CODES.INVALID_CREDENTIALS);
     }
@@ -580,14 +566,7 @@ export const authService = {
     }
 
     if (!isMatch) {
-      // In development mode or for developer ease, auto-sync password to prevent accidental lockouts
-      if (env.isDevelopment()) {
-        const newHash = await hashPassword(password);
-        await User.findByIdAndUpdate(user._id, { $set: { passwordHash: newHash } });
-        user.passwordHash = newHash;
-      } else {
-        throw new UnauthorizedError("Invalid email or password", ERROR_CODES.INVALID_CREDENTIALS);
-      }
+      throw new UnauthorizedError("Invalid email or password", ERROR_CODES.INVALID_CREDENTIALS);
     }
 
     // Check chapter status if user is associated with a chapter and is not Super Admin / State Admin

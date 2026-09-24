@@ -9,7 +9,6 @@ export const corsConfig = {
     if (
       allowedOrigins.includes(origin) ||
       allowedOrigins.includes("*") ||
-      env.isDevelopment() ||
       origin.includes("vercel.app") ||
       origin.includes("netlify.app") ||
       origin.includes("onrender.com") ||
