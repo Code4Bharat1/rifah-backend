@@ -730,6 +730,9 @@ export const authService = {
     // user.role in the database is left exactly as it was.
     const userObj = user.toJSON ? user.toJSON() : { ...user._doc };
     userObj.role = targetRole;
+    // Session-only, mirrors tokenPayload — NOT saved to the DB (see comment above). Lets the
+    // frontend show a "switch back" control without permanently touching the account's real role.
+    userObj.previousRole = user.role;
     if (targetRole === "business_owner" && ownedBusiness) {
       userObj.businessId = ownedBusiness._id;
       userObj.businessSlug = ownedBusiness.slug;

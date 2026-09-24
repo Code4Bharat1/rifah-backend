@@ -119,8 +119,8 @@ export const auditService = {
 
     if (queryParams.targetModel) filter.targetModel = queryParams.targetModel;
     
-    if (queryParams.search) {
-      const searchRegex = new RegExp(queryParams.search, "i");
+    if (queryParams.search && queryParams.search.trim()) {
+      const searchRegex = new RegExp(queryParams.search.trim(), "i");
       const searchOr = [
         { action: searchRegex },
         { actorName: searchRegex },

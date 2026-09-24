@@ -6,8 +6,8 @@ import { ROLES } from "../../shared/constants/roles.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../shared/errors/errors.js";
 
 const POPULATE_FIELDS = [
-  ["giverBusiness", "name logo city"],
-  ["receiverBusiness", "name logo city"],
+  ["giverBusiness", "name logo city slug"],
+  ["receiverBusiness", "name logo city slug"],
   ["giverUser", "name email phone"],
   ["receiverUser", "name email phone"],
 ];

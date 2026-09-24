@@ -1,9 +1,9 @@
-import { isValidEmail, isValidPhone } from "../../shared/validators/common.validation.js";
+import { isValidEmail, isValidPhone, isValidName } from "../../shared/validators/common.validation.js";
 
 export const validateUpdateProfile = (data = {}) => {
   const errors = [];
-  if (data.name !== undefined && (typeof data.name !== "string" || data.name.trim().length < 2)) {
-    errors.push({ field: "name", message: "Name must be at least 2 characters" });
+  if (data.name !== undefined && !isValidName(data.name)) {
+    errors.push({ field: "name", message: "Name must contain only letters and be at least 2 characters" });
   }
   if (data.email !== undefined && data.email !== "" && !isValidEmail(data.email)) {
     errors.push({ field: "email", message: "Invalid email format" });

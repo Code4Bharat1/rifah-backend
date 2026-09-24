@@ -920,7 +920,10 @@ export const eventService = {
     }
 
     const { type, amount, desc, from, to, method, invoice, date, notes } = transactionData;
-    const numAmount = Number(amount) || 0;
+    const numAmount = Number(amount);
+    if (!Number.isFinite(numAmount) || numAmount <= 0) {
+      throw new BadRequestError("Transaction amount must be greater than 0");
+    }
     const record = {
       id: `txn-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       desc: desc || "Finance entry",
