@@ -1,6 +1,5 @@
 import { AppError } from "../shared/errors/AppError.js";
 import { ERROR_CODES } from "../shared/errors/error-codes.js";
-import { env } from "../config/env.js";
 import { logger } from "../infrastructure/logger/logger.js";
 
 /**
@@ -67,10 +66,6 @@ export const errorMiddleware = (err, req, res, next) => {
 
   if (details) {
     responsePayload.error.details = details;
-  }
-
-  if (env.isDevelopment() && statusCode >= 500) {
-    responsePayload.error.stack = err.stack;
   }
 
   res.status(statusCode).json(responsePayload);

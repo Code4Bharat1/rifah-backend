@@ -133,11 +133,7 @@ export const paymentService = {
       }
     }
 
-    const isTestKey = (gatewayConfig.KEY_ID || "").startsWith("rzp_test_") || (env.RAZORPAY?.KEY_ID || "").startsWith("rzp_test_");
-    const isSimulatedSignature = typeof razorpay_signature === "string" && razorpay_signature.startsWith("sig_");
-    const isDevelopmentMode = env.isDevelopment() || env.isTest();
-
-    if (expectedSignature !== razorpay_signature && !(isSimulatedSignature && (isTestKey || isDevelopmentMode))) {
+    if (expectedSignature !== razorpay_signature) {
       throw new BadRequestError("Invalid payment signature");
     }
 
