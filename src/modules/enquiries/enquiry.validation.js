@@ -1,3 +1,5 @@
+import { isValidEmail, isValidPhone, isValidName } from "../../shared/validators/common.validation.js";
+
 export const validateCreateEnquiry = (data = {}, req = null) => {
   const errors = [];
   if (!data.title || typeof data.title !== "string" || !data.title.trim()) {
@@ -40,6 +42,20 @@ export const validateCreateEnquiry = (data = {}, req = null) => {
         errors.push({ field: "guestEmail", message: "Your email is required for direct business enquiries" });
       }
     }
+  }
+  // BUG-001/002/003: RFQ/contact form guest name, email and phone were accepted with
+  // no format validation whenever provided (previously only presence was checked).
+  const guestName = data.guestName ?? data.name ?? data.senderName;
+  if (guestName !== undefined && guestName !== "" && !isValidName(guestName)) {
+    errors.push({ field: "guestName", message: "Name must contain only letters" });
+  }
+  const guestEmail = data.guestEmail ?? data.email ?? data.senderEmail;
+  if (guestEmail !== undefined && guestEmail !== "" && !isValidEmail(guestEmail)) {
+    errors.push({ field: "guestEmail", message: "Enter a valid email address" });
+  }
+  const guestPhone = data.guestPhone ?? data.phone ?? data.senderPhone;
+  if (guestPhone !== undefined && guestPhone !== "" && !isValidPhone(guestPhone)) {
+    errors.push({ field: "guestPhone", message: "Enter a valid phone number" });
   }
   return { valid: errors.length === 0, errors };
 };

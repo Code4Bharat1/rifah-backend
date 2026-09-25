@@ -28,7 +28,11 @@ const roleSchema = new mongoose.Schema(
     },
     level: {
       type: String,
-      enum: ["Central", "State", "Chapter"],
+      // "Leadership" added alongside the existing org-structure levels: the
+      // Roles > Leadership Role admin screen was saving edits with a level value
+      // this enum didn't recognize, so schema validation (runValidators: true on
+      // update) silently rejected every edit to a Leadership role (BUG-033).
+      enum: ["Central", "State", "Chapter", "Leadership"],
       default: "Central",
       index: true,
     },

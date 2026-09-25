@@ -3,6 +3,8 @@ import { stateController } from "./state.controller.js";
 import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { upload } from "../../middleware/upload.middleware.js";
+import { validateRequest } from "../../middleware/validation.middleware.js";
+import { validateUpdateStateProfile, validateAssignStateAdmin } from "./state.validation.js";
 import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
@@ -42,6 +44,7 @@ router.post(
   "/assign-admin",
   authMiddleware,
   requireRole(ROLES.CENTRAL_ADMIN),
+  validateRequest(validateAssignStateAdmin),
   stateController.assignStateAdmin
 );
 
@@ -74,6 +77,7 @@ router.put(
   "/:stateName/profile",
   authMiddleware,
   requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  validateRequest(validateUpdateStateProfile),
   stateController.updateStateProfile
 );
 

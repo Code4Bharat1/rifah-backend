@@ -1,15 +1,18 @@
-import { isValidEmail } from "../../shared/validators/common.validation.js";
+import { isValidEmail, isValidPhone, isValidName, isValidPincode } from "../../shared/validators/common.validation.js";
 
 export const validateRegister = (data = {}) => {
   const errors = [];
-  if (!data.name || typeof data.name !== "string" || data.name.trim().length < 2) {
-    errors.push({ field: "name", message: "Full name is required (at least 2 characters)" });
+  if (!data.name || typeof data.name !== "string" || !isValidName(data.name)) {
+    errors.push({ field: "name", message: "Full name must contain only letters (at least 2 characters)" });
   }
   if (!data.email || !isValidEmail(data.email)) {
     errors.push({ field: "email", message: "Valid email address is required" });
   }
   if (!data.password || typeof data.password !== "string" || data.password.length < 6) {
     errors.push({ field: "password", message: "Password must be at least 6 characters" });
+  }
+  if (data.phone !== undefined && data.phone !== "" && !isValidPhone(data.phone)) {
+    errors.push({ field: "phone", message: "Enter a valid phone number" });
   }
   return { valid: errors.length === 0, errors };
 };
@@ -19,8 +22,8 @@ export const validateRegisterBusiness = (data = {}) => {
   if (data.taxId && (typeof data.taxId !== "string" || data.taxId.trim().length > 30)) {
     errors.push({ field: "taxId", message: "A valid GST Number / Tax ID is required if provided" });
   }
-  if (!data.name || typeof data.name !== "string" || data.name.trim().length < 2) {
-    errors.push({ field: "name", message: "Owner name is required" });
+  if (!data.name || typeof data.name !== "string" || !isValidName(data.name)) {
+    errors.push({ field: "name", message: "Owner name must contain only letters" });
   }
   if (!data.email || !isValidEmail(data.email)) {
     errors.push({ field: "email", message: "Valid email address is required" });
@@ -33,6 +36,12 @@ export const validateRegisterBusiness = (data = {}) => {
   }
   if (data.businessEmail && !isValidEmail(data.businessEmail)) {
     errors.push({ field: "businessEmail", message: "Please provide a valid official business email or leave it empty" });
+  }
+  if (data.phone !== undefined && data.phone !== "" && !isValidPhone(data.phone)) {
+    errors.push({ field: "phone", message: "Enter a valid phone number" });
+  }
+  if (data.pincode !== undefined && data.pincode !== "" && !isValidPincode(data.pincode)) {
+    errors.push({ field: "pincode", message: "Enter a valid 6-digit pincode" });
   }
   return { valid: errors.length === 0, errors };
 };
@@ -94,7 +103,7 @@ export const validateCompleteOnboarding = (data = {}) => {
   if (!data.password || typeof data.password !== "string" || data.password.length < 6) {
     errors.push({ field: "password", message: "Password must be at least 6 characters" });
   }
-  if (!data.phone || typeof data.phone !== "string" || data.phone.trim().length < 5) {
+  if (!data.phone || typeof data.phone !== "string" || !isValidPhone(data.phone)) {
     errors.push({ field: "phone", message: "A valid phone number is required" });
   }
   if (data.role === "business_owner") {

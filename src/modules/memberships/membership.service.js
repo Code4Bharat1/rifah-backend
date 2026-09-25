@@ -264,10 +264,6 @@ export const membershipService = {
 
   upgradePlan: async (businessId, planId) => {
     const planKey = (planId || "silver").toLowerCase();
-    const plan = await Plan.findOne({ planId: planKey, isActive: { $ne: false } }).lean();
-    if (!plan) {
-      throw new NotFoundError("Selected membership plan is unavailable");
-    }
 
     const business = await Business.findById(businessId);
     if (!business) {
@@ -277,6 +273,35 @@ export const membershipService = {
     let membership = await Membership.findOne({ business: businessId });
     if (!membership) {
       membership = new Membership({ business: businessId });
+    }
+
+    // "Free" is the baseline, no-cost tier (BUG-025: "Free Basic plan" button in
+    // Biz > Membership) — it isn't a purchasable catalog entry, so it must not
+    // depend on a matching `Plan` document existing. The canonical plan catalog
+    // (see DEFAULT_MEMBERSHIP_PLANS below: Silver/Gold/Platinum/Diamond) never
+    // seeds a "free" Plan row, so looking it up via Plan.findOne always 404'd and
+    // the activation silently failed. Handle it directly instead.
+    if (planKey === "free") {
+      membership.planId = "free";
+      membership.planName = "Free";
+      membership.price = 0;
+      membership.billingCycle = "Free";
+      membership.startDate = new Date();
+      membership.endDate = null;
+      membership.status = "Active";
+      membership.features = [];
+      membership.remindersSent = [];
+      await membership.save();
+
+      business.membership = "Free";
+      await business.save();
+
+      return membership;
+    }
+
+    const plan = await Plan.findOne({ planId: planKey, isActive: { $ne: false } }).lean();
+    if (!plan) {
+      throw new NotFoundError("Selected membership plan is unavailable");
     }
 
     const durationYears = Number(plan.durationYears) || 1;

@@ -10,6 +10,17 @@ import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from ".
 import { logger } from "../../infrastructure/logger/logger.js";
 import crypto from "crypto";
 
+// Normalizes a chapter name for duplicate detection: case-insensitive, strips the
+// generic word "chapter" and all non-alphanumerics, so "Pune", "pune chapter" and
+// "Pune-Chapter" are all recognized as the same chapter (BUG-050: duplicate chapter
+// records like "Pune" and "Pune Chapter" existing side by side for the same city).
+const normalizeChapterName = (name) =>
+  String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\bchapter\b/g, "")
+    .replace(/[^a-z0-9]/g, "");
+
 export const chapterService = {
   listChapters: async (filter = {}, user) => {
     const query = {};
@@ -127,6 +138,22 @@ export const chapterService = {
         ]);
       } else {
         throw new ConflictError("Chapter already exists");
+      }
+    }
+
+    // Guard against near-duplicate chapters for the same city/state that only differ
+    // by the word "chapter" or punctuation/casing (e.g. "Pune" vs "Pune Chapter").
+    const normalizedName = normalizeChapterName(data.name);
+    if (normalizedName) {
+      const cityStateQuery = {};
+      if (data.state) cityStateQuery.state = new RegExp(`^${data.state.trim()}$`, "i");
+      if (data.city) cityStateQuery.city = new RegExp(`^${data.city.trim()}$`, "i");
+      const candidates = await Chapter.find(cityStateQuery).select("name city state");
+      const nearDuplicate = candidates.find((c) => normalizeChapterName(c.name) === normalizedName);
+      if (nearDuplicate) {
+        throw new ConflictError(
+          `A chapter with an equivalent name already exists for this city/state: "${nearDuplicate.name}". Use a distinct, more specific name to avoid duplicate chapter records.`
+        );
       }
     }
 

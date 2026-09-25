@@ -13,6 +13,7 @@ import { getChapterFilter, enforceBodyChapterScope, preventChapterModification }
 import { postService } from "../posts/post.service.js";
 import { followupService } from "../followups/followup.service.js";
 import { eventMediaService } from "../gallery/gallery.service.js";
+import { isValidEmail, isValidPhone, isValidName } from "../../shared/validators/common.validation.js";
 
 // teamAssignments role keys that grant real Operations Centre tools (each one unlocks a
 // working panel on the member's /biz/operations page).
@@ -195,6 +196,23 @@ const broadcastEventToAudience = async (event) => {
   } catch (err) {
     console.error("Error broadcasting event to audience:", err);
   }
+};
+
+// Same creator-scope RBAC as listEvents' strictAdminScope branch: a state/chapter
+// admin can manage (edit/delete/view registrations for) any event visible to them
+// in the admin dashboard, not just ones they personally created (RIF-038/RIF-039 —
+// listEvents already gave them that visibility; update/delete/registrations never did).
+const buildManageScopeQuery = (id, user) => {
+  if (!user || user.role === ROLES.CENTRAL_ADMIN) return { _id: id };
+  const conditions = [{ createdBy: user.id || user._id }];
+  const userState = (user.state || "").trim();
+  const userChapter = (user.chapter || "").trim();
+  if (user.role === ROLES.STATE_ADMIN && userState) {
+    conditions.push({ creatorState: new RegExp(`^${userState}$`, "i") });
+  } else if (user.role === ROLES.CHAPTER_ADMIN && userChapter) {
+    conditions.push({ creatorChapter: new RegExp(`^${userChapter}$`, "i") });
+  }
+  return { _id: id, $or: conditions };
 };
 
 export const eventService = {
@@ -566,10 +584,7 @@ export const eventService = {
    * Admin: Get all registrations for an event
    */
   getEventRegistrations: async (eventId, user, { skipOwnerScope = false } = {}) => {
-    const query = { _id: eventId };
-    if (!skipOwnerScope && user && user.role !== ROLES.CENTRAL_ADMIN) {
-      query.createdBy = (user.id || user._id);
-    }
+    const query = skipOwnerScope ? { _id: eventId } : buildManageScopeQuery(eventId, user);
     const event = await Event.findOne(query).lean();
 
     if (!event) {
@@ -616,10 +631,7 @@ export const eventService = {
    * Update event details \u2014 preserves creator-scope RBAC
    */
   updateEvent: async (id, updateData, user) => {
-    const query = { _id: id };
-    if (user && user.role !== ROLES.CENTRAL_ADMIN) {
-      query.createdBy = (user.id || user._id);
-    }
+    const query = buildManageScopeQuery(id, user);
     const existing = await Event.findOne(query);
     if (!existing) {
       throw new NotFoundError("Event not found or you don't have permission to edit it");
@@ -668,6 +680,21 @@ export const eventService = {
       updateData.fee = fee;
     }
 
+    // BUG-007: Publication date (scheduledAt) must not be after the event date,
+    // re-checked here against the merged (existing + incoming) values so a partial
+    // PATCH that only touches one of the two fields is still validated correctly.
+    if (updateData.scheduledAt !== undefined || updateData.date !== undefined) {
+      const effectiveScheduledAt = updateData.scheduledAt !== undefined ? updateData.scheduledAt : existing.scheduledAt;
+      const effectiveDate = updateData.date !== undefined ? updateData.date : existing.date;
+      if (effectiveScheduledAt && effectiveDate) {
+        const pubDate = new Date(effectiveScheduledAt);
+        const eventDate = new Date(effectiveDate);
+        if (!isNaN(pubDate.getTime()) && !isNaN(eventDate.getTime()) && pubDate.getTime() > eventDate.getTime()) {
+          throw new BadRequestError("Publication date cannot be after the event date");
+        }
+      }
+    }
+
     const updated = await Event.findByIdAndUpdate(id, updateData, { new: true });
 
     // Sync updates (poster image, cover, title, description) to the feed post
@@ -690,10 +717,7 @@ export const eventService = {
    * Delete event
    */
   deleteEvent: async (id, user) => {
-    const query = { _id: id };
-    if (user && user.role !== ROLES.CENTRAL_ADMIN) {
-      query.createdBy = (user.id || user._id);
-    }
+    const query = buildManageScopeQuery(id, user);
     const existing = await Event.findOne(query);
     if (!existing) {
       throw new NotFoundError("Event not found or you don't have permission to delete it");
@@ -743,7 +767,11 @@ export const eventService = {
       totalFees = event.finance.moneyIn.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
     }
 
-    const approvedCount = registeredUsers.filter((r) => r.status !== "Cancelled").length;
+    // BUG-030: "approved" must be driven by the dedicated entrance-desk gateStatus
+    // field (set only via the explicit gate approve/reject action), not by the
+    // registration status — otherwise every new "Register" click (status defaults
+    // to "Confirmed") was counted as "Approved" too, coupling two independent flows.
+    const approvedCount = registeredUsers.filter((r) => r.gateStatus === "approved").length;
 
     return {
       event: {
@@ -829,7 +857,14 @@ export const eventService = {
           isMember: Boolean(isMem),
           membership: isMem ? "Active Member" : "Non-Member",
           membershipStatus: isMem ? "Active Member" : "Non-Member",
-          approvalStatus: reg.status === "Cancelled" ? "Rejected" : "Approved",
+          approvalStatus:
+            reg.status === "Cancelled"
+              ? "Rejected"
+              : reg.gateStatus === "approved"
+              ? "Approved"
+              : reg.gateStatus === "rejected"
+              ? "Rejected"
+              : "Pending",
           status: reg.paymentStatus || (event.isPaid ? "Paid" : "Free"),
           paymentStatus: reg.paymentStatus || (event.isPaid ? "Paid" : "Free"),
           attendanceStatus: reg.attendanceStatus || "Pending",
@@ -903,7 +938,64 @@ export const eventService = {
       }
     }
 
-    const updated = await Event.findByIdAndUpdate(eventId, { $set: updateObj }, { new: true });
+    // BUG-040: the event schema carries THREE separate places that store the same
+    // "signatory 1 / signatory 2" role text — `signatories.signatory1/2`,
+    // `certificateSettings.signatory1/2`, and the canonical `signatory1Role` /
+    // `signatory2Role` flat fields — which is why the Certificate Settings screen
+    // shows signatory 1 in more than one section. Only the flat fields are actually
+    // read by certificate generation (see certificate.util.js), so if an admin edits
+    // the role via the legacy `signatories` or `certificateSettings` objects, mirror
+    // it into the flat fields too, unless this same request already set the flat
+    // field explicitly (which wins).
+    if (updateObj.signatories) {
+      if (updateObj.signatories.signatory1 !== undefined && updateObj.signatory1Role === undefined) {
+        updateObj.signatory1Role = updateObj.signatories.signatory1;
+      }
+      if (updateObj.signatories.signatory2 !== undefined && updateObj.signatory2Role === undefined) {
+        updateObj.signatory2Role = updateObj.signatories.signatory2;
+      }
+    }
+    if (updateObj.certificateSettings) {
+      if (updateObj.certificateSettings.signatory1 !== undefined && updateObj.signatory1Role === undefined) {
+        updateObj.signatory1Role = updateObj.certificateSettings.signatory1;
+      }
+      if (updateObj.certificateSettings.signatory2 !== undefined && updateObj.signatory2Role === undefined) {
+        updateObj.signatory2Role = updateObj.certificateSettings.signatory2;
+      }
+    }
+
+    // BUG-001/002/003: Speakers & Guests entries (name/mobile/email) were saved with
+    // zero format validation via Operations Centre.
+    if (Array.isArray(updateObj.speakers)) {
+      for (const sp of updateObj.speakers) {
+        if (!sp || typeof sp !== "object") continue;
+        if (sp.name !== undefined && sp.name !== "" && !isValidName(sp.name)) {
+          throw new BadRequestError(`Speaker name "${sp.name}" must contain only letters`);
+        }
+        if (sp.mobile !== undefined && sp.mobile !== "" && !isValidPhone(sp.mobile)) {
+          throw new BadRequestError(`Speaker mobile number "${sp.mobile}" is invalid`);
+        }
+        if (sp.email !== undefined && sp.email !== "" && !isValidEmail(sp.email)) {
+          throw new BadRequestError(`Speaker email "${sp.email}" is invalid`);
+        }
+      }
+    }
+
+    // BUG-009: the Operations Center form had no validation at all — any numeric
+    // field could be saved as negative or non-numeric. Guard the numeric fields
+    // that are safe to check generically here (money/seat/count values must be
+    // non-negative finite numbers).
+    const nonNegativeNumericFields = ["seats", "ticketPrice", "memberFee", "nonMemberFee", "repeatGuestThreshold"];
+    for (const key of nonNegativeNumericFields) {
+      if (updateObj[key] === undefined) continue;
+      const num = Number(updateObj[key]);
+      if (!Number.isFinite(num) || num < 0) {
+        throw new BadRequestError(`${key} must be a valid non-negative number`);
+      }
+      updateObj[key] = num;
+    }
+
+    const updated = await Event.findByIdAndUpdate(eventId, { $set: updateObj }, { new: true, runValidators: true });
     if (!updated) throw new NotFoundError("Event not found");
     return updated;
   },

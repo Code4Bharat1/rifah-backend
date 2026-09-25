@@ -217,10 +217,13 @@ router.patch(
 );
 
 // ─── Certificates Routes ──────────────────────────────────────────────────
+// BUG-041: previously restricted to Central/State/Chapter Admin only, so an
+// attendee (or the public) could never view/download their own certificate.
+// Any authenticated user may call this now; per-attendee authorization (admin,
+// or the attendee viewing their own certificate) is enforced in the controller.
 router.get(
   "/:id/certificates/:attendeeId",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.generateCertificate
 );

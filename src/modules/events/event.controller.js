@@ -223,24 +223,51 @@ export const eventController = {
   generateCertificate: asyncHandler(async (req, res) => {
     const { id, attendeeId } = req.params;
     const { style, accentColor } = req.query;
-    
+
     // Check if event and attendee exist and get details
     const event = await eventService.getEventBySlugOrId(id, req.user);
     if (!event) return ApiResponse.error(res, "Event not found", 404);
-    
+
     // We import this dynamically so it doesn't break if pdfkit has issues
     const { generateCertificate } = await import("./certificate.util.js");
-    
+
     let attendeeName = "Attendee Name";
     let actualAttendeeId = attendeeId;
-    
+
     if (attendeeId !== "preview") {
-      const registrations = await eventService.getEventRegistrations(id, req.user);
+      // BUG-041: certificates weren't reachable by the attendee/public viewer at
+      // all — this route used to require Central/State/Chapter Admin, and even
+      // then getEventRegistrations() scoped results to events the requester
+      // personally created, so a genuine attendee viewing their own certificate
+      // always got "Attendee not found" / 403. `skipOwnerScope` lets us look the
+      // registration up here, and authorization below allows either an admin or
+      // the attendee themselves.
+      const registrations = await eventService.getEventRegistrations(id, req.user, { skipOwnerScope: true });
       const attendee = registrations.find(r => r._id.toString() === attendeeId);
       if (!attendee) return ApiResponse.error(res, "Attendee not found", 404);
+
+      const isAdmin = req.user && ["central_admin", "state_admin", "chapter_admin"].includes(req.user.role);
+      const isSelf = req.user && attendee.user?._id && String(attendee.user._id) === String(req.user.id || req.user._id);
+      if (!isAdmin && !isSelf) {
+        return ApiResponse.error(res, "You are not authorized to view this certificate", 403);
+      }
+
       attendeeName = attendee.user?.name || "Participant";
+    } else {
+      // Live preview of the certificate design is admin-only.
+      const isAdmin = req.user && ["central_admin", "state_admin", "chapter_admin"].includes(req.user.role);
+      if (!isAdmin) {
+        return ApiResponse.error(res, "You are not authorized to preview this certificate", 403);
+      }
     }
 
+    // BUG-037/038/039: previously this only used ?style=/?accentColor= query
+    // params (which the certificate download/print button never actually sends)
+    // and never read the event's own saved certificateStyle/certificateAccentColor
+    // or any signatory name/image — so every certificate rendered identically with
+    // no signatures regardless of what was configured in Operations Centre. The
+    // event's saved settings are now the source of truth, with any explicit query
+    // params (e.g. a live preview) taking precedence.
     const pdfBuffer = await generateCertificate(
       { name: attendeeName, id: actualAttendeeId },
       {
@@ -248,9 +275,16 @@ export const eventController = {
         date: event.date,
         chapter: event.chapter,
         signatory1Role: event.signatory1Role,
-        signatory2Role: event.signatory2Role
+        signatory1Name: event.signatory1Name,
+        signatory1Image: event.signatory1Image,
+        signatory2Role: event.signatory2Role,
+        signatory2Name: event.signatory2Name,
+        signatory2Image: event.signatory2Image,
       },
-      { style, accentColor }
+      {
+        style: style || event.certificateStyle,
+        accentColor: accentColor || event.certificateAccentColor,
+      }
     );
 
     res.set({

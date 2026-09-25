@@ -73,6 +73,24 @@ export const businessService = {
         verification: { $nin: ["rejected", "Rejected", "pending", "Pending", "under_review", "Correction Requested", "unverified"] },
         status: { $nin: ["Suspended", "suspended", "Rejected", "rejected", "Pending", "pending", "Pending Verification", "pending_verification", "Draft", "draft"] },
       });
+    } else {
+      // BUG-049: admins (Central/State/Chapter) previously had NO status/verification
+      // filtering applied at all here, so a rejected business still showed up in the
+      // "Member Businesses" list. Rejected businesses are excluded by default for
+      // admin viewers too, unless they explicitly ask to include them (e.g. a
+      // dedicated "Rejected applications" tab passing includeRejected=true, or
+      // filtering to that status directly).
+      const wantsRejectedExplicitly =
+        String(queryParams.status || "").toLowerCase() === "rejected" ||
+        String(queryParams.verification || "").toLowerCase() === "rejected" ||
+        queryParams.includeRejected === "true" ||
+        queryParams.includeRejected === true;
+      if (!wantsRejectedExplicitly) {
+        andConditions.push({
+          verification: { $nin: ["rejected", "Rejected"] },
+          status: { $nin: ["Rejected", "rejected"] },
+        });
+      }
     }
 
     // RBAC: Chapter Admin Scope Enforcement
@@ -405,18 +423,21 @@ export const businessService = {
           }
         }
 
-        if (!resolvedChapter) {
-          const firstCh = await Chapter.findOne({ status: { $ne: "Inactive" } }).sort({ name: 1 });
-          resolvedChapter = firstCh?.name || "Hyderabad Chapter";
-          resolvedChapterId = firstCh?._id || null;
+        // NOTE (BUG-048 fix): previously, when the business's city/state didn't match
+        // any chapter, this silently fell back to "the alphabetically first active
+        // chapter" — which is how Mumbai/Maharashtra businesses ended up auto-linked
+        // to e.g. Bengaluru or Delhi chapters (whichever sorted first by name) any
+        // time this record was read with no chapter assigned. That fallback has been
+        // removed: with no confident city/state match, the business is left
+        // Unassigned instead of being mis-assigned to an arbitrary chapter.
+        if (resolvedChapter) {
+          business.chapter = resolvedChapter;
+          if (resolvedChapterId) business.chapterId = resolvedChapterId;
+          await Business.findByIdAndUpdate(business._id, {
+            chapter: resolvedChapter,
+            ...(resolvedChapterId ? { chapterId: resolvedChapterId } : {}),
+          });
         }
-
-        business.chapter = resolvedChapter;
-        if (resolvedChapterId) business.chapterId = resolvedChapterId;
-        await Business.findByIdAndUpdate(business._id, {
-          chapter: resolvedChapter,
-          ...(resolvedChapterId ? { chapterId: resolvedChapterId } : {}),
-        });
       }
     }
     return business;

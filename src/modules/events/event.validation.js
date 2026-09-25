@@ -26,6 +26,16 @@ export const validateCreateEvent = (data = {}) => {
       errors.push({ field: "memberPrice", message: "Member price cannot be negative" });
     }
   }
+  // BUG-007: the publication/scheduling date (scheduledAt) must not be after the
+  // event's own date — otherwise the event would be "published" after it already
+  // happened.
+  if (data.scheduledAt && data.date) {
+    const pubDate = new Date(data.scheduledAt);
+    const eventDate = new Date(data.date);
+    if (!isNaN(pubDate.getTime()) && !isNaN(eventDate.getTime()) && pubDate.getTime() > eventDate.getTime()) {
+      errors.push({ field: "scheduledAt", message: "Publication date cannot be after the event date" });
+    }
+  }
   return { valid: errors.length === 0, errors };
 };
 
@@ -47,6 +57,16 @@ export const validateUpdateEvent = (data = {}) => {
       if (isNaN(memPrice) || memPrice < 0) {
         errors.push({ field: "memberPrice", message: "Member price cannot be negative" });
       }
+    }
+  }
+  // BUG-007: same publicationDate <= eventDate guard on update, when both are
+  // present in the same request. (When only one of the two is being patched, the
+  // service-layer check below also re-validates against the stored event.)
+  if (data.scheduledAt && data.date) {
+    const pubDate = new Date(data.scheduledAt);
+    const eventDate = new Date(data.date);
+    if (!isNaN(pubDate.getTime()) && !isNaN(eventDate.getTime()) && pubDate.getTime() > eventDate.getTime()) {
+      errors.push({ field: "scheduledAt", message: "Publication date cannot be after the event date" });
     }
   }
   return { valid: errors.length === 0, errors };

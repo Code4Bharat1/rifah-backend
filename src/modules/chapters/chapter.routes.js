@@ -7,6 +7,7 @@ import {
   validateCreateChapter,
   validateUpdateChapter,
   validateAddUnit,
+  validateAssignChapterAdmin,
 } from "./chapter.validation.js";
 import { validateObjectIdParam } from "../../shared/validators/object-id.validation.js";
 import { ROLES } from "../../shared/constants/roles.js";
@@ -76,6 +77,7 @@ router.post(
   authMiddleware,
   requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
+  validateRequest(validateAssignChapterAdmin),
   chapterController.assignAdmin
 );
 

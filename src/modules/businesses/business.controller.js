@@ -55,30 +55,43 @@ export const businessController = {
 
   uploadLogo: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    if (!req.file) {
+    // req.files is populated by upload.fields([...]) with one array per accepted
+    // field name alias — pick whichever alias the client actually used.
+    const files = req.files || {};
+    const file = (files.logo || files.logoImage || files.file || files.image || [])[0];
+    if (!file) {
       return ApiResponse.error(res, "No image file uploaded", 400);
     }
-    const fileUrl = await storageService.uploadFile(req.file, "logos");
+    const fileUrl = await storageService.uploadFile(file, "logos");
     const updated = await businessService.updateBusiness(id, { logo: fileUrl }, req.user);
     return ApiResponse.success(res, { logo: fileUrl, business: updated }, "Logo uploaded successfully");
   }),
 
   uploadCover: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    if (!req.file) {
+    const files = req.files || {};
+    const file = (files.cover || files.coverImage || files.banner || files.bannerImage || files.file || files.image || [])[0];
+    if (!file) {
       return ApiResponse.error(res, "No image file uploaded", 400);
     }
-    const fileUrl = await storageService.uploadFile(req.file, "covers");
+    const fileUrl = await storageService.uploadFile(file, "covers");
     const updated = await businessService.updateBusiness(id, { coverImage: fileUrl }, req.user);
     return ApiResponse.success(res, { coverImage: fileUrl, business: updated }, "Cover image uploaded successfully");
   }),
 
   uploadGallery: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    if (!req.files || req.files.length === 0) {
+    const files = req.files || {};
+    const galleryFiles = [
+      ...(files.gallery || []),
+      ...(files.photos || []),
+      ...(files.images || []),
+      ...(files.files || []),
+    ];
+    if (galleryFiles.length === 0) {
       return ApiResponse.error(res, "No image files uploaded", 400);
     }
-    const newUrls = await Promise.all(req.files.map((f) => storageService.uploadFile(f, "gallery")));
+    const newUrls = await Promise.all(galleryFiles.map((f) => storageService.uploadFile(f, "gallery")));
     const business = await businessService.getBusinessBySlugOrId(id);
     const updatedGallery = [...(business.gallery || []), ...newUrls];
     const updated = await businessService.updateBusiness(id, { gallery: updatedGallery }, req.user);

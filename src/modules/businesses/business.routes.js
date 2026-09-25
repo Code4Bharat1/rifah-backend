@@ -44,34 +44,49 @@ router.patch(
   validateRequest(validateUpdateBusiness),
   businessController.updateBusiness
 );
-router.put(
-  "/:id",
-  authMiddleware,
-  validateObjectIdParam("id"),
-  validateRequest(validateUpdateBusiness),
-  businessController.updateBusiness
-);
 
 // File upload endpoints (direct local server storage)
+// BUG-031: "Photo upload fails" for Logo/Cover/Gallery in Business Workspace > My
+// Profile — accept the field name aliases used by different upload widgets on the
+// frontend (not just the exact "logo"/"cover"/"gallery" names) so a form-field-name
+// mismatch doesn't silently drop the file (multer only populates req.file/req.files
+// for names it was told to expect; any other field name is discarded).
 router.post(
   "/:id/logo",
   authMiddleware,
   validateObjectIdParam("id"),
-  upload.single("logo"),
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "logoImage", maxCount: 1 },
+    { name: "file", maxCount: 1 },
+    { name: "image", maxCount: 1 },
+  ]),
   businessController.uploadLogo
 );
 router.post(
   "/:id/cover",
   authMiddleware,
   validateObjectIdParam("id"),
-  upload.single("cover"),
+  upload.fields([
+    { name: "cover", maxCount: 1 },
+    { name: "coverImage", maxCount: 1 },
+    { name: "banner", maxCount: 1 },
+    { name: "bannerImage", maxCount: 1 },
+    { name: "file", maxCount: 1 },
+    { name: "image", maxCount: 1 },
+  ]),
   businessController.uploadCover
 );
 router.post(
   "/:id/gallery",
   authMiddleware,
   validateObjectIdParam("id"),
-  upload.array("gallery", 10),
+  upload.fields([
+    { name: "gallery", maxCount: 10 },
+    { name: "photos", maxCount: 10 },
+    { name: "images", maxCount: 10 },
+    { name: "files", maxCount: 10 },
+  ]),
   businessController.uploadGallery
 );
 router.post(
