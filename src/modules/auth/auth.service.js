@@ -753,6 +753,20 @@ export const authService = {
     if (Array.isArray(userObj.savedBusinesses)) {
       userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
     }
+    // Attach businessId/businessSlug for admins who own a business.
+    // This lets the frontend sidebar always show the "Switch to Business Panel" button
+    // without requiring the user to have explicitly called switchRole in the current session.
+    if (["central_admin", "state_admin", "chapter_admin"].includes(userObj.role)) {
+      try {
+        const ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
+        if (ownedBusiness) {
+          userObj.businessId = ownedBusiness._id;
+          userObj.businessSlug = ownedBusiness.slug;
+        }
+      } catch (err) {
+        // non-fatal
+      }
+    }
     return userObj;
   },
 

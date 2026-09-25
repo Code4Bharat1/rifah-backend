@@ -317,18 +317,39 @@ export const catalogueService = {
 
     // --- Enforce plan-based limits ---
     const tier = (business.membership || "Free").toLowerCase();
+
+    // Map every real plan name to its catalogue limit.
+    // Paid plans (Silver / Gold / Platinum / Diamond and legacy names)
+    // have NO catalogue limit — Infinity means the count check below never fires.
+    // Only a truly free/unregistered tier gets a hard cap.
     const tierCatalogueLimits = {
-      free: 2,
-      basic: 5,
-      premium: 25,
-      enterprise: 100,
+      // Free / unregistered
+      free: 5,
+      // Legacy names (kept for backward-compat)
+      basic: Infinity,
+      premium: Infinity,
+      enterprise: Infinity,
+      // Current RIFAH plan names
+      silver: Infinity,
+      gold: Infinity,
+      platinum: Infinity,
+      diamond: Infinity,
     };
+
     const globalSettings = await Settings.findOne({ isSingleton: "global" });
-    const maxItems = tierCatalogueLimits[tier] || (globalSettings?.maxCatalogueItems ?? 50);
+    // Guard: if the setting is missing, zero, or negative, default to a safe value.
+    const rawGlobalMax = globalSettings?.maxCatalogueItems;
+    const safeGlobalMax = (typeof rawGlobalMax === "number" && rawGlobalMax > 0) ? rawGlobalMax : 50;
+
+    // Use the tier limit if it is defined (including Infinity), otherwise fall back
+    // to the global settings value.
+    const maxItems = (tierCatalogueLimits[tier] !== undefined)
+      ? tierCatalogueLimits[tier]
+      : safeGlobalMax;
     const maxImages = globalSettings?.maxImagesPerItem ?? 5;
 
     const currentCount = await Catalogue.countDocuments({ business: business._id });
-    if (currentCount >= maxItems) {
+    if (isFinite(maxItems) && currentCount >= maxItems) {
       throw new ForbiddenError(`Catalogue limit reached for ${business.membership || "Free"} plan. Maximum ${maxItems} items allowed. Please upgrade your plan for higher catalogue capacity.`);
     }
 
