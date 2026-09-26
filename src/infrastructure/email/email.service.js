@@ -1582,6 +1582,7 @@ RIFAH Chamber of Commerce & Industry
 
     const formattedDate = endDate
       ? new Date(endDate).toLocaleDateString("en-IN", {
+
         day: "numeric",
         month: "long",
         year: "numeric",

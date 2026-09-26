@@ -7,6 +7,7 @@ import { addDays } from "../../shared/utils/date.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
+
 import { User } from "../users/user.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 
@@ -423,60 +424,62 @@ export const membershipService = {
 
         const title = milestoneTitles[milestone] || "Membership Expiry Notice";
 
-        // Send Email
         try {
-          if (emailService.sendMembershipExpiryReminderEmail) {
-            await emailService.sendMembershipExpiryReminderEmail({
-              email: targetEmail,
-              businessName: business.name || "Member Business",
-              ownerName: business.owner?.name || business.contactPerson || "",
-              planName: membership.planName || "Membership",
-              endDate: membership.endDate,
-              milestone,
-              chapter: business.chapter || "",
-            });
+          // Send Email
+          await emailService.sendMembershipExpiryReminderEmail({
+            email: targetEmail,
+            businessName: business.name || "Member Business",
+            ownerName: business.owner?.name || business.contactPerson || "",
+            planName: membership.planName || "Membership",
+            endDate: membership.endDate,
+            milestone,
+            chapter: business.chapter || "",
+          });
+
+          // Send in-app notification to business owner
+          if (business.owner?._id || business.owner) {
+            const recipientId = business.owner._id || business.owner;
+            await notificationService
+              .createNotification({
+                recipientId,
+                type: "Membership",
+                title,
+                body: `Your RIFAH ${membership.planName || "Membership"} (${business.name}) requires renewal. Expiry date: ${end.toLocaleDateString("en-IN")}. Click to renew your subscription.`,
+                link: "/biz/membership",
+              })
+              .catch(() => {});
           }
-        } catch (mailErr) {
-          logger.error(`Error sending email to ${targetEmail}: ${mailErr.message}`);
+
+          // Record that this milestone was successfully sent
+          membership.remindersSent.push({
+            milestone,
+            sentAt: new Date(),
+            forEndDate: membership.endDate,
+          });
+
+          // If expired, update status to Expired
+          if (diffDays < 0 && membership.status === "Active") {
+            membership.status = "Expired";
+          }
+
+          // If 2 weeks past expiry, downgrade business membership to Free
+          if (diffDays <= -14 && business.membership !== "Free") {
+            business.membership = "Free";
+            await business.save();
+          }
+
+          await membership.save();
+          sentCount++;
+          logger.info(
+            `[MEMBERSHIP EXPIRY EMAIL SENT] Business: ${business.name} | Email: ${targetEmail} | Milestone: ${milestone} | DiffDays: ${diffDays}`
+          );
+        } catch (err) {
+          logger.error(`Error sending membership reminder for ${business.name}: ${err.message}`);
         }
+      }
 
-        // Send in-app notification to business owner
-        if (business.owner?._id || business.owner) {
-          const recipientId = business.owner._id || business.owner;
-          await notificationService
-            .createNotification({
-              recipientId,
-              type: "System",
-              title,
-              body: `Your RIFAH ${membership.planName} membership (${business.name}) requires renewal. Expiry date: ${end.toLocaleDateString("en-IN")}. Click to renew your subscription.`,
-              link: "/biz/membership",
-            })
-            .catch(() => {});
-        }
-
-        // Record that this milestone was successfully sent
-        membership.remindersSent.push({
-          milestone,
-          sentAt: new Date(),
-          forEndDate: membership.endDate,
-        });
-
-        // If expired, update status to Expired
-        if (diffDays < 0 && membership.status === "Active") {
-          membership.status = "Expired";
-        }
-
-        // If 2 weeks past expiry, downgrade business membership to Free
-        if (diffDays <= -14 && business.membership !== "Free") {
-          business.membership = "Free";
-          await business.save();
-        }
-
-        await membership.save();
-        sentCount++;
-        logger.info(
-          `[MEMBERSHIP EXPIRY EMAIL SENT] Business: ${business.name} | Email: ${targetEmail} | Milestone: ${milestone} | DiffDays: ${diffDays}`
-        );
+      if (sentCount > 0) {
+        logger.info(`Membership expiry scheduler sent ${sentCount} reminder notifications.`);
       }
 
       return { success: true, processedCount: memberships.length, sentCount };
@@ -487,19 +490,23 @@ export const membershipService = {
   },
 
   /**
-   * Starts periodic scheduler to check and send membership expiry reminder emails hourly
+   * Starts periodic scheduler to check and send membership expiry reminder emails
    */
   startMembershipExpiryScheduler: () => {
+    logger.info("[MEMBERSHIP SCHEDULER] Membership expiry reminder scheduler initialized.");
+
     // Initial check after 15 seconds of startup
     setTimeout(() => {
-      membershipService.checkAndSendMembershipExpiryReminders().catch(() => {});
+      membershipService.checkAndSendMembershipExpiryReminders().catch((err) => {
+        logger.error("[MEMBERSHIP SCHEDULER] Initial run error:", err);
+      });
     }, 15000);
 
-    // Run hourly to check for milestone transitions
+    // Run periodically to check for milestone transitions
     setInterval(() => {
-      membershipService.checkAndSendMembershipExpiryReminders().catch(() => {});
+      membershipService.checkAndSendMembershipExpiryReminders().catch((err) => {
+        logger.error("[MEMBERSHIP SCHEDULER] Periodic run error:", err);
+      });
     }, 60 * 60 * 1000);
-
-    logger.info("[MEMBERSHIP SCHEDULER] Membership expiry reminder scheduler started.");
   },
 };
