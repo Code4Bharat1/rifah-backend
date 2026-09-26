@@ -36,7 +36,6 @@ export const anniversaryController = {
       data: result,
     });
   }),
-
   /**
    * Remove test anniversary businesses and users
    */

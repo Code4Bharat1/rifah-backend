@@ -454,7 +454,6 @@ export const anniversaryService = {
 
     return { chapter: targetChapter, count: seeded.length, seeded };
   },
-
   /**
    * Removes test anniversary businesses and users from the database.
    */
