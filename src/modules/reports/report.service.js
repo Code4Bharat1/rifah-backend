@@ -393,20 +393,42 @@ export const reportService = {
       const filter = await getChapterFilter(requester, "direct_id");
       if (Object.keys(filter).length > 0) conditions.push(filter);
     }
-    const query = conditions.length > 0 ? { $and: conditions } : {};
-    const businesses = await Business.find(query).sort({ createdAt: -1 });
-    const headers = ["Business Name", "Owner", "Email", "Phone", "Category", "City", "State", "Chapter", "Status", "Joined Date"];
-    const rows = businesses.map(b => [
-      b.name || b.businessName || '',
-      b.ownerName || '',
-      b.email || '',
-      b.phone || '',
-      b.category || '',
-      b.city || '',
-      b.state || '',
-      b.chapter || '',
-      b.status || '',
-      b.createdAt ? new Date(b.createdAt).toISOString() : ''
+    const businesses = await Business.find(query)
+      .sort({ createdAt: 1 })
+      .populate("owner", "name email phone");
+
+    const headers = [
+      "Sr No",
+      "Membership ID",
+      "Business Name",
+      "Owner",
+      "Email",
+      "Phone",
+      "City",
+      "State",
+      "Chapter",
+      "Plan",
+      "Verification",
+      "Status",
+      "Last Action Date",
+      "Joined Date",
+    ];
+
+    const rows = businesses.map((b, i) => [
+      i + 1,
+      b.membershipId || (b._id ? `RIFAH-MEM-${b._id.toString().slice(-6).toUpperCase()}` : ""),
+      b.name || b.businessName || "",
+      b.owner?.name || b.ownerName || "",
+      b.owner?.email || b.email || "",
+      b.owner?.phone || b.phone || "",
+      b.city || "",
+      b.state || "",
+      b.chapter || "",
+      b.membership || "Free",
+      b.verification || "unverified",
+      b.status || "",
+      b.lastActionDate ? new Date(b.lastActionDate).toISOString() : (b.updatedAt ? new Date(b.updatedAt).toISOString() : ""),
+      b.createdAt ? new Date(b.createdAt).toISOString() : "",
     ]);
     return { headers, rows };
   },

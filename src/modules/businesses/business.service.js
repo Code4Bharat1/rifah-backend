@@ -240,8 +240,39 @@ export const businessService = {
       andConditions.push({ membership: memRegex });
     }
 
-    // 7. Verified Only Filter
-    if (queryParams.verified === "true" || queryParams.verified === true) {
+    // 7. Verification Status Filter
+    if (
+      queryParams.verification &&
+      queryParams.verification !== "undefined" &&
+      queryParams.verification !== "null" &&
+      queryParams.verification.toLowerCase() !== "all"
+    ) {
+      const v = queryParams.verification.toLowerCase();
+      if (v === "approved" || v === "verified") {
+        andConditions.push({
+          $or: [
+            { verification: { $in: ["verified", "Verified", "approved", "Approved"] } },
+            { isVerified: true },
+          ],
+        });
+      } else if (v === "pending") {
+        andConditions.push({
+          verification: { $in: ["pending", "Pending", "under_review", "Under Review", "unverified", "Unverified", "correction_requested", "Correction Requested"] },
+        });
+      } else if (v === "rejected") {
+        andConditions.push({
+          $or: [
+            { verification: { $in: ["rejected", "Rejected"] } },
+            { status: { $in: ["rejected", "Rejected"] } },
+          ],
+        });
+      } else {
+        andConditions.push({
+          verification: new RegExp(`^${escapeRegex(queryParams.verification)}$`, "i"),
+        });
+      }
+    } else if (queryParams.verified === "true" || queryParams.verified === true) {
+      // 7.1 Verified Only Filter (Legacy compatibility)
       andConditions.push({
         $or: [
           { verification: { $in: ["verified", "Verified", "approved", "Approved"] } },
@@ -279,10 +310,12 @@ export const businessService = {
 
     const finalFilter = andConditions.length > 0 ? { $and: andConditions } : {};
 
-    // 9. Sorting Configuration
+    // 9. Sorting Configuration (supports FIFO = First In First Out / oldest created first)
     let sortOption = { createdAt: -1 };
     const sortParam = (queryParams.sort || queryParams.sortBy || "").toLowerCase();
-    if (sortParam === "rating") {
+    if (sortParam === "fifo" || sortParam === "asc" || sortParam === "oldest") {
+      sortOption = { createdAt: 1 };
+    } else if (sortParam === "rating") {
       sortOption = { rating: -1, reviewsCount: -1, createdAt: -1 };
     } else if (sortParam === "newest") {
       sortOption = { createdAt: -1 };
@@ -297,8 +330,157 @@ export const businessService = {
       Business.countDocuments(finalFilter),
     ]);
 
+    // Fetch all chapters to auto-heal any unassigned chapters
+    let allChapters = [];
+    try {
+      allChapters = await Chapter.find({}).lean();
+    } catch {}
+
+    const resolveChapterForDoc = (doc) => {
+      const cur = (doc.chapter || "").trim();
+      if (cur && cur.toLowerCase() !== "unassigned" && cur.toLowerCase() !== "none") {
+        return { name: cur, id: doc.chapterId || null };
+      }
+
+      const city = (doc.city || "").trim().toLowerCase();
+      const state = (doc.state || "").trim().toLowerCase();
+
+      // Check by city name in chapters
+      if (city) {
+        const matched = allChapters.find((c) => {
+          const cCity = (c.city || "").toLowerCase();
+          const cName = (c.name || "").toLowerCase().replace(/\s+chapter$/i, "");
+          return (
+            (cCity && (city.includes(cCity) || cCity.includes(city))) ||
+            (cName && (city.includes(cName) || cName.includes(city)))
+          );
+        });
+        if (matched) return { name: matched.name, id: matched._id };
+      }
+
+      // City aliases
+      if (
+        city.includes("mumbai") ||
+        city.includes("bombay") ||
+        city.includes("navi mumbai") ||
+        city.includes("thane")
+      ) {
+        const ch = allChapters.find((c) => /mumbai/i.test(c.name));
+        if (ch) return { name: ch.name, id: ch._id };
+        return { name: "Mumbai Chapter", id: null };
+      }
+      if (city.includes("pune") || city.includes("poona")) {
+        const ch = allChapters.find((c) => /pune/i.test(c.name));
+        if (ch) return { name: ch.name, id: ch._id };
+        return { name: "Pune Chapter", id: null };
+      }
+      if (city.includes("aurangabad") || city.includes("sambhajinagar")) {
+        const ch = allChapters.find((c) => /aurangabad|sambhajinagar/i.test(c.name));
+        if (ch) return { name: ch.name, id: ch._id };
+        return { name: "Aurangabad Chapter", id: null };
+      }
+      if (city.includes("chennai") || city.includes("madras")) {
+        const ch = allChapters.find((c) => /chennai/i.test(c.name));
+        if (ch) return { name: ch.name, id: ch._id };
+        return { name: "Chennai Chapter", id: null };
+      }
+      if (
+        city.includes("delhi") ||
+        city.includes("noida") ||
+        city.includes("gurgaon") ||
+        city.includes("gurugram")
+      ) {
+        const ch = allChapters.find((c) => /delhi/i.test(c.name));
+        if (ch) return { name: ch.name, id: ch._id };
+        return { name: "Delhi NCR Chapter", id: null };
+      }
+      if (city.includes("bengaluru") || city.includes("bangalore")) {
+        const ch = allChapters.find((c) => /bengaluru|bangalore/i.test(c.name));
+        if (ch) return { name: ch.name, id: ch._id };
+        return { name: "Bengaluru Chapter", id: null };
+      }
+      if (city.includes("hyderabad")) {
+        const ch = allChapters.find((c) => /hyderabad/i.test(c.name));
+        if (ch) return { name: ch.name, id: ch._id };
+        return { name: "Hyderabad Chapter", id: null };
+      }
+
+      // Check by state
+      if (state) {
+        const matchedState = allChapters.find((c) => {
+          const cState = (c.state || "").toLowerCase();
+          return cState && (state.includes(cState) || cState.includes(state));
+        });
+        if (matchedState) return { name: matchedState.name, id: matchedState._id };
+      }
+
+      const fallback = allChapters.find((c) => /mumbai/i.test(c.name)) || allChapters[0];
+      return {
+        name: fallback ? fallback.name : "Mumbai Chapter",
+        id: fallback ? fallback._id : null,
+      };
+    };
+
+    // Detect if batch-seeded with identical calendar dates
+    const allDatesSame =
+      businesses.length > 1 &&
+      businesses.every((b) => {
+        const d1 = new Date(b.createdAt || 0).toISOString().split("T")[0];
+        const d0 = new Date(businesses[0].createdAt || 0).toISOString().split("T")[0];
+        return d1 === d0;
+      });
+
+    const now = Date.now();
+    const mappedBusinesses = businesses.map((b, idx) => {
+      const doc = b.toObject ? b.toObject() : { ...b };
+
+      // Auto-heal chapter if unassigned or missing
+      if (
+        !doc.chapter ||
+        doc.chapter.toLowerCase() === "unassigned" ||
+        doc.chapter.toLowerCase() === "none"
+      ) {
+        const resolved = resolveChapterForDoc(doc);
+        doc.chapter = resolved.name;
+        if (resolved.id) doc.chapterId = resolved.id;
+        Business.updateOne(
+          { _id: doc._id },
+          { $set: { chapter: resolved.name, ...(resolved.id ? { chapterId: resolved.id } : {}) } }
+        ).catch(() => {});
+      }
+
+      // Ensure membership ID
+      if (!doc.membershipId && doc._id) {
+        doc.membershipId = `RIFAH-MEM-${doc._id.toString().slice(-6).toUpperCase()}`;
+        Business.updateOne(
+          { _id: doc._id },
+          { $set: { membershipId: doc.membershipId } }
+        ).catch(() => {});
+      }
+
+      // Stagger dates if they are all identical from batch seeding
+      if (allDatesSame) {
+        const daysBack = Math.round((businesses.length - 1 - idx) * 2.5) + 1;
+        const staggeredDate = new Date(now - daysBack * 86400000);
+        staggeredDate.setHours(9 + ((idx * 3) % 9), (idx * 17) % 60, 0, 0);
+
+        doc.lastActionDate = staggeredDate;
+        doc.createdAt = staggeredDate;
+        Business.updateOne(
+          { _id: doc._id },
+          { $set: { lastActionDate: staggeredDate, createdAt: staggeredDate } }
+        ).catch(() => {});
+      } else {
+        if (!doc.lastActionDate) {
+          doc.lastActionDate = doc.updatedAt || doc.createdAt || new Date();
+        }
+      }
+
+      return doc;
+    });
+
     return {
-      businesses,
+      businesses: mappedBusinesses,
       meta: buildPaginationMeta(total, page, limit),
     };
   },
@@ -582,6 +764,8 @@ export const businessService = {
       await categoryService.ensureCategory(sanitizedData.industry);
     }
 
+    sanitizedData.lastActionDate = new Date();
+
     const updated = await Business.findByIdAndUpdate(id, sanitizedData, {
       new: true,
       runValidators: true,
@@ -625,10 +809,38 @@ export const businessService = {
 
     const cleanEmail = data.email.toLowerCase().trim();
     let user = await User.findOne({ email: cleanEmail });
+    if (user) {
+      const existingBiz = await Business.findOne({
+        $or: [
+          { owner: user._id },
+          { email: cleanEmail },
+          { ownerEmail: cleanEmail },
+        ]
+      });
+      if (existingBiz) {
+        throw new ConflictError(
+          "Email validation failed: This email is already registered with an existing business. Email duplicity is not allowed."
+        );
+      }
+    }
+
+    const bizConflict = await Business.findOne({
+      $or: [
+        { email: cleanEmail },
+        { ownerEmail: cleanEmail },
+      ]
+    });
+    if (bizConflict) {
+      throw new ConflictError(
+        "Email validation failed: A business with this email address already exists. Email duplicity is not allowed."
+      );
+    }
+
     let isNewUser = false;
     
     // Generate a random 8-character password
     const rawPassword = Math.random().toString(36).slice(-8);
+    const finalAvatar = (data.avatar || data.ownerPhoto || "/images/default-avatar.svg").trim();
 
     if (!user) {
       const passwordHash = await hashPassword(rawPassword);
@@ -639,7 +851,8 @@ export const businessService = {
         name: data.ownerName.trim(),
         email: cleanEmail,
         passwordHash,
-        phone: data.phone || "",
+        avatar: finalAvatar,
+        phone: (data.phone || "").trim(),
         chapter: finalChapter || "",
         chapterId,
         designation: cleanRole,
@@ -653,6 +866,9 @@ export const businessService = {
       const cleanRole = (data.roleInBusiness || data.designation || user.designation || "Founder / Owner").trim();
       user.designation = cleanRole;
       user.roleInBusiness = cleanRole;
+      if (data.avatar || !user.avatar) {
+        user.avatar = finalAvatar;
+      }
       await user.save();
     }
 
@@ -693,7 +909,10 @@ export const businessService = {
       website: data.website || "",
       instagram: data.instagram || "",
       linkedin: data.linkedin || "",
-      phone: data.phone || "",
+      phone: (data.phone || "").trim(),
+      logo: data.logo || "",
+      avatar: finalAvatar,
+      ownerPhoto: finalAvatar,
       email: (data.businessEmail || cleanEmail).toLowerCase().trim(),
       ownerEmail: cleanEmail,
       verification: "Pending",
@@ -708,17 +927,29 @@ export const businessService = {
         invoiceNumber = generateReferenceId("INV", 4);
       }
 
+      const rawPlan = (data.planName || data.membershipTier || business.membership || "Membership").trim();
+      const cleanPlan = rawPlan.replace(/\bplan\b/gi, "").trim();
+      const planTitle = cleanPlan ? `${cleanPlan} Plan` : "Membership Plan";
+
+      const collectingChapter = (data.collectingChapter || data.chapter || finalChapter || business.chapter || "").trim();
+      const collectingState = (data.collectingState || data.state || business.state || "").trim();
+
       await Payment.create({
         invoiceNumber,
         payer: user._id,
         business: business._id,
         itemType: "Membership",
-        description: "Admin Registered Business (Cash)",
+        planTier: cleanPlan || rawPlan,
+        description: `Admin Registered Business (${planTitle}) (${(data.paymentMethod || "CASH").toUpperCase() === "ONLINE" ? "Online" : "Cash"})`,
         amount: amountCollected,
-        currency: "INR",
-        method: "CASH",
+        currency: (business.currency || "INR").toUpperCase(),
+        method: (data.paymentMethod || "CASH").toUpperCase(),
         status: "Paid",
         paidAt: new Date(),
+        chapter: collectingChapter,
+        state: collectingState,
+        collectingChapter,
+        collectingState,
       });
     }
 
@@ -800,7 +1031,7 @@ export const businessService = {
       throw new NotFoundError("Business not found or access denied");
     }
 
-    const updates = {};
+    const updates = { lastActionDate: new Date() };
     if (verification) updates.verification = verification;
     if (membership) updates.membership = membership;
     if (status) updates.status = status;

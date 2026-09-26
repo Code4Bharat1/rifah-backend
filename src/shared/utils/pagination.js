@@ -7,7 +7,7 @@
 export const parsePagination = (query = {}, defaults = {}) => {
   const page = Math.max(1, parseInt(query.page || defaults.page || "1", 10));
   const limit = Math.min(
-    100,
+    1000,
     Math.max(1, parseInt(query.limit || defaults.limit || "20", 10))
   );
   const skip = (page - 1) * limit;

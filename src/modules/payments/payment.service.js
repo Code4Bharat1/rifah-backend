@@ -798,8 +798,8 @@ export const paymentService = {
 
     const [payments, total] = await Promise.all([
       Payment.find(filter)
-        .populate("payer", "name email phone")
-        .populate("business", "name slug chapter")
+        .populate("payer", "name email phone chapter state")
+        .populate("business", "name slug chapter state city membership")
         .populate("eventId", "title slug")
         .sort(sort)
         .skip(skip)
@@ -821,8 +821,8 @@ export const paymentService = {
     const query = isObjectId ? { _id: identifier } : { invoiceNumber: identifier };
 
     const payment = await Payment.findOne(query)
-      .populate("payer", "name email phone chapter")
-      .populate("business", "name slug chapter city")
+      .populate("payer", "name email phone chapter state")
+      .populate("business", "name slug chapter state city membership")
       .populate("eventId", "title slug date venue");
 
     if (!payment) {

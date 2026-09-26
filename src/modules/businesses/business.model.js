@@ -102,6 +102,16 @@ const businessSchema = new mongoose.Schema(
       default: "Free",
       index: true,
     },
+    membershipId: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    lastActionDate: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
     paymentStatus: {
       type: String,
       enum: ["Pending", "Paid", "Failed", "Refunded", "Free", "pending", "paid", "failed", "refunded", "free"],
@@ -321,6 +331,16 @@ const businessSchema = new mongoose.Schema(
 );
 
 businessSchema.index({ name: "text", about: "text", tagline: "text", productsSummary: "text" });
+
+businessSchema.pre("save", function (next) {
+  if (!this.membershipId && this._id) {
+    this.membershipId = `RIFAH-MEM-${this._id.toString().slice(-6).toUpperCase()}`;
+  }
+  if (!this.lastActionDate) {
+    this.lastActionDate = this.updatedAt || new Date();
+  }
+  if (typeof next === "function") next();
+});
 
 // Automatically sync live entities to JSON knowledge base whenever a business is saved, updated, or removed
 businessSchema.post("save", function () {

@@ -95,4 +95,10 @@ export const authController = {
     const result = await authService.verifyRegistrationOtp({ email, otp });
     return ApiResponse.success(res, result, result.message || "Email verified successfully");
   }),
+
+  checkEmail: asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const result = await authService.checkEmailAvailability(email);
+    return ApiResponse.success(res, result, result.message);
+  }),
 };

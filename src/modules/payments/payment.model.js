@@ -35,6 +35,24 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    chapter: {
+      type: String,
+      default: "",
+      index: true,
+    },
+    state: {
+      type: String,
+      default: "",
+      index: true,
+    },
+    collectingChapter: {
+      type: String,
+      default: "",
+    },
+    collectingState: {
+      type: String,
+      default: "",
+    },
     durationYears: {
       type: Number,
       default: 1,

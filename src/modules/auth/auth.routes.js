@@ -101,5 +101,11 @@ router.post(
   authController.verifyRegisterOtp
 );
 
+router.post(
+  "/check-email",
+  authRateLimitMiddleware,
+  authController.checkEmail
+);
+
 export { router as authRoutes };
 export default router;

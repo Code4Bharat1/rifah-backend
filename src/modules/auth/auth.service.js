@@ -83,6 +83,60 @@ export const authService = {
   },
 
   /**
+   * Check if an email is already registered to prevent email duplicity
+   */
+  checkEmailAvailability: async (email) => {
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      throw new BadRequestError("Please provide a valid email address");
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+
+    // 1. Check if an account already exists with this email
+    const existingUser = await User.findOne({ email: { $regex: emailRegex } });
+    if (existingUser) {
+      const existingBiz = await Business.findOne({
+        $or: [
+          { owner: existingUser._id },
+          { email: { $regex: emailRegex } },
+          { ownerEmail: { $regex: emailRegex } },
+        ]
+      });
+      return {
+        available: false,
+        exists: true,
+        hasBusiness: !!existingBiz,
+        message: existingBiz 
+          ? "Email validation failed: This email is already registered with an existing business. Email duplicity is not allowed."
+          : "Email validation failed: An account with this email address already exists. Email duplicity is not allowed.",
+      };
+    }
+
+    // 2. Check if a business is registered with this email directly
+    const bizWithEmail = await Business.findOne({
+      $or: [
+        { email: { $regex: emailRegex } },
+        { ownerEmail: { $regex: emailRegex } },
+      ]
+    });
+    if (bizWithEmail) {
+      return {
+        available: false,
+        exists: true,
+        hasBusiness: true,
+        message: "Email validation failed: This email is already registered with an existing business. Email duplicity is not allowed.",
+      };
+    }
+
+    return {
+      available: true,
+      exists: false,
+      hasBusiness: false,
+      message: "Email is available for registration.",
+    };
+  },
+
+  /**
    * Send Registration OTP
    */
   sendRegistrationOtp: async (email) => {
