@@ -318,6 +318,18 @@ const businessSchema = new mongoose.Schema(
         createdAt: { type: Date, default: Date.now },
       },
     ],
+    adminRemark: {
+      type: String,
+      default: "",
+    },
+    adminUpdateAcknowledged: {
+      type: Boolean,
+      default: true,
+    },
+    adminUpdateChanges: {
+      type: String,
+      default: "",
+    },
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

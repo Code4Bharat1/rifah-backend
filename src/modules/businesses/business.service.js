@@ -705,21 +705,23 @@ export const businessService = {
     const isOwner = String(business.owner) === String(user.id);
     const isAdmin = user.role === "central_admin";
     const isChapterAdmin = user.role === "chapter_admin";
+    const isStateAdmin = user.role === "state_admin";
     const isOwnChapterAdmin = isChapterAdmin && business.chapterId && user.chapterId && String(business.chapterId) === String(user.chapterId);
+    const isOwnStateAdmin = isStateAdmin && user.state && business.state && business.state.toLowerCase() === user.state.toLowerCase();
 
-    if (!isOwner && !isAdmin && !isOwnChapterAdmin) {
+    if (!isOwner && !isAdmin && !isOwnChapterAdmin && !isOwnStateAdmin) {
       throw new ForbiddenError("You are not authorized to update this business profile");
     }
 
     let sanitizedData = { ...updateData };
-    if (!isAdmin && !isChapterAdmin) {
+    if (!isAdmin && !isChapterAdmin && !isStateAdmin) {
       const ALLOWED_OWNER_FIELDS = [
         "name", "tagline", "about", "industry", "categories", "businessType",
         "city", "state", "address", "pincode", "chapter", "employees",
         "founded", "website", "instagram", "linkedin", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
         "accent", "logo", "coverImage", "gallery", "productsSummary",
-        "servicesSummary", "certifications", "dob", "timezone",
-        "contactPerson", "roleInBusiness", "designation", "contactPersonRole"
+        "certifications", "dob", "timezone",
+        "contactPerson", "roleInBusiness", "designation", "contactPersonRole", "adminUpdateAcknowledged"
       ];
       sanitizedData = {};
       for (const key of ALLOWED_OWNER_FIELDS) {
@@ -766,10 +768,38 @@ export const businessService = {
 
     sanitizedData.lastActionDate = new Date();
 
+    if (isAdmin || isChapterAdmin || isStateAdmin) {
+      let changedFields = [];
+      if (sanitizedData.paymentStatus && sanitizedData.paymentStatus !== business.paymentStatus) changedFields.push(`Payment Status changed to ${sanitizedData.paymentStatus}`);
+      if (sanitizedData.membershipTier && sanitizedData.membershipTier !== business.membershipTier) changedFields.push(`Membership Plan changed to ${sanitizedData.membershipTier}`);
+      if (sanitizedData.chapter && sanitizedData.chapter !== business.chapter) changedFields.push(`Chapter changed to ${sanitizedData.chapter}`);
+      if (sanitizedData.registrationType && sanitizedData.registrationType !== business.registrationType) changedFields.push(`Registration Type changed to ${sanitizedData.registrationType}`);
+      if (sanitizedData.adminRemark && sanitizedData.adminRemark !== business.adminRemark) {
+        changedFields.push(`Admin Remark: "${sanitizedData.adminRemark}"`);
+      }
+
+      if (changedFields.length > 0) {
+        sanitizedData.adminUpdateAcknowledged = false;
+        sanitizedData.adminUpdateChanges = changedFields.join(", ");
+      }
+    }
+
     const updated = await Business.findByIdAndUpdate(id, sanitizedData, {
       new: true,
       runValidators: true,
     });
+
+    if ((isAdmin || isChapterAdmin || isStateAdmin) && sanitizedData.adminUpdateAcknowledged === false && business.owner) {
+      try {
+        await notificationService.createNotification({
+          recipientId: business.owner,
+          type: "System",
+          title: "Business Details Updated by Admin",
+          body: `Your business details were updated: ${sanitizedData.adminUpdateChanges}`,
+          link: "/workspace"
+        });
+      } catch (err) {}
+    }
 
     if (business.owner) {
       const userUpdate = {};
