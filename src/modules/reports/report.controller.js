@@ -65,16 +65,30 @@ export const reportController = {
   }),
 
   exportRevenue: asyncHandler(async (req, res) => {
-    const { startDate, endDate, format } = req.query;
-    const data = await reportService.exportRevenueData(startDate, endDate);
+    const { startDate, endDate, format, filter } = req.query;
+    const data = await reportService.exportRevenueData(startDate, endDate, req.user, filter);
     if (format === "json") return ApiResponse.success(res, data, "Revenue data retrieved");
+    
+    const filterLabel = filter && filter !== "All" ? filter : "Revenue";
+    const reportTitle = `${filterLabel} Report`;
+    const baseFilename = filter && filter !== "All" ? `${filter.toLowerCase().replace(/\s+/g, "_")}_revenue_report` : "revenue_report";
+
     if (format === "pdf") {
-      return sendTabularPdf(res, { title: "Revenue Report", subtitle: [startDate, endDate].filter(Boolean).join(" – "), headers: data.headers, rows: data.rows, filename: "revenue_report.pdf" });
+      return sendTabularPdf(res, { 
+        title: reportTitle, 
+        subtitle: [startDate, endDate].filter(Boolean).join(" – "), 
+        headers: data.headers, 
+        rows: data.rows, 
+        filename: `${baseFilename}.pdf` 
+      });
     }
 
-    const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
+    const csvData = [
+      data.headers.join(","),
+      ...data.rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
     res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", 'attachment; filename="revenue_report.csv"');
+    res.setHeader("Content-Disposition", `attachment; filename="${baseFilename}.csv"`);
     return res.status(200).send(csvData);
   }),
 
@@ -93,16 +107,30 @@ export const reportController = {
   }),
 
   exportMemberships: asyncHandler(async (req, res) => {
-    const { startDate, endDate, format } = req.query;
-    const data = await reportService.exportMembershipsData(startDate, endDate, req.user);
+    const { startDate, endDate, format, filter } = req.query;
+    const data = await reportService.exportMembershipsData(startDate, endDate, req.user, filter);
     if (format === "json") return ApiResponse.success(res, data, "Memberships data retrieved");
+    
+    const filterLabel = filter && filter !== "Membership" && filter !== "All" ? filter : "Memberships";
+    const reportTitle = filter === "Event Registrations" ? "Event Registrations Report" : `${filterLabel} Report`;
+    const baseFilename = filter ? `${filter.toLowerCase().replace(/\s+/g, "_")}_report` : "memberships_report";
+
     if (format === "pdf") {
-      return sendTabularPdf(res, { title: "Memberships Report", subtitle: [startDate, endDate].filter(Boolean).join(" – "), headers: data.headers, rows: data.rows, filename: "memberships_report.pdf" });
+      return sendTabularPdf(res, { 
+        title: reportTitle, 
+        subtitle: [startDate, endDate].filter(Boolean).join(" – "), 
+        headers: data.headers, 
+        rows: data.rows, 
+        filename: `${baseFilename}.pdf` 
+      });
     }
 
-    const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
+    const csvData = [
+      data.headers.join(","),
+      ...data.rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
     res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", 'attachment; filename="memberships_report.csv"');
+    res.setHeader("Content-Disposition", `attachment; filename="${baseFilename}.csv"`);
     return res.status(200).send(csvData);
   }),
 

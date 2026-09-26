@@ -246,26 +246,124 @@ export const reportService = {
   },
 
   /**
-   * Export Revenue Data
+   * Export Revenue Data (supports filters: "All", "States", "Chapters", "Cash", "UPI", "Gateway", "Approved", "Pending", "Refund")
    */
-  exportRevenueData: async (startDate, endDate) => {
-    const query = { status: "Paid" };
-    if (startDate && endDate) {
-      query.createdAt = { $gte: new Date(startDate), $lte: new Date(endDate) };
+  exportRevenueData: async (startDate, endDate, requester, filterType = "All") => {
+    const filter = String(filterType || "All").trim();
+    const query = {};
+
+    // 1. Status and Method filtering based on filter
+    if (filter.toLowerCase() === "cash") {
+      query.method = { $regex: /^cash$/i };
+    } else if (filter.toLowerCase() === "upi") {
+      query.method = { $regex: /^upi$/i };
+    } else if (filter.toLowerCase() === "gateway") {
+      query.$or = [
+        { method: { $regex: /gateway|online|razorpay|card|netbanking/i } },
+        { method: { $nin: ["Cash", "cash", "Offline", "offline"] } }
+      ];
+    } else if (filter.toLowerCase() === "approved") {
+      query.status = { $in: ["Paid", "paid", "Approved", "approved", "Success", "success"] };
+    } else if (filter.toLowerCase() === "pending") {
+      query.status = { $in: ["Pending", "pending", "Under Review", "under_review"] };
+    } else if (filter.toLowerCase() === "refund" || filter.toLowerCase() === "refunded") {
+      query.status = { $in: ["Refunded", "refunded", "Refund", "refund"] };
     }
-    const payments = await Payment.find(query).populate("payer", "name email phone");
-    const headers = ["Invoice Number", "Amount", "Status", "Method", "Plan", "User Name", "Email", "Phone", "Date"];
-    const rows = payments.map(p => [
-      p.invoiceNumber || '',
-      p.amount,
-      p.status,
-      p.method || '',
-      p.description || '',
-      p.payer ? p.payer.name : 'Unknown',
-      p.payer?.email || '',
-      p.payer?.phone || '',
-      p.createdAt.toISOString()
-    ]);
+
+    // 2. Date filtering
+    const dateFilter = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      if (!isNaN(start.getTime())) dateFilter.$gte = start;
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      if (!isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999);
+        dateFilter.$lte = end;
+      }
+    }
+    if (Object.keys(dateFilter).length > 0) {
+      query.createdAt = dateFilter;
+    }
+
+    // 3. RBAC Scoping
+    if (requester && requester.role === "chapter_admin" && requester.chapterId) {
+      const businesses = await Business.find({ chapterId: requester.chapterId }).select("_id");
+      const bIds = businesses.map(b => b._id);
+      query.business = { $in: bIds };
+    }
+
+    // 4. Query payments populated with payer and business
+    let payments = await Payment.find(query)
+      .populate("payer", "name email phone chapter state city")
+      .populate("business", "name chapter state city")
+      .sort({ createdAt: -1 });
+
+    // 5. Sort / Organize for "States" or "Chapters" if requested
+    if (filter.toLowerCase() === "states") {
+      payments.sort((a, b) => {
+        const stateA = (a.business?.state || a.payer?.state || "").toLowerCase();
+        const stateB = (b.business?.state || b.payer?.state || "").toLowerCase();
+        return stateA.localeCompare(stateB) || b.createdAt - a.createdAt;
+      });
+    } else if (filter.toLowerCase() === "chapters") {
+      payments.sort((a, b) => {
+        const chapA = (a.business?.chapter || a.payer?.chapter || "").toLowerCase();
+        const chapB = (b.business?.chapter || b.payer?.chapter || "").toLowerCase();
+        return chapA.localeCompare(chapB) || b.createdAt - a.createdAt;
+      });
+    }
+
+    // 6. Build Headers and Rows
+    let headers;
+    let rows;
+
+    if (filter.toLowerCase() === "states") {
+      headers = ["Invoice Number", "State", "Chapter", "Amount", "Status", "Method", "Plan", "Payer Name", "Email", "Date"];
+      rows = payments.map(p => [
+        p.invoiceNumber || '',
+        p.business?.state || p.payer?.state || 'N/A',
+        p.business?.chapter || p.payer?.chapter || 'N/A',
+        p.amount !== undefined ? `₹${p.amount}` : '0',
+        p.status || 'Paid',
+        p.method || 'Online',
+        p.description || p.planTier || p.itemType || 'Membership',
+        p.payer ? p.payer.name : (p.business?.name || 'Unknown'),
+        p.payer?.email || '',
+        p.createdAt ? new Date(p.createdAt).toISOString().split("T")[0] : ''
+      ]);
+    } else if (filter.toLowerCase() === "chapters") {
+      headers = ["Invoice Number", "Chapter", "State", "Amount", "Status", "Method", "Plan", "Payer Name", "Email", "Date"];
+      rows = payments.map(p => [
+        p.invoiceNumber || '',
+        p.business?.chapter || p.payer?.chapter || 'N/A',
+        p.business?.state || p.payer?.state || 'N/A',
+        p.amount !== undefined ? `₹${p.amount}` : '0',
+        p.status || 'Paid',
+        p.method || 'Online',
+        p.description || p.planTier || p.itemType || 'Membership',
+        p.payer ? p.payer.name : (p.business?.name || 'Unknown'),
+        p.payer?.email || '',
+        p.createdAt ? new Date(p.createdAt).toISOString().split("T")[0] : ''
+      ]);
+    } else {
+      headers = ["Invoice Number", "Amount", "Status", "Method", "State", "Chapter", "Plan", "User Name", "Email", "Phone", "Date"];
+      rows = payments.map(p => [
+        p.invoiceNumber || '',
+        p.amount !== undefined ? `₹${p.amount}` : '0',
+        p.status || 'Paid',
+        p.method || '',
+        p.business?.state || p.payer?.state || 'N/A',
+        p.business?.chapter || p.payer?.chapter || 'N/A',
+        p.description || p.planTier || p.itemType || 'Membership',
+        p.payer ? p.payer.name : (p.business?.name || 'Unknown'),
+        p.payer?.email || '',
+        p.payer?.phone || '',
+        p.createdAt ? new Date(p.createdAt).toISOString().split("T")[0] : ''
+      ]);
+    }
+
     return { headers, rows };
   },
 
@@ -314,9 +412,100 @@ export const reportService = {
   },
 
   /**
-   * Export Memberships Data
+   * Export Memberships Data (supports filter: "Event Registrations", "Membership", "Silver", "Gold", "Platinum", "Diamond")
    */
-  exportMembershipsData: async (startDate, endDate, requester) => {
+  exportMembershipsData: async (startDate, endDate, requester, filterType = "Membership") => {
+    const filter = String(filterType || "Membership").trim();
+
+    // ── Handle "Event Registrations" Filter ────────────────────────────────────
+    if (filter.toLowerCase() === "event registrations" || filter.toLowerCase() === "event_registrations") {
+      const eventQuery = {};
+
+      if (requester && requester.role === "chapter_admin") {
+        const orConditions = [];
+        if (requester.chapter) {
+          orConditions.push({ chapter: new RegExp(`^${requester.chapter.trim()}$`, "i") });
+          orConditions.push({ creatorChapter: new RegExp(`^${requester.chapter.trim()}$`, "i") });
+        }
+        if (requester._id || requester.id) {
+          orConditions.push({ createdBy: requester._id || requester.id });
+        }
+        if (orConditions.length > 0) {
+          eventQuery.$or = orConditions;
+        }
+      } else if (requester && requester.role === "state_admin") {
+        const orConditions = [];
+        if (requester.state) {
+          orConditions.push({ creatorState: new RegExp(`^${requester.state.trim()}$`, "i") });
+          orConditions.push({ targetStates: requester.state });
+        }
+        if (requester._id || requester.id) {
+          orConditions.push({ createdBy: requester._id || requester.id });
+        }
+        if (orConditions.length > 0) {
+          eventQuery.$or = orConditions;
+        }
+      }
+
+      const events = await Event.find(eventQuery)
+        .populate("registeredUsers.user", "name email phone whatsapp mobile role chapter businessName organization city state")
+        .sort({ createdAt: -1 });
+
+      let start = null;
+      let end = null;
+      if (startDate) {
+        const s = new Date(startDate);
+        if (!isNaN(s.getTime())) start = s;
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        if (!isNaN(e.getTime())) {
+          e.setHours(23, 59, 59, 999);
+          end = e;
+        }
+      }
+
+      const headers = ["Attendee Name", "Email", "Phone", "Event Title", "Chapter", "Role", "Payment Status", "Attendance Status", "Registration Date"];
+      const rows = [];
+
+      for (const event of events) {
+        if (!Array.isArray(event.registeredUsers)) continue;
+
+        for (const reg of event.registeredUsers) {
+          const regDate = reg.registeredAt ? new Date(reg.registeredAt) : (event.createdAt ? new Date(event.createdAt) : null);
+          
+          if (start && regDate && regDate < start) continue;
+          if (end && regDate && regDate > end) continue;
+
+          const user = reg.user || {};
+          const userName = user.name || "Attendee";
+          const userEmail = user.email || "N/A";
+          const userPhone = user.phone || user.whatsapp || user.mobile || "N/A";
+          const eventTitle = event.title || "N/A";
+          const chapter = event.chapter || user.chapter || "N/A";
+          const userRole = (user.role || "Member").replace(/_/g, " ");
+          const paymentStatus = reg.paymentStatus || (event.isPaid ? "Paid" : "Free");
+          const attendanceStatus = reg.attendanceStatus || "Pending";
+          const regDateFormatted = regDate ? regDate.toISOString().split("T")[0] : (event.date || "");
+
+          rows.push([
+            userName,
+            userEmail,
+            userPhone,
+            eventTitle,
+            chapter,
+            userRole,
+            paymentStatus,
+            attendanceStatus,
+            regDateFormatted
+          ]);
+        }
+      }
+
+      return { headers, rows, rawBusinesses: [] };
+    }
+
+    // ── Handle Membership & Tier Filters (Membership / Silver / Gold / Platinum / Diamond) ──
     const conditions = [];
     conditions.push({
       $or: [
@@ -324,6 +513,13 @@ export const reportService = {
         { isVerified: true }
       ]
     });
+
+    // Specific Tier Filtering
+    if (["Silver", "Gold", "Platinum", "Diamond"].some(tier => tier.toLowerCase() === filter.toLowerCase())) {
+      conditions.push({
+        membership: new RegExp(filter.trim(), "i")
+      });
+    }
     
     const dateFilter = {};
     if (startDate) {
@@ -342,23 +538,23 @@ export const reportService = {
     }
 
     if (requester && requester.role === "chapter_admin") {
-      const filter = await getChapterFilter(requester, "direct_id");
-      if (Object.keys(filter).length > 0) conditions.push(filter);
+      const filterScope = await getChapterFilter(requester, "direct_id");
+      if (Object.keys(filterScope).length > 0) conditions.push(filterScope);
     }
     const query = conditions.length > 0 ? { $and: conditions } : {};
     const businesses = await Business.find(query).populate("owner", "name email phone avatar sourcingInterest roleInBusiness").sort({ createdAt: -1 });
     const headers = ["Business Name", "Owner", "Email", "Phone", "Tier", "Chapter", "Verification", "City", "State", "Joined Date"];
     const rows = businesses.map(b => [
       b.name || b.businessName || '',
-      b.ownerName || '',
-      b.email || '',
-      b.phone || '',
+      b.ownerName || b.owner?.name || b.contactPerson || '',
+      b.email || b.owner?.email || '',
+      b.phone || b.owner?.phone || '',
       b.membership || 'Basic',
       b.chapter || '',
       b.verification || (b.isVerified ? 'verified' : 'pending'),
       b.city || '',
       b.state || '',
-      b.createdAt ? new Date(b.createdAt).toISOString() : ''
+      b.createdAt ? new Date(b.createdAt).toISOString().split("T")[0] : ''
     ]);
     return { headers, rows, rawBusinesses: businesses };
   },
