@@ -3,6 +3,7 @@ import { User } from "../users/user.model.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
+import { notificationService } from "../notifications/notification.service.js";
 
 const ADMIN_ROLES = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN];
 
@@ -332,6 +333,22 @@ export const postService = {
     });
 
     await post.save();
+    
+    // Broadcast notification if post is by an admin
+    if (ADMIN_ROLES.includes(authorRole)) {
+      try {
+        await notificationService.broadcastNotification({
+          type: "System",
+          title: "New Post in Feed",
+          body: `${authorName} posted an update in the Feed.`,
+          link: "/feed",
+          targetRole: "all",
+        });
+      } catch (err) {
+        console.error("Failed to broadcast feed notification:", err);
+      }
+    }
+
     return formatPost(post.toObject(), user.id || user._id);
   },
 
