@@ -393,9 +393,10 @@ export const reportService = {
       const filter = await getChapterFilter(requester, "direct_id");
       if (Object.keys(filter).length > 0) conditions.push(filter);
     }
+    const query = conditions.length > 0 ? { $and: conditions } : {};
     const businesses = await Business.find(query)
       .sort({ createdAt: 1 })
-      .populate("owner", "name email phone");
+      .populate("owner", "name email phone avatar sourcingInterest roleInBusiness");
 
     const headers = [
       "Sr No",
@@ -430,7 +431,7 @@ export const reportService = {
       b.lastActionDate ? new Date(b.lastActionDate).toISOString() : (b.updatedAt ? new Date(b.updatedAt).toISOString() : ""),
       b.createdAt ? new Date(b.createdAt).toISOString() : "",
     ]);
-    return { headers, rows };
+    return { headers, rows, rawBusinesses: businesses };
   },
 
   /**
