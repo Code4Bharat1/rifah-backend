@@ -81,6 +81,10 @@ const eventSchema = new mongoose.Schema(
       enum: ENUMS.EVENT_MODES,
       default: "In-person",
     },
+    meetingLink: {
+      type: String,
+      trim: true,
+    },
     eventCategory: {
       type: String,
       enum: ["Meet", "Sports"],

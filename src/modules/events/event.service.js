@@ -508,6 +508,7 @@ export const eventService = {
             paymentId: paymentData?.paymentId || null,
             transactionId: paymentData?.transactionId || null,
             chapter: updatedEvent.chapter || "",
+            meetingLink: updatedEvent.meetingLink || "",
           });
         }
 

@@ -1218,7 +1218,7 @@ RIFAH Chamber of Commerce & Industry
   /**
    * Sends Event Registration / RSVP confirmation email
    */
-  sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType, isPaid, ticketPrice, paymentId, transactionId, invoiceNumber, chapter }) => {
+  sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType, isPaid, ticketPrice, paymentId, transactionId, invoiceNumber, chapter, meetingLink }) => {
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
     const subject = isPaid
@@ -1278,6 +1278,13 @@ RIFAH Chamber of Commerce & Industry
           </div>
 
           ${paymentSection}
+          
+          ${meetingLink ? `
+          <div style="background-color: #f0fdfa; border: 1px solid #5eead4; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
+            <p style="margin: 0 0 10px 0; color: #0f766e; font-size: 14px; font-weight: bold;">Virtual Meeting Details</p>
+            <a href="${meetingLink}" target="_blank" style="background-color: #0d9488; color: #ffffff; padding: 10px 20px; border-radius: 6px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Join Meeting Now</a>
+          </div>
+          ` : ""}
 
           <div style="margin-top: 24px;">
             <a href="http://localhost:3000/events" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Event Details →</a>
