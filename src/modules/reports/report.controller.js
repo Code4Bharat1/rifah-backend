@@ -97,10 +97,23 @@ export const reportController = {
     const data = await reportService.exportBusinessesData(startDate, endDate, req.user);
     if (format === "json") return ApiResponse.success(res, data, "Businesses data retrieved");
     if (format === "pdf") {
-      return sendTabularPdf(res, { title: "Businesses Report", subtitle: [startDate, endDate].filter(Boolean).join(" – "), headers: data.headers, rows: data.rows, filename: "businesses_report.pdf" });
+      const pdfHeaders = ["Sr No", "Business Name", "Owner", "Phone", "City", "Chapter", "Plan", "Status", "Joined Date"];
+      const headerIndices = pdfHeaders.map(h => data.headers.indexOf(h)).filter(idx => idx !== -1);
+      const pdfRows = data.rows.map(r => headerIndices.map(idx => r[idx]));
+      
+      return sendTabularPdf(res, { 
+        title: "Businesses Report", 
+        subtitle: [startDate, endDate].filter(Boolean).join(" – "), 
+        headers: pdfHeaders, 
+        rows: pdfRows, 
+        filename: "businesses_report.pdf" 
+      });
     }
 
-    const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
+    const csvData = [
+      data.headers.join(","),
+      ...data.rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="businesses_report.csv"');
     return res.status(200).send(csvData);
@@ -142,7 +155,10 @@ export const reportController = {
       return sendTabularPdf(res, { title: "Leads Report", subtitle: [startDate, endDate].filter(Boolean).join(" – "), headers: data.headers, rows: data.rows, filename: "leads_report.pdf" });
     }
 
-    const csvData = [data.headers.join(","), ...data.rows.map(r => r.map(c => `"${c}"`).join(","))].join("\n");
+    const csvData = [
+      data.headers.join(","),
+      ...data.rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", 'attachment; filename="leads_report.csv"');
     return res.status(200).send(csvData);
