@@ -20,11 +20,11 @@ export const validateCreateEnquiry = (data = {}, req = null) => {
   if (data.description && typeof data.description !== "string") {
     errors.push({ field: "description", message: "Description must be a valid text string" });
   }
-  if (data.targetType && !["all", "chamber", "business"].includes(data.targetType)) {
-    errors.push({ field: "targetType", message: "targetType must be one of: all, chamber, business" });
+  if (data.targetType && !["all", "state", "business"].includes(data.targetType)) {
+    errors.push({ field: "targetType", message: "targetType must be one of: all, state, business" });
   }
-  if (data.targetType === "chamber" && (!data.chapter || typeof data.chapter !== "string" || !data.chapter.trim())) {
-    errors.push({ field: "chapter", message: "Chapter is required when targeting a specific chamber" });
+  if (data.targetType === "state" && !req?.user && (!data.targetState || typeof data.targetState !== "string" || !data.targetState.trim())) {
+    errors.push({ field: "targetState", message: "State is required when targeting a specific state" });
   }
   if (data.targetType === "business" && (!data.targetBusiness || !/^[0-9a-fA-F]{24}$/.test(String(data.targetBusiness)))) {
     errors.push({ field: "targetBusiness", message: "Valid target business ID is required when targeting a specific business" });

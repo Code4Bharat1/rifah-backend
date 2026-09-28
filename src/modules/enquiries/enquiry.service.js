@@ -7,7 +7,7 @@ import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
-import { getChapterFilter, resolveChapterIdForLocation, resolveChapterIdByName } from "../../shared/utils/chapter-scope.js";
+import { getChapterFilter, resolveChapterIdForLocation } from "../../shared/utils/chapter-scope.js";
 import { Chapter } from "../chapters/chapter.model.js";
 
 export const enquiryService = {
@@ -28,17 +28,16 @@ export const enquiryService = {
     ];
 
     const isCustomerOrGuest = !user || user.role === "customer" || user.role === "user";
-    let targetType = data.targetType || (data.targetBusiness ? "business" : (data.chapter && data.chapter !== "All Chapters" ? "chamber" : "all"));
+    let targetType = data.targetType || (data.targetBusiness ? "business" : (data.targetState ? "state" : "all"));
     let targetBusiness = data.targetBusiness;
 
     if (isCustomerOrGuest) {
       // Allow direct business enquiries from the profile page for guests;
-      // all other guest/customer enquiries go through Chamber Admin routing.
+      // all other guest/customer enquiries go to pan-chamber broadcast.
       if (data.targetType === "business" && data.targetBusiness) {
         targetType = "business";
-        // targetBusiness already set above
       } else {
-        targetType = data.targetType === "chamber" ? "chamber" : "all";
+        targetType = "all";
         targetBusiness = undefined;
       }
     }
@@ -63,20 +62,47 @@ export const enquiryService = {
       }
     }
 
-    // Resolve the owning chapter for this enquiry: explicit chamber-targeting is trusted directly;
-    // otherwise derive it from the buyer's delivery location so it only reaches that chapter's admin.
+    // Resolve chapter metadata for admin scoping:
+    // for state-targeting, resolve a representative chapter;
+    // otherwise derive it from the buyer's delivery location.
     let resolvedChapter;
     let resolvedChapterId = null;
-    if (targetType === "chamber" && data.chapter) {
-      resolvedChapter = data.chapter;
-      resolvedChapterId = await resolveChapterIdByName(data.chapter);
+    let resolvedTargetState = null;
+    if (targetType === "state") {
+      let stateToUse = "";
+      if (userBusiness) {
+        if (userBusiness.state) {
+          stateToUse = userBusiness.state.trim();
+        } else if (userBusiness.chapterId) {
+          const ch = await Chapter.findById(userBusiness.chapterId);
+          if (ch?.state) stateToUse = ch.state.trim();
+        } else if (userBusiness.chapter) {
+          const ch = await Chapter.findOne({ name: new RegExp(`^${userBusiness.chapter.trim()}$`, "i") });
+          if (ch?.state) stateToUse = ch.state.trim();
+        }
+      }
+      if (!stateToUse && user?.state) {
+        stateToUse = user.state.trim();
+      }
+      if (!stateToUse && data.targetState) {
+        stateToUse = data.targetState.trim();
+      }
+      resolvedTargetState = stateToUse || null;
+
+      const stateChapter = await Chapter.findOne({ state: new RegExp(`^${resolvedTargetState}$`, "i"), status: "Active" });
+      if (stateChapter) {
+        resolvedChapter = stateChapter.name;
+        resolvedChapterId = stateChapter._id;
+      } else {
+        resolvedChapter = resolvedTargetState || "State-Wide";
+      }
     } else {
       resolvedChapterId = await resolveChapterIdForLocation(data.location);
       if (resolvedChapterId) {
         const matchedChapter = await Chapter.findById(resolvedChapterId);
         resolvedChapter = matchedChapter.name;
       } else {
-        resolvedChapter = targetType === "all" ? (data.chapter || "All Chapters") : (data.chapter || "Unassigned");
+        resolvedChapter = data.chapter || "All Chapters";
       }
     }
 
@@ -101,6 +127,7 @@ export const enquiryService = {
       targetType,
       sourceType,
       targetBusiness,
+      targetState: resolvedTargetState,
       requester: user ? user.id : null,
       requesterName,
       requesterRole,
@@ -163,7 +190,38 @@ export const enquiryService = {
           });
         }
       } catch (err) { }
-    } else if (targetType === "chamber" || targetType === "all") {
+    } else if (targetType === "state") {
+      // State-scoped: auto-route to businesses in the same state
+      try {
+        const { Settings } = await import("../settings/settings.model.js");
+        const settings = await Settings.findOne({ isSingleton: "global" });
+        const autoRoute = settings ? settings.autoRouteLeadsByCategory : true;
+
+        if (autoRoute && data.category) {
+          const stateRegex = new RegExp(`^${resolvedTargetState}$`, "i");
+          const stateChapters = await Chapter.find({ state: stateRegex }).select("_id");
+          const chapterIds = stateChapters.map(c => c._id);
+
+          const query = {
+            status: { $in: ["Live", "Active"] },
+            categories: data.category,
+            chapterId: { $in: chapterIds },
+            ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
+          };
+
+          const matchingBusinesses = await Business.find(query);
+          if (matchingBusinesses.length > 0) {
+            const businessIds = matchingBusinesses.map(b => b._id.toString());
+            const { leadService } = await import("../leads/lead.service.js");
+            leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
+              console.error("State auto routing background task failed:", err);
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to auto-route state-scoped leads:", err);
+      }
+    } else if (targetType === "all") {
       try {
         const { Settings } = await import("../settings/settings.model.js");
         const settings = await Settings.findOne({ isSingleton: "global" });
@@ -175,11 +233,6 @@ export const enquiryService = {
             categories: data.category,
             ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
           };
-
-          // Restrict to chapter only when explicitly targeting a single chamber
-          if (targetType === "chamber" && resolvedChapterId) {
-            query.chapterId = resolvedChapterId;
-          }
 
           const matchingBusinesses = await Business.find(query);
 
@@ -306,13 +359,28 @@ export const enquiryService = {
       ? { category: { $in: bizCategories } }
       : {};
 
+    // Safely resolve viewing business's own state (direct state field or from chapter)
+    let businessState = (userBusiness.state || "").trim();
+    if (!businessState && userBusiness.chapterId) {
+      const ch = await Chapter.findById(userBusiness.chapterId);
+      if (ch?.state) businessState = ch.state.trim();
+    }
+    if (!businessState && userBusiness.chapter) {
+      const ch = await Chapter.findOne({ name: new RegExp(`^${userBusiness.chapter.trim()}$`, "i") });
+      if (ch?.state) businessState = ch.state.trim();
+    }
+
+    const stateFilterCondition = businessState
+      ? { targetType: "state", targetState: new RegExp(`^${businessState}$`, "i") }
+      : { targetType: "state", _id: null };
+
     // Build filter matching:
-    // 1. Direct enquiries to this business (targetBusiness === userBusiness._id) - includes B2B Direct & Guest Direct
-    // 2. Enquiries explicitly routed to this business by admin/lead routing (_id in routedEnquiryIds)
-    // 3. Chamber-specific enquiries matching this business's chapter
+    // 1. Direct enquiries to this business
+    // 2. Enquiries explicitly routed to this business by admin/lead routing
+    // 3. State-specific enquiries matching this business's own state
     // 4. Pan-Chamber B2B enquiries from fellow chamber members
     // 5. General RFQs from public buyers matching business category
-    // STRICT RULE: Exclude user's own posted enquiries (which belong in My Enquiries)
+    // STRICT RULE: Exclude user's own posted enquiries
     const filter = {
       $and: [
         { requester: { $ne: userId } },
@@ -320,7 +388,7 @@ export const enquiryService = {
           $or: [
             { targetBusiness: userBusiness._id },
             { _id: { $in: routedEnquiryIds } },
-            { targetType: "chamber", chapterId: userBusiness.chapterId },
+            stateFilterCondition,
             { targetType: "all", sourceType: "b2b" },
             {
               targetType: "all",

@@ -307,6 +307,7 @@ export const verificationService = {
       if (finalStatus === "verified") {
         business.verification = "verified";
         business.isVerified = true;
+        business.status = "Active";
       } else if (finalStatus === "rejected") {
         business.verification = "rejected";
         business.isVerified = false;

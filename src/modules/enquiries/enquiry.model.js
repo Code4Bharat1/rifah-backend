@@ -57,8 +57,13 @@ const enquirySchema = new mongoose.Schema(
     },
     targetType: {
       type: String,
-      enum: ["all", "chamber", "business"],
+      enum: ["all", "state", "business"],
       default: "all",
+      index: true,
+    },
+    targetState: {
+      type: String,
+      default: null,
       index: true,
     },
     sourceType: {
