@@ -48,7 +48,7 @@ export const paymentService = {
   /**
    * Create Razorpay Order
    */
-  createRazorpayOrder: async ({ planId, currency = "INR" }, user) => {
+  createRazorpayOrder: async ({ planId, amount, currency = "INR", eventId, itemType }, user) => {
     let invoiceNumber = generateReferenceId("INV", 4);
     while (await Payment.findOne({ invoiceNumber })) {
       invoiceNumber = generateReferenceId("INV", 4);
@@ -62,11 +62,30 @@ export const paymentService = {
       ? env.RAZORPAY_INTERNATIONAL
       : env.RAZORPAY;
 
-    const plan = await getActivePlan(planId);
-    const { totalAmount: numericAmount } = getPlanCharge(plan, selectedCurrency);
-    if (numericAmount <= 0) throw new BadRequestError("Free membership plans do not require a payment order");
+    let numericAmount = 0;
+    let actualPlanId = null;
+
+    if (planId) {
+      const plan = await getActivePlan(planId);
+      const charge = getPlanCharge(plan, selectedCurrency);
+      numericAmount = charge.totalAmount;
+      actualPlanId = plan.planId;
+    } else if (amount) {
+      numericAmount = Number(amount);
+    }
+
+    if (numericAmount <= 0) throw new BadRequestError("Amount must be greater than zero to create a payment order");
     const amountInSubunits = Math.round(numericAmount * 100);
     const authString = Buffer.from(`${gatewayConfig.KEY_ID}:${gatewayConfig.KEY_SECRET}`).toString("base64");
+
+    const notes = {
+      payerId: user.id,
+      currency: selectedCurrency,
+      accountType: isInternational ? "international_foreign" : "national_domestic",
+    };
+    if (actualPlanId) notes.planId = actualPlanId;
+    if (eventId) notes.eventId = String(eventId);
+    if (itemType) notes.itemType = String(itemType);
 
     const response = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
@@ -78,12 +97,7 @@ export const paymentService = {
         amount: amountInSubunits,
         currency: selectedCurrency,
         receipt: invoiceNumber,
-        notes: {
-          payerId: user.id,
-          planId: plan.planId,
-          currency: selectedCurrency,
-          accountType: isInternational ? "international_foreign" : "national_domestic",
-        },
+        notes,
       }),
     });
 

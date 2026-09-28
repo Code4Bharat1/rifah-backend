@@ -32,9 +32,26 @@ export const notificationService = {
   /**
    * Broadcast a notification to all active users or members of a chapter
    */
-  broadcastNotification: async ({ type, title, body, chapter, link, targetRole }) => {
+  broadcastNotification: async ({ type, title, body, state, chapter, link, targetRole }) => {
     const query = { status: "Active" };
-    if (chapter && chapter !== "all") query.chapter = chapter;
+    
+    // Handle state filtering
+    if (state && state !== "all") {
+      if (Array.isArray(state) && state.length > 0) {
+        query.state = { $in: state };
+      } else if (typeof state === "string") {
+        query.state = state;
+      }
+    }
+
+    // Handle chapter filtering
+    if (chapter && chapter !== "all") {
+      if (Array.isArray(chapter) && chapter.length > 0) {
+        query.chapter = { $in: chapter };
+      } else if (typeof chapter === "string") {
+        query.chapter = chapter;
+      }
+    }
 
     if (targetRole && targetRole !== "all") {
       if (targetRole === "business_owner") query.role = "business_owner";
