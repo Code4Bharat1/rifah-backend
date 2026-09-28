@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Business } from "./business.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
 import { Catalogue } from "../catalogue/catalogue.model.js";
@@ -63,16 +64,42 @@ export const businessService = {
     const { page, limit, skip } = parsePagination(queryParams);
     const andConditions = [];
 
-    // For public users (non-admins), strictly show ONLY verified and active businesses
+    const isNetworkingOrMemberPicker =
+      queryParams.forNetworking === "true" ||
+      queryParams.forNetworking === true ||
+      queryParams.purpose === "networking" ||
+      queryParams.memberPicker === "true" ||
+      queryParams.memberPicker === true;
+
+    // For public users (non-admins), strictly show verified businesses,
+    // EXCEPT when used for MemberPicker / Networking collaboration between chamber members.
     if (!user || ![ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user.role)) {
-      andConditions.push({
-        $or: [
-          { verification: { $in: ["verified", "Verified", "approved", "Approved"] } },
-          { isVerified: true },
-        ],
-        verification: { $nin: ["rejected", "Rejected", "pending", "Pending", "under_review", "Correction Requested", "unverified"] },
-        status: { $nin: ["Suspended", "suspended", "Rejected", "rejected", "Pending", "pending", "Pending Verification", "pending_verification", "Draft", "draft"] },
-      });
+      if (isNetworkingOrMemberPicker) {
+        // In networking member picker, fellow members can select any registered business in their chapter/state
+        // as long as it's not explicitly rejected or suspended.
+        andConditions.push({
+          verification: { $nin: ["rejected", "Rejected"] },
+          status: { $nin: ["Suspended", "suspended", "Rejected", "rejected", "Draft", "draft"] },
+        });
+      } else {
+        // For public directory: verified or active businesses (never rejected or suspended)
+        andConditions.push({
+          $or: [
+            {
+              verification: { $in: ["verified", "Verified", "approved", "Approved"] },
+              status: { $nin: ["Suspended", "suspended", "Rejected", "rejected"] },
+            },
+            {
+              isVerified: true,
+              status: { $nin: ["Suspended", "suspended", "Rejected", "rejected"] },
+            },
+            {
+              status: { $in: ["Active", "active", "Live", "live"] },
+              verification: { $nin: ["rejected", "Rejected", "pending", "Pending", "under_review", "Correction Requested", "unverified"] },
+            },
+          ],
+        });
+      }
     } else {
       // BUG-049: admins (Central/State/Chapter) previously had NO status/verification
       // filtering applied at all here, so a rejected business still showed up in the
@@ -99,19 +126,48 @@ export const businessService = {
       andConditions.push(chapterScope);
     }
 
-    // 1. Chapter Filter
+    // 1. Chapter Filter (supports chapter name, chapterId, or both)
+    const targetChapter = queryParams.chapter || queryParams.chapterId;
     if (
-      queryParams.chapter &&
-      queryParams.chapter !== "undefined" &&
-      queryParams.chapter !== "null" &&
-      queryParams.chapter.toLowerCase() !== "all" &&
-      queryParams.chapter !== "All chapters" &&
+      targetChapter &&
+      targetChapter !== "undefined" &&
+      targetChapter !== "null" &&
+      String(targetChapter).toLowerCase() !== "all" &&
+      targetChapter !== "All chapters" &&
       !chapterScope.chapterId
     ) {
-      const chClean = escapeRegex(queryParams.chapter.trim().replace(/\s+Chapter$/i, ""));
-      andConditions.push({
-        chapter: new RegExp(chClean, "i"),
-      });
+      const rawCh = String(targetChapter).trim();
+      const chClean = escapeRegex(rawCh.replace(/\s+Chapter$/i, ""));
+
+      let matchedChapterIds = [];
+      if (mongoose.Types.ObjectId.isValid(rawCh)) {
+        matchedChapterIds.push(new mongoose.Types.ObjectId(rawCh));
+      }
+      if (queryParams.chapterId && mongoose.Types.ObjectId.isValid(queryParams.chapterId)) {
+        matchedChapterIds.push(new mongoose.Types.ObjectId(queryParams.chapterId));
+      }
+      try {
+        const found = await Chapter.find({
+          $or: [
+            { name: new RegExp(`^${chClean}`, "i") },
+            { name: new RegExp(escapeRegex(rawCh), "i") },
+            ...(matchedChapterIds.length > 0 ? [{ _id: { $in: matchedChapterIds } }] : []),
+          ],
+        }).select("_id");
+        for (const fc of found) {
+          matchedChapterIds.push(fc._id);
+        }
+      } catch {}
+
+      const chapterOrConditions = [
+        { chapter: new RegExp(chClean, "i") },
+        { chapter: new RegExp(escapeRegex(rawCh), "i") },
+      ];
+      if (matchedChapterIds.length > 0) {
+        chapterOrConditions.push({ chapterId: { $in: matchedChapterIds } });
+      }
+
+      andConditions.push({ $or: chapterOrConditions });
     }
 
     // 2. Keyword Search

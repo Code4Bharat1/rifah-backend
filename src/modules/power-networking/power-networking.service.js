@@ -784,7 +784,12 @@ export const powerNetworkingService = {
       throw new NotFoundError("Connection request not found");
     }
 
-    if (String(connection.receiverBusiness._id) !== String(businessId)) {
+    const receiverBizId = connection.receiverBusiness?._id ? String(connection.receiverBusiness._id) : String(connection.receiverBusiness || "");
+    const isReceiverBiz = businessId && receiverBizId === String(businessId);
+    const isReceiverOwner = connection.receiverBusiness?.owner && String(connection.receiverBusiness.owner) === String(userId);
+    const isReceiverUser = connection.receiverUser && String(connection.receiverUser._id || connection.receiverUser) === String(userId);
+
+    if (!isReceiverBiz && !isReceiverOwner && !isReceiverUser) {
       throw new ForbiddenError("Only the recipient business can accept or decline this request");
     }
 
@@ -830,12 +835,20 @@ export const powerNetworkingService = {
    * Cancel an Outgoing Connection Request
    */
   cancelConnectionRequest: async (connectionId, userId, businessId) => {
-    const connection = await PowerConnection.findById(connectionId);
+    const connection = await PowerConnection.findById(connectionId)
+      .populate("requesterBusiness", "name owner")
+      .populate("requesterUser", "_id name email");
+
     if (!connection) {
       throw new NotFoundError("Connection request not found");
     }
 
-    if (String(connection.requesterBusiness) !== String(businessId)) {
+    const requesterBizId = connection.requesterBusiness?._id ? String(connection.requesterBusiness._id) : String(connection.requesterBusiness || "");
+    const isRequesterBiz = businessId && requesterBizId === String(businessId);
+    const isRequesterOwner = connection.requesterBusiness?.owner && String(connection.requesterBusiness.owner) === String(userId);
+    const isRequesterUser = connection.requesterUser && String(connection.requesterUser?._id || connection.requesterUser) === String(userId);
+
+    if (!isRequesterBiz && !isRequesterOwner && !isRequesterUser) {
       throw new ForbiddenError("Only the requester business can cancel this request");
     }
 

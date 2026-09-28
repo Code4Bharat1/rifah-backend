@@ -49,20 +49,21 @@ export const messageService = {
     emitToUser(recipientId, "update_conversations", populated);
     emitToUser(senderId, "update_conversations", populated);
 
-    // Persistent in-app notification for recipient
-    try {
-      const isBiz = recipient.role === "business" || Boolean(await import("../businesses/business.model.js").then(m => m.Business.findOne({ owner: recipientId })));
-      await notificationService.createNotification({
-        recipientId: recipientId,
-        type: "Message",
-        title: "New Message",
-        body: `You received a new message from ${populated.sender?.name || 'a member'}`,
-        entityId: message._id,
-        link: `/biz/messages?userId=${senderId}`
-      });
-    } catch (err) {
-      console.error("Failed to create message notification:", err);
-    }
+    // Persistent in-app notification for recipient (non-blocking for fast message sending)
+    (async () => {
+      try {
+        await notificationService.createNotification({
+          recipientId: recipientId,
+          type: "Message",
+          title: "New Message",
+          body: `You received a new message from ${populated.sender?.name || 'a member'}`,
+          entityId: message._id,
+          link: `/biz/messages?userId=${senderId}`
+        });
+      } catch (err) {
+        console.error("Failed to create message notification:", err);
+      }
+    })();
 
     return populated;
   },

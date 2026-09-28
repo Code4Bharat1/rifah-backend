@@ -12,7 +12,9 @@ export const corsConfig = {
       origin.includes("vercel.app") ||
       origin.includes("netlify.app") ||
       origin.includes("onrender.com") ||
-      origin.includes("localhost")
+      origin.includes("localhost") ||
+      origin.includes("127.0.0.1") ||
+      env.isDevelopment()
     ) {
       return callback(null, true);
     }
