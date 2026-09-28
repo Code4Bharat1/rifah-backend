@@ -53,6 +53,19 @@ const reviewSchema = new mongoose.Schema(
     moderatedAt: {
       type: Date,
     },
+    reply: {
+      text: {
+        type: String,
+        trim: true,
+      },
+      createdAt: {
+        type: Date,
+      },
+      respondedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    },
   },
   {
     timestamps: true,

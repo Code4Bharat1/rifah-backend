@@ -43,4 +43,10 @@ export const reviewController = {
       `Successfully deleted ${result.deletedCount} review(s)`
     );
   }),
+
+  replyToReview: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const review = await reviewService.replyToReview(id, req.body, req.user);
+    return ApiResponse.success(res, review, "Reply added successfully");
+  }),
 };

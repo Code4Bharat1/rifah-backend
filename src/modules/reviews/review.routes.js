@@ -59,5 +59,13 @@ router.delete(
   reviewController.deleteReview
 );
 
+// Authenticated: Business Owner replies to review
+router.post(
+  "/:id/reply",
+  authMiddleware,
+  validateObjectIdParam("id"),
+  reviewController.replyToReview
+);
+
 export { router as reviewRoutes };
 export default router;

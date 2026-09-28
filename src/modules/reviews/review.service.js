@@ -1,7 +1,8 @@
 import { Review } from "./review.model.js";
 import { Business } from "../businesses/business.model.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
-import { NotFoundError, ConflictError } from "../../shared/errors/errors.js";
+import { NotFoundError, ConflictError, ForbiddenError } from "../../shared/errors/errors.js";
+import { ROLES } from "../../shared/constants/roles.js";
 
 export const reviewService = {
   /**
@@ -171,5 +172,42 @@ export const reviewService = {
     );
 
     return { deletedCount: result.deletedCount };
+  },
+
+  /**
+   * Reply to review (Business Owner or Admin)
+   */
+  replyToReview: async (reviewId, { text }, user) => {
+    if (!text || !text.trim()) {
+      throw new ConflictError("Reply text cannot be empty");
+    }
+
+    const review = await Review.findById(reviewId).populate("business");
+    if (!review) {
+      throw new NotFoundError("Review not found");
+    }
+
+    const biz = review.business;
+    const bizOwner = biz?.owner?.toString() || biz?.userId?.toString();
+    const isAdmin = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user?.role);
+    const isOwner = Boolean(bizOwner && user?.id && bizOwner === user.id.toString());
+
+    if (!isOwner && !isAdmin) {
+      // In case business was not populated or owner field is stored differently
+      const actualBiz = await Business.findById(biz?._id || biz);
+      const actualOwner = actualBiz?.owner?.toString() || actualBiz?.userId?.toString();
+      if (!actualOwner || actualOwner !== user?.id?.toString()) {
+        throw new ForbiddenError("You are not authorized to reply to reviews for this business");
+      }
+    }
+
+    review.reply = {
+      text: text.trim(),
+      createdAt: new Date(),
+      respondedBy: user.id,
+    };
+    await review.save();
+
+    return review;
   },
 };
