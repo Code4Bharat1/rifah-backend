@@ -12,7 +12,8 @@ import { Role } from "../roles/role.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { NotFoundError, ConflictError, BadRequestError } from "../../shared/errors/errors.js";
-import { resolveEligibleAdminBusiness } from "../../shared/utils/admin-eligibility.js";
+import { ERROR_CODES } from "../../shared/errors/error-codes.js";
+import { resolveEligibleAdminBusiness, isBusinessVerified } from "../../shared/utils/admin-eligibility.js";
 
 export const stateService = {
   /**
@@ -201,11 +202,27 @@ export const stateService = {
       }
     } else if (email && name) {
       // Manual entry: find user by email or create new user
-      nominee = await User.findOne({ email: email.toLowerCase().trim() });
-      if (!nominee) {
+      const cleanEmail = email.toLowerCase().trim();
+      nominee = await User.findOne({ email: cleanEmail });
+      if (nominee) {
+        const ownedBusiness = await Business.findOne({
+          $or: [
+            { owner: nominee._id },
+            { ownerEmail: cleanEmail },
+            { email: cleanEmail },
+          ],
+        });
+        if (ownedBusiness && !isBusinessVerified(ownedBusiness)) {
+          throw new BadRequestError(
+            "This business is currently pending verification. It cannot be allocated to a State Admin or Chapter Admin until the verification process is completed.",
+            null,
+            ERROR_CODES.BUSINESS_VERIFICATION_PENDING
+          );
+        }
+      } else {
         nominee = await User.create({
           name: name.trim(),
-          email: email.toLowerCase().trim(),
+          email: cleanEmail,
           phone: phone ? phone.trim() : "",
           role: ROLES.CUSTOMER,
           isProfileComplete: true
@@ -282,6 +299,11 @@ export const stateService = {
       throw new BadRequestError("State name is required");
     }
     const cleanState = name.trim();
+
+    // Atomic guard: If businessId provided, enforce verification check BEFORE modifying database
+    if (businessId) {
+      await resolveEligibleAdminBusiness(businessId);
+    }
     
     // Create/update state profile
     const profile = await StateProfile.findOneAndUpdate(

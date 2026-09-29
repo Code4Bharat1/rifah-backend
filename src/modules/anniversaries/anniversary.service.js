@@ -1,6 +1,7 @@
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
+import { Message } from "../messages/message.model.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -243,6 +244,31 @@ export const anniversaryService = {
           yearsCompleted,
           isSelf: String(ownerDoc._id || biz.owner) === String(currentUserId),
         });
+      }
+    }
+
+    // Check if current user has already sent anniversary congratulations/wishes today
+    if (currentUserId && todayAnniversaries.length > 0) {
+      try {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const since = new Date(Math.min(startOfToday.getTime(), Date.now() - 24 * 60 * 60 * 1000));
+        const recipientIds = todayAnniversaries.map((a) => a.userId).filter(Boolean);
+
+        if (recipientIds.length > 0) {
+          const sentMessages = await Message.find({
+            sender: currentUserId,
+            recipient: { $in: recipientIds },
+            createdAt: { $gte: since },
+          }).select("recipient").lean();
+
+          const wishedRecipientIds = new Set(sentMessages.map((m) => String(m.recipient)));
+          for (const anniv of todayAnniversaries) {
+            anniv.isWished = anniv.userId ? wishedRecipientIds.has(String(anniv.userId)) : false;
+          }
+        }
+      } catch (err) {
+        logger.warn("[Anniversary] Error checking sent messages:", err);
       }
     }
 

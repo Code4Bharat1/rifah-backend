@@ -1,5 +1,6 @@
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
+import { Message } from "../messages/message.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
@@ -196,6 +197,31 @@ export const birthdayService = {
         isSelf: String(u._id) === String(currentUserId),
       };
     });
+
+    // Check if current user has already sent birthday wishes today
+    if (currentUserId && todayBirthdays.length > 0) {
+      try {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const since = new Date(Math.min(startOfToday.getTime(), Date.now() - 24 * 60 * 60 * 1000));
+        const recipientIds = todayBirthdays.map((b) => b.userId).filter(Boolean);
+
+        if (recipientIds.length > 0) {
+          const sentMessages = await Message.find({
+            sender: currentUserId,
+            recipient: { $in: recipientIds },
+            createdAt: { $gte: since },
+          }).select("recipient").lean();
+
+          const wishedRecipientIds = new Set(sentMessages.map((m) => String(m.recipient)));
+          for (const bday of todayBirthdays) {
+            bday.isWished = bday.userId ? wishedRecipientIds.has(String(bday.userId)) : false;
+          }
+        }
+      } catch (err) {
+        logger.warn("[Birthday] Error checking sent messages:", err);
+      }
+    }
 
     return {
       isSelfBirthday: isSelf,

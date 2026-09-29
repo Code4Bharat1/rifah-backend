@@ -614,7 +614,23 @@ export const businessService = {
    * Get business owned by a specific user
    */
   getBusinessByOwnerId: async (ownerId) => {
-    const business = await Business.findOne({ owner: ownerId });
+    let business = await Business.findOne({ owner: ownerId });
+    if (!business) {
+      const user = await User.findById(ownerId);
+      if (user) {
+        const emailFilter = user.email ? [{ email: user.email }, { ownerEmail: user.email }] : [];
+        const phoneFilter = user.phone ? [{ phone: user.phone }, { whatsapp: user.phone }] : [];
+        const orConditions = [...emailFilter, ...phoneFilter];
+
+        if (orConditions.length > 0) {
+          business = await Business.findOne({ $or: orConditions });
+          if (business) {
+            business.owner = user._id;
+            await business.save().catch(() => {});
+          }
+        }
+      }
+    }
     if (business) {
       const hasEverBeenApproved =
         Array.isArray(business.verificationHistory) &&

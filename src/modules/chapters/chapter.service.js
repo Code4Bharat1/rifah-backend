@@ -5,8 +5,9 @@ import { ROLES } from "../../shared/constants/roles.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
-import { resolveEligibleAdminBusiness } from "../../shared/utils/admin-eligibility.js";
+import { resolveEligibleAdminBusiness, isBusinessVerified } from "../../shared/utils/admin-eligibility.js";
 import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
+import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { logger } from "../../infrastructure/logger/logger.js";
 import crypto from "crypto";
 
@@ -157,6 +158,11 @@ export const chapterService = {
       }
     }
 
+    // Atomic guard: If businessId provided, enforce verification check BEFORE modifying database
+    if (data.businessId) {
+      await resolveEligibleAdminBusiness(data.businessId);
+    }
+
     const chapter = await Chapter.create({
       name: data.name,
       city: data.city,
@@ -289,7 +295,22 @@ export const chapterService = {
     } else if (email) {
       const cleanEmail = email.toLowerCase().trim();
       nominee = await User.findOne({ email: cleanEmail }).select("+passwordHash");
-      if (!nominee) {
+      if (nominee) {
+        const ownedBusiness = await Business.findOne({
+          $or: [
+            { owner: nominee._id },
+            { ownerEmail: cleanEmail },
+            { email: cleanEmail },
+          ],
+        });
+        if (ownedBusiness && !isBusinessVerified(ownedBusiness)) {
+          throw new BadRequestError(
+            "This business is currently pending verification. It cannot be allocated to a State Admin or Chapter Admin until the verification process is completed.",
+            null,
+            ERROR_CODES.BUSINESS_VERIFICATION_PENDING
+          );
+        }
+      } else {
         nominee = await User.create({
           name: name ? name.trim() : "Chapter Admin",
           email: cleanEmail,

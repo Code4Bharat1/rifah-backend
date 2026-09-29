@@ -2,8 +2,8 @@ import { AppError } from "./AppError.js";
 import { ERROR_CODES } from "./error-codes.js";
 
 export class BadRequestError extends AppError {
-  constructor(message = "Bad request", details = null) {
-    super(message, 400, ERROR_CODES.BAD_REQUEST, details);
+  constructor(message = "Bad request", details = null, code = ERROR_CODES.BAD_REQUEST) {
+    super(message, 400, code, details);
   }
 }
 

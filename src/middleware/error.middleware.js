@@ -58,6 +58,8 @@ export const errorMiddleware = (err, req, res, next) => {
   const responsePayload = {
     success: false,
     statusCode,
+    code,
+    message,
     error: {
       code,
       message,

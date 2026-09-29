@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { Membership } from "./membership.model.js";
 import { Plan } from "./plan.model.js";
 import { Business } from "../businesses/business.model.js";
+import { Payment } from "../payments/payment.model.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
 import { addDays } from "../../shared/utils/date.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -12,6 +13,27 @@ import { User } from "../users/user.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 
 export const DEFAULT_MEMBERSHIP_PLANS = {
+  free: {
+    name: "Free",
+    price: 0,
+    priceUsd: 0,
+    durationYears: 0,
+    gstRate: 0,
+    displayOrder: 0,
+    isRecommended: false,
+    summary: "Basic Directory & Community Presence",
+    features: [
+      "Directory listing on RIFAH Connect",
+      "Basic business profile",
+      "Search visibility",
+    ],
+    missingFeatures: [
+      "Verified Chamber Badge",
+      "Matched buyer lead enquiries",
+      "Direct B2B buyer messaging",
+      "Priority RFQ & high-value lead routing",
+    ],
+  },
   silver: {
     name: "Silver",
     price: 3000,
@@ -221,29 +243,71 @@ export const membershipService = {
     const business = await Business.findById(businessId);
     let membership = await Membership.findOne({ business: businessId });
     
+    // Check real payment records for this business
+    const hasPaidPayment = await Payment.exists({
+      business: businessId,
+      status: { $in: ["Paid", "paid", "Completed", "completed", "Success", "success"] },
+    });
+    const isPaid = Boolean(business?.isPaid || hasPaidPayment);
+    const bizTier = (business?.membership || "Free").toLowerCase();
+
     if (!membership) {
-      // If no membership record exists, sync with business tier or default to Silver
-      const bizTier = (business?.membership || "Silver").toLowerCase();
-      const plan = await Plan.findOne({ planId: bizTier }).lean() || 
-                   DEFAULT_MEMBERSHIP_PLANS[bizTier] || 
-                   DEFAULT_MEMBERSHIP_PLANS.silver;
-      
-      const durationYears = plan.durationYears || 1;
-      membership = await Membership.create({
-        business: businessId,
-        planId: bizTier,
-        planName: plan.name || "Silver",
-        price: plan.price || 3000,
-        billingCycle: `${durationYears} Year${durationYears > 1 ? "s" : ""}`,
-        startDate: business?.createdAt || new Date(),
-        endDate: addDays(365 * durationYears),
-        status: "Active",
-        features: plan.features || [],
-      });
+      if (bizTier === "free") {
+        membership = await Membership.create({
+          business: businessId,
+          planId: "free",
+          planName: "Free",
+          price: 0,
+          billingCycle: "Free",
+          startDate: business?.createdAt || new Date(),
+          endDate: null,
+          status: "Active",
+          features: [
+            "Directory listing on RIFAH Connect",
+            "Basic business profile",
+            "Search visibility",
+          ],
+        });
+      } else {
+        const plan = await Plan.findOne({ planId: bizTier }).lean() || 
+                     DEFAULT_MEMBERSHIP_PLANS[bizTier] || 
+                     DEFAULT_MEMBERSHIP_PLANS.silver;
+        
+        const durationYears = Number(plan?.durationYears) || 1;
+        membership = await Membership.create({
+          business: businessId,
+          planId: bizTier,
+          planName: plan?.name || "Silver",
+          price: plan?.price || 3000,
+          billingCycle: `${durationYears} Year${durationYears > 1 ? "s" : ""}`,
+          startDate: business?.createdAt || new Date(),
+          endDate: isPaid ? addDays(365 * durationYears) : null,
+          status: isPaid ? "Active" : "Pending",
+          features: plan?.features || [],
+        });
+      }
+    } else {
+      // Reconcile existing DB membership with real plan & payment status
+      if ((membership.planId || "").toLowerCase() === "free") {
+        if (membership.endDate !== null || membership.price !== 0) {
+          membership.endDate = null;
+          membership.price = 0;
+          membership.billingCycle = "Free";
+          membership.status = "Active";
+          await membership.save();
+        }
+      } else if (!isPaid) {
+        // Unpaid accounts should not have an active expiration date (e.g. 25-yr future date)
+        if (membership.status === "Active" || membership.endDate) {
+          membership.status = "Pending";
+          membership.endDate = null;
+          await membership.save();
+        }
+      }
     }
 
     const now = new Date();
-    // Check if membership is expired
+    // Check if membership is expired (only applicable if endDate exists)
     if (membership.endDate && new Date(membership.endDate) < now) {
       if (membership.status === "Active") {
         membership.status = "Expired";
@@ -254,11 +318,12 @@ export const membershipService = {
     const membershipObj = membership.toObject ? membership.toObject() : { ...membership };
     const endDate = membership.endDate ? new Date(membership.endDate) : null;
     const diffMs = endDate ? endDate.getTime() - now.getTime() : 0;
-    const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    const daysRemaining = endDate ? Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24))) : null;
 
+    membershipObj.isPaid = isPaid;
     membershipObj.daysRemaining = daysRemaining;
-    membershipObj.isExpiringSoon = membership.status === "Active" && daysRemaining <= 30 && daysRemaining > 0;
-    membershipObj.isExpired = membership.status === "Expired" || (endDate && endDate < now);
+    membershipObj.isExpiringSoon = Boolean(membership.status === "Active" && daysRemaining !== null && daysRemaining <= 30 && daysRemaining > 0);
+    membershipObj.isExpired = Boolean(membership.status === "Expired" || (endDate && endDate < now));
 
     return membershipObj;
   },

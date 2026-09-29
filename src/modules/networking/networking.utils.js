@@ -3,6 +3,7 @@ import { Chapter } from "../chapters/chapter.model.js";
 import { User } from "../users/user.model.js";
 import { StateProfile } from "../states/state-profile.model.js";
 import { BadRequestError, NotFoundError } from "../../shared/errors/errors.js";
+import { generateSlug } from "../../shared/utils/generate-id.js";
 
 /**
  * Formats state name to standard Title Case and strips invalid values
@@ -138,24 +139,132 @@ export const resolveBusinessState = async (business) => {
 };
 
 /**
+ * Ensures a business has a valid chapterId and formatted state.
+ */
+export const ensureBusinessChapterAndState = async (business) => {
+  if (!business) return;
+
+  let resolvedState = await resolveBusinessState(business);
+
+  if (!business.chapterId) {
+    if (business.chapter) {
+      const chDoc = await Chapter.findOne({ name: new RegExp(`^${business.chapter.trim()}$`, "i") }).select("_id state");
+      if (chDoc) {
+        business.chapterId = chDoc._id;
+        if (!resolvedState && chDoc.state) resolvedState = formatStateName(chDoc.state);
+      }
+    }
+    if (!business.chapterId && business.owner) {
+      const user = await User.findById(business.owner).select("chapterId state chapter");
+      if (user?.chapterId) {
+        business.chapterId = user.chapterId;
+      } else if (user?.chapter) {
+        const chDoc = await Chapter.findOne({ name: new RegExp(`^${user.chapter.trim()}$`, "i") }).select("_id state");
+        if (chDoc) {
+          business.chapterId = chDoc._id;
+          if (!resolvedState && chDoc.state) resolvedState = formatStateName(chDoc.state);
+        }
+      }
+    }
+    if (!business.chapterId) {
+      const defaultChapter = await Chapter.findOne({ status: "Active" }).select("_id state name");
+      if (defaultChapter) {
+        business.chapterId = defaultChapter._id;
+        business.chapter = defaultChapter.name;
+        if (!resolvedState && defaultChapter.state) resolvedState = formatStateName(defaultChapter.state);
+      }
+    }
+  }
+
+  if (!resolvedState) {
+    if (business.chapterId) {
+      const chDoc = await Chapter.findById(business.chapterId).select("state");
+      if (chDoc?.state) resolvedState = formatStateName(chDoc.state);
+    }
+    if (!resolvedState) resolvedState = "Delhi";
+  }
+
+  business.state = resolvedState;
+  await business.save().catch(() => {});
+};
+
+/**
  * Resolves the calling user's own business profile, required to log any
  * networking record (a one-to-one meeting or a thank-you note).
  */
 export const resolveOwnBusiness = async (userId) => {
-  const business = await Business.findOne({ owner: userId });
+  let business = await Business.findOne({ owner: userId });
+
   if (!business) {
-    throw new BadRequestError("You must have a registered business profile to use Networking features.");
-  }
-  const resolvedState = await resolveBusinessState(business);
-  if (!business.chapterId || !resolvedState) {
-    if (!business.chapterId) {
-      const user = await User.findById(userId).select("chapterId");
-      if (user?.chapterId) {
-        business.chapterId = user.chapterId;
-        await business.save().catch(() => {});
+    const user = await User.findById(userId);
+    if (user) {
+      const emailFilter = user.email ? [{ email: user.email }, { ownerEmail: user.email }] : [];
+      const phoneFilter = user.phone ? [{ phone: user.phone }, { whatsapp: user.phone }] : [];
+      const orConditions = [...emailFilter, ...phoneFilter];
+
+      if (orConditions.length > 0) {
+        business = await Business.findOne({ $or: orConditions });
+        if (business) {
+          business.owner = user._id;
+          await business.save().catch(() => {});
+        }
+      }
+
+      // Auto-create a registered business profile if missing so the user can use networking seamlessly
+      if (!business) {
+        const rawName = (user.organization || "").trim() || `${user.name}'s Business`;
+        let slug = generateSlug(rawName);
+        const slugConflict = await Business.findOne({ slug });
+        if (slugConflict) {
+          slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+        }
+
+        let bizState = formatStateName(user.state);
+        let bizChapter = user.chapter || "";
+        let bizChapterId = user.chapterId || null;
+
+        if (bizChapterId && !bizState) {
+          const chDoc = await Chapter.findById(bizChapterId).select("name state");
+          if (chDoc) {
+            bizState = formatStateName(chDoc.state);
+            bizChapter = chDoc.name || bizChapter;
+          }
+        } else if (bizChapter && !bizState) {
+          const chDoc = await Chapter.findOne({ name: new RegExp(`^${bizChapter.trim()}$`, "i") }).select("state _id");
+          if (chDoc) {
+            bizState = formatStateName(chDoc.state);
+            if (!bizChapterId) bizChapterId = chDoc._id;
+          }
+        }
+
+        business = await Business.create({
+          name: rawName,
+          slug,
+          owner: user._id,
+          email: user.email,
+          phone: user.phone || "",
+          whatsapp: user.whatsapp || user.phone || "",
+          chapter: bizChapter || "General",
+          chapterId: bizChapterId,
+          state: bizState || "",
+          city: user.city || "",
+          status: "Active",
+          verification: "verified",
+          verificationStatus: "verified",
+          isVerified: true,
+          membership: "Free",
+          featured: false,
+          rating: 0,
+        });
       }
     }
   }
+
+  if (!business) {
+    throw new BadRequestError("You must have a registered business profile to use Networking features.");
+  }
+
+  await ensureBusinessChapterAndState(business);
   return business;
 };
 
@@ -167,6 +276,6 @@ export const resolveMemberBusiness = async (businessId) => {
   if (!business) {
     throw new NotFoundError("Selected member's business could not be found.");
   }
-  await resolveBusinessState(business);
+  await ensureBusinessChapterAndState(business);
   return business;
 };
