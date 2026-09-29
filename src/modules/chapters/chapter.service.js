@@ -285,13 +285,17 @@ export const chapterService = {
     }
 
     let nominee;
+    let isNewUser = false;
+    let randomPassword = null;
+
     if (businessId) {
       const business = await resolveEligibleAdminBusiness(businessId);
       const nomineeId = business.owner?._id || business.owner;
-      nominee = await User.findById(nomineeId).select("+passwordHash");
+      nominee = await User.findById(nomineeId);
       if (!nominee && (business.ownerEmail || business.email)) {
-        nominee = await User.findOne({ email: (business.ownerEmail || business.email).toLowerCase().trim() }).select("+passwordHash");
+        nominee = await User.findOne({ email: (business.ownerEmail || business.email).toLowerCase().trim() });
       }
+      isNewUser = false;
     } else if (email) {
       const cleanEmail = email.toLowerCase().trim();
       nominee = await User.findOne({ email: cleanEmail }).select("+passwordHash");
@@ -310,10 +314,16 @@ export const chapterService = {
             ERROR_CODES.BUSINESS_VERIFICATION_PENDING
           );
         }
+        isNewUser = false;
       } else {
+        isNewUser = true;
+        randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
+        const passwordHash = await hashPassword(randomPassword);
         nominee = await User.create({
           name: name ? name.trim() : "Chapter Admin",
           email: cleanEmail,
+          passwordHash,
+          forcePasswordChange: true,
           role: ROLES.CUSTOMER,
           isProfileComplete: true,
         });
@@ -326,8 +336,8 @@ export const chapterService = {
       throw new BadRequestError("Could not resolve nominated user account for Chapter Admin appointment.");
     }
 
-    // Update name or email if supplied
-    if (name && name.trim()) {
+    // Update name or email if supplied for new/unnamed accounts
+    if (name && name.trim() && (!nominee.name || nominee.name === "Chapter Admin")) {
       nominee.name = name.trim();
     }
     if (email && email.trim() && !nominee.email) {
@@ -356,10 +366,6 @@ export const chapterService = {
       }
     }
 
-    // Generate a secure random password for the Chapter Admin (refreshed upon creation or re-allocation)
-    const randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
-    const passwordHash = await hashPassword(randomPassword);
-
     if (nominee.role !== ROLES.CHAPTER_ADMIN) {
       nominee.previousRole = nominee.role;
     }
@@ -369,16 +375,19 @@ export const chapterService = {
     nominee.chapterId = chapter._id;
     nominee.city = chapter.city || nominee.city || "";
     nominee.state = chapter.state || nominee.state || "";
-    nominee.passwordHash = passwordHash;
-    nominee.forcePasswordChange = true;
     await nominee.save();
 
-    // Send email with generated credentials & password to the assigned chapter admin email
+    // Send email with generated credentials or notification to the assigned chapter admin email
     try {
-      await emailService.sendChapterAdminInvite(nominee.email, randomPassword, chapter.name, nominee.name);
-      logger.info(`[CHAPTER ADMIN APPOINTMENT] Password credentials sent to ${nominee.email} for chapter ${chapter.name}`);
+      if (isNewUser && randomPassword) {
+        await emailService.sendChapterAdminInvite(nominee.email, randomPassword, chapter.name, nominee.name);
+        logger.info(`[CHAPTER ADMIN APPOINTMENT] Password credentials sent to new user ${nominee.email} for chapter ${chapter.name}`);
+      } else {
+        await emailService.sendChapterAdminUpgradeEmail(nominee.email, "", chapter.name, nominee.name);
+        logger.info(`[CHAPTER ADMIN APPOINTMENT] Upgrade notification sent to existing user ${nominee.email} for chapter ${chapter.name}`);
+      }
     } catch (mailErr) {
-      logger.error(`[CHAPTER ADMIN APPOINTMENT] Failed to send email credentials to ${nominee.email}:`, mailErr);
+      logger.error(`[CHAPTER ADMIN APPOINTMENT] Failed to send email to ${nominee.email}:`, mailErr);
     }
 
     // Real-time Copilot Knowledge Base Sync

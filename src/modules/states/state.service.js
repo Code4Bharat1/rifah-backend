@@ -193,10 +193,17 @@ export const stateService = {
   assignStateAdmin: async ({ businessId, image, address, explicitStateName, contactEmail, contactPhone, name, email, phone }) => {
     let nominee;
     let cleanState = explicitStateName;
+    let isNewUser = false;
+    let randomPassword = null;
     
     if (businessId) {
       const business = await resolveEligibleAdminBusiness(businessId);
-      nominee = business.owner;
+      const nomineeId = business.owner?._id || business.owner;
+      nominee = await User.findById(nomineeId);
+      if (!nominee && (business.ownerEmail || business.email)) {
+        nominee = await User.findOne({ email: (business.ownerEmail || business.email).toLowerCase().trim() });
+      }
+      isNewUser = false;
       if (!cleanState) {
         cleanState = (business.state || "").trim();
       }
@@ -219,10 +226,16 @@ export const stateService = {
             ERROR_CODES.BUSINESS_VERIFICATION_PENDING
           );
         }
+        isNewUser = false;
       } else {
+        isNewUser = true;
+        randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
+        const passwordHash = await hashPassword(randomPassword);
         nominee = await User.create({
           name: name.trim(),
           email: cleanEmail,
+          passwordHash,
+          forcePasswordChange: true,
           phone: phone ? phone.trim() : "",
           role: ROLES.CUSTOMER,
           isProfileComplete: true
@@ -266,20 +279,23 @@ export const stateService = {
       );
     };
 
-    // Generate a secure random password for the State Admin
-    const randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
-    const passwordHash = await hashPassword(randomPassword);
-
     if (nominee.role !== ROLES.STATE_ADMIN) {
       nominee.previousRole = nominee.role;
     }
     nominee.role = ROLES.STATE_ADMIN;
     nominee.state = cleanState;
-    nominee.passwordHash = passwordHash;
-    nominee.forcePasswordChange = true;
     await nominee.save();
 
-    await emailService.sendStateAdminInvite(nominee.email, randomPassword, cleanState, nominee.name);
+    try {
+      if (isNewUser && randomPassword) {
+        await emailService.sendStateAdminInvite(nominee.email, randomPassword, cleanState, nominee.name);
+      } else {
+        await emailService.sendStateAdminUpgradeEmail(nominee.email, cleanState, nominee.name);
+      }
+    } catch (mailErr) {
+      logger.warn(`Failed to send state admin email to ${nominee.email}: ${mailErr.message}`);
+    }
+
     await upsertStateProfile();
 
     // Real-time Copilot Knowledge Base Sync
