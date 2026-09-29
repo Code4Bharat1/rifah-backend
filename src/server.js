@@ -137,7 +137,7 @@ const startServer = async () => {
     membershipService.startMembershipExpiryScheduler();
 
     // 3. Start HTTP Server
-    server = app.listen(env.PORT, () => {
+    server = app.listen(env.PORT, "0.0.0.0", () => {
       logger.info(`Port:${env.PORT}`);
       logger.info(`Health Check: http://localhost:${env.PORT}/health`);
     });

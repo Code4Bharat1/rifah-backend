@@ -4,8 +4,10 @@ export const databaseConfig = {
   uri: env.DATABASE.URI,
   options: {
     autoIndex: env.isDevelopment(),
-    maxPoolSize: 15,
-    serverSelectionTimeoutMS: 15000,
+    minPoolSize: 5,
+    maxPoolSize: 20,
+    maxIdleTimeMS: 45000,
+    serverSelectionTimeoutMS: 10000,
     socketTimeoutMS: 60000,
     connectTimeoutMS: 15000,
     retryWrites: true,
