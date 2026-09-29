@@ -787,7 +787,7 @@ export const authService = {
     // Session-only, mirrors tokenPayload — NOT saved to the DB (see comment above). Lets the
     // frontend show a "switch back" control without permanently touching the account's real role.
     userObj.previousRole = user.role;
-    if (targetRole === "business_owner" && ownedBusiness) {
+    if (ownedBusiness) {
       userObj.businessId = ownedBusiness._id;
       userObj.businessSlug = ownedBusiness.slug;
     }
