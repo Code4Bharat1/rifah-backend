@@ -7,9 +7,19 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
-router.post("/", authMiddleware, requireRole(ROLES.BUSINESS_OWNER), oneToOneController.create);
+router.post(
+  "/",
+  authMiddleware,
+  requireRole(ROLES.BUSINESS_OWNER, ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
+  oneToOneController.create
+);
 
-router.get("/me", authMiddleware, requireRole(ROLES.BUSINESS_OWNER), oneToOneController.listMine);
+router.get(
+  "/me",
+  authMiddleware,
+  requireRole(ROLES.BUSINESS_OWNER, ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
+  oneToOneController.listMine
+);
 
 router.get(
   "/",
