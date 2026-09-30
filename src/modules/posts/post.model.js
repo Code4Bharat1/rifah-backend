@@ -21,10 +21,12 @@ const postSchema = new mongoose.Schema(
       type: String,
       enum: [
         "central_admin",
+        "secretariat",
         "state_admin",
         "chapter_admin",
         "business_owner",
         "customer",
+        "buyer",
         "public",
       ],
       default: "business_owner",

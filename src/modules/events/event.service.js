@@ -209,8 +209,12 @@ const buildManageScopeQuery = (id, user) => {
   const userChapter = (user.chapter || "").trim();
   if (user.role === ROLES.STATE_ADMIN && userState) {
     conditions.push({ creatorState: new RegExp(`^${userState}$`, "i") });
+    conditions.push({ state: new RegExp(`^${userState}$`, "i") });
+    conditions.push({ targetStates: new RegExp(`^${userState}$`, "i") });
   } else if (user.role === ROLES.CHAPTER_ADMIN && userChapter) {
     conditions.push({ creatorChapter: new RegExp(`^${userChapter}$`, "i") });
+    conditions.push({ chapter: new RegExp(`^${userChapter}$`, "i") });
+    conditions.push({ targetChapters: new RegExp(`^${userChapter}$`, "i") });
   }
   return { _id: id, $or: conditions };
 };

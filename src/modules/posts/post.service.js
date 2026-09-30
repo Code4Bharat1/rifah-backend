@@ -318,12 +318,26 @@ export const postService = {
       images = [data.image];
     }
 
+    const VALID_AUTHOR_ROLES = [
+      "central_admin",
+      "secretariat",
+      "state_admin",
+      "chapter_admin",
+      "business_owner",
+      "customer",
+      "buyer",
+      "public",
+    ];
+    if (!VALID_AUTHOR_ROLES.includes(authorRole)) {
+      authorRole = "business_owner";
+    }
+
     const post = new Post({
       title: data.title || "",
       eventId: data.eventId || null,
       author: user.id || user._id,
       authorName: authorName || "Member",
-      authorRole: authorRole || "business_owner",
+      authorRole,
       authorAvatar: authorAvatar || "",
       chapter: data.chapter || user.chapter || "",
       chapterId: data.chapterId || user.chapterId || null,

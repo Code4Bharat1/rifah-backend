@@ -8,6 +8,7 @@ export const ROLES = Object.freeze({
   CHAPTER_ADMIN: "chapter_admin",
   BUSINESS_OWNER: "business_owner",
   CUSTOMER: "customer",
+  BUYER: "buyer",
   PUBLIC: "public",
 });
 
@@ -20,5 +21,7 @@ export const ROLE_HIERARCHY = Object.freeze({
   [ROLES.CHAPTER_ADMIN]: 60,
   [ROLES.BUSINESS_OWNER]: 40,
   [ROLES.CUSTOMER]: 20,
+  [ROLES.BUYER]: 20,
+  buyer: 20,
   [ROLES.PUBLIC]: 0,
 });
