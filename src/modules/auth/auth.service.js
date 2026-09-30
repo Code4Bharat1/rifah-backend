@@ -889,9 +889,15 @@ export const authService = {
    * Verify password reset verification code
    */
   verifyResetCode: async ({ email, resetToken }) => {
+    if (!email || !resetToken) {
+      throw new BadRequestError("Email and verification code are required");
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanToken = String(resetToken).trim();
+
     const user = await User.findOne({
-      email: email.toLowerCase().trim(),
-      resetPasswordToken: String(resetToken).trim(),
+      email: cleanEmail,
+      resetPasswordToken: cleanToken,
       resetPasswordExpires: { $gt: new Date() },
     });
 
@@ -906,9 +912,15 @@ export const authService = {
    * Reset password with verification code
    */
   resetPassword: async ({ email, resetToken, newPassword }) => {
+    if (!email || !resetToken || !newPassword) {
+      throw new BadRequestError("Email, verification code, and new password are required");
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanToken = String(resetToken).trim();
+
     const user = await User.findOne({
-      email: email.toLowerCase().trim(),
-      resetPasswordToken: resetToken,
+      email: cleanEmail,
+      resetPasswordToken: cleanToken,
       resetPasswordExpires: { $gt: new Date() },
     }).select("+passwordHash +resetPasswordToken +resetPasswordExpires");
 
