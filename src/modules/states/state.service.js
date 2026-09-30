@@ -208,39 +208,33 @@ export const stateService = {
         cleanState = (business.state || "").trim();
       }
     } else if (email && name) {
-      // Manual entry: find user by email or create new user
+      // Manual entry: find user by email
       const cleanEmail = email.toLowerCase().trim();
       nominee = await User.findOne({ email: cleanEmail });
+      
+      let ownedBusiness = null;
       if (nominee) {
-        const ownedBusiness = await Business.findOne({
+        ownedBusiness = await Business.findOne({
           $or: [
             { owner: nominee._id },
             { ownerEmail: cleanEmail },
             { email: cleanEmail },
           ],
         });
-        if (ownedBusiness && !isBusinessVerified(ownedBusiness)) {
-          throw new BadRequestError(
-            "This business is currently pending verification. It cannot be allocated to a State Admin or Chapter Admin until the verification process is completed.",
-            null,
-            ERROR_CODES.BUSINESS_VERIFICATION_PENDING
-          );
-        }
-        isNewUser = false;
-      } else {
-        isNewUser = true;
-        randomPassword = crypto.randomBytes(4).toString("hex"); // 8-character random alphanumeric password
-        const passwordHash = await hashPassword(randomPassword);
-        nominee = await User.create({
-          name: name.trim(),
-          email: cleanEmail,
-          passwordHash,
-          forcePasswordChange: true,
-          phone: phone ? phone.trim() : "",
-          role: ROLES.CUSTOMER,
-          isProfileComplete: true
-        });
       }
+
+      if (!nominee || !ownedBusiness) {
+        throw new BadRequestError("The user must be a registered RIFAH member with an active business profile to be appointed as an Admin.");
+      }
+
+      if (!isBusinessVerified(ownedBusiness)) {
+        throw new BadRequestError(
+          "This business is currently pending verification. It cannot be allocated to a State Admin or Chapter Admin until the verification process is completed.",
+          null,
+          ERROR_CODES.BUSINESS_VERIFICATION_PENDING
+        );
+      }
+      isNewUser = false;
     } else {
       throw new BadRequestError("Please select a business owner or provide name and email to allocate an admin.");
     }
