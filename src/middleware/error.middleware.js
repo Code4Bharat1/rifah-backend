@@ -37,6 +37,36 @@ export const errorMiddleware = (err, req, res, next) => {
     message = "Database validation failed";
   }
 
+  // BUG-058: Multer throws raw, cryptic errors ("Unexpected field", "File too large")
+  // with no statusCode of their own, so they fell through to a bare 500 with that exact
+  // literal text as the message — e.g. selecting more files than an upload.array(field,
+  // maxCount) route allows throws code LIMIT_UNEXPECTED_FILE (not LIMIT_FILE_COUNT, which
+  // is Multer's own confusingly-named behavior for exceeding that per-field cap), and the
+  // frontend showed "Unexpected field" verbatim in the toast. Translate every Multer error
+  // code to a real status + a message someone can actually act on.
+  if (err.name === "MulterError") {
+    statusCode = 400;
+    code = err.code;
+    switch (err.code) {
+      case "LIMIT_FILE_SIZE":
+        statusCode = 413;
+        message = "That file is too large. Please choose a smaller file and try again.";
+        break;
+      case "LIMIT_UNEXPECTED_FILE":
+        message = "Too many files selected for one upload (max 12 at a time). Please select fewer files and try again.";
+        break;
+      case "LIMIT_FILE_COUNT":
+        message = "Too many files selected. Please select fewer files and try again.";
+        break;
+      case "LIMIT_FIELD_COUNT":
+      case "LIMIT_PART_COUNT":
+        message = "Too much data in this upload. Please try again with fewer files.";
+        break;
+      default:
+        message = "Could not process the uploaded file(s). Please try again.";
+    }
+  }
+
   // Handle JWT errors
   if (err.name === "JsonWebTokenError") {
     statusCode = 401;

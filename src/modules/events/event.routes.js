@@ -101,6 +101,28 @@ router.post(
   eventController.uploadPoster
 );
 
+// BUG-055: real signature-image upload for Operations Centre certificate signatories
+// (see event.controller.js uploadSignatoryImage for the full story).
+router.post(
+  "/:id/signatory-image",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  upload.single("image"),
+  eventController.uploadSignatoryImage
+);
+
+// BUG-060: real Keynote 1/2 poster upload for Operations Centre My Team > Role Assignments
+// (see event.controller.js uploadKeynotePoster for the full story).
+router.post(
+  "/:id/keynote-poster",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  upload.single("poster"),
+  eventController.uploadKeynotePoster
+);
+
 router.delete(
   "/:id",
   authMiddleware,

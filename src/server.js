@@ -124,11 +124,20 @@ const startServer = async () => {
     // 1.2 Ensure test chapters across multiple states exist
     await ensureChapters();
 
-    // 1.4 Clean up any seeded Anniversary Test Data
-    await anniversaryService.cleanAnniversaryTestData();
+    // BUG-057: demo/fixture data for the Anniversary feature — not required for the
+    // server to function, so (like ensureChapters above) a failure here must only be
+    // logged, never take the whole API down via the catch block's process.exit(1)
+    // below. This previously crashed boot outright on an E11000 duplicate-key error
+    // (see anniversary.service.js for the underlying race-condition fix).
+    try {
+      // 1.4 Clean up any seeded Anniversary Test Data
+      await anniversaryService.cleanAnniversaryTestData();
 
-    // 1.3 Ensure Anniversary Test Data
-    await anniversaryService.seedAnniversaryTestData({ chapter: "Mumbai" });
+      // 1.3 Ensure Anniversary Test Data
+      await anniversaryService.seedAnniversaryTestData({ chapter: "Mumbai" });
+    } catch (err) {
+      logger.error("[ANNIVERSARY SEED ERROR] Skipping demo data, server will continue starting:", err);
+    }
 
     // 2. Start Scheduled Background Tasks
     eventService.startEventScheduler();
