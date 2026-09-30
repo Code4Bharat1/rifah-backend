@@ -86,6 +86,23 @@ export const roleService = {
       }
     }
 
+    // Sort by hierarchy: Central/Leadership > State > Chapter
+    const levelOrder = { "Central": 1, "Leadership": 2, "State": 3, "Chapter": 4 };
+    roles.sort((a, b) => {
+      // First by displayOrder (if set, otherwise 0)
+      const orderA = a.displayOrder || 0;
+      const orderB = b.displayOrder || 0;
+      if (orderA !== orderB) return orderA - orderB;
+      
+      // Then by level hierarchy
+      const levelA = levelOrder[a.level] || 99;
+      const levelB = levelOrder[b.level] || 99;
+      if (levelA !== levelB) return levelA - levelB;
+
+      // Then by createdAt
+      return new Date(a.createdAt) - new Date(b.createdAt);
+    });
+
     return roles;
   },
 
