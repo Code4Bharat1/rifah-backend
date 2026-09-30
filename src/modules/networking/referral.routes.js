@@ -7,14 +7,24 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
-router.post("/", authMiddleware, requireRole(ROLES.BUSINESS_OWNER), referralController.create);
+router.post(
+  "/",
+  authMiddleware,
+  requireRole(ROLES.BUSINESS_OWNER, ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
+  referralController.create
+);
 
-router.get("/me", authMiddleware, requireRole(ROLES.BUSINESS_OWNER), referralController.listMine);
+router.get(
+  "/me",
+  authMiddleware,
+  requireRole(ROLES.BUSINESS_OWNER, ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
+  referralController.listMine
+);
 
 router.post(
   "/:id/close",
   authMiddleware,
-  requireRole(ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.BUSINESS_OWNER, ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
   validateObjectIdParam("id"),
   referralController.close
 );
