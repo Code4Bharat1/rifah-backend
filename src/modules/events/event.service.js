@@ -1005,6 +1005,24 @@ export const eventService = {
     return updated;
   },
 
+  // BUG-060: "Keynote 1/2 Poster" in My Team's Role Assignments section was a `disabled`
+  // "Choose File" button with no onChange and no backend field to hold it at all — a pure
+  // UI stub. updateOperations's `teamAssignments` field is a whole-object replace, so a
+  // dedicated endpoint that $sets only this one nested path is used instead of round-
+  // tripping the entire teamAssignments object through the client — the poster then
+  // persists the instant it's uploaded, the same way Save Assignments doesn't need to be
+  // clicked for anything else that already auto-saves.
+  setKeynotePoster: async (eventId, slot, posterUrl, user) => {
+    const field = slot === "2" ? "keynote2Poster" : "keynote1Poster";
+    const updated = await Event.findByIdAndUpdate(
+      eventId,
+      { $set: { [`teamAssignments.${field}`]: posterUrl } },
+      { new: true, runValidators: true }
+    );
+    if (!updated) throw new NotFoundError("Event not found");
+    return updated;
+  },
+
   /**
    * RIFAH Operations Center: Append financial transaction (Money In / Money Out)
    */

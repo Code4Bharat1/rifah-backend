@@ -130,6 +130,46 @@ export const eventController = {
     return ApiResponse.success(res, { posterImage: posterUrl, event: updated }, "Event poster uploaded successfully");
   }),
 
+  // BUG-055: the Certificate Signatory image inputs previously only did
+  // `signatory1Image: URL.createObjectURL(file)` on the frontend — a browser-only blob:
+  // reference that was never actually uploaded anywhere. It looked fine until the tab
+  // closed (blob URLs die with the page), and the backend certificate generator
+  // (certificate.util.js loadImageBuffer) could never fetch it at all since it never
+  // existed outside that one browser tab. Mirrors uploadCover/uploadPoster: store the
+  // real file and persist the returned URL on the event's flat signatory field.
+  uploadSignatoryImage: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!req.file) {
+      return ApiResponse.error(res, "No image uploaded", 400);
+    }
+    const slot = req.body?.slot === "2" ? "2" : "1";
+    const field = slot === "2" ? "signatory2Image" : "signatory1Image";
+    const imageUrl = await storageService.uploadFile(req.file, "signatures");
+    const updated = await eventService.updateOperations(id, { [field]: imageUrl }, req.user);
+    return ApiResponse.success(
+      res,
+      { [field]: imageUrl, event: updated },
+      "Signatory signature uploaded successfully"
+    );
+  }),
+
+  // BUG-060: see eventService.setKeynotePoster for why this bypasses updateOperations.
+  uploadKeynotePoster: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    if (!req.file) {
+      return ApiResponse.error(res, "No image uploaded", 400);
+    }
+    const slot = req.body?.slot === "2" ? "2" : "1";
+    const field = slot === "2" ? "keynote2Poster" : "keynote1Poster";
+    const posterUrl = await storageService.uploadFile(req.file, "covers");
+    const updated = await eventService.setKeynotePoster(id, slot, posterUrl, req.user);
+    return ApiResponse.success(
+      res,
+      { [field]: posterUrl, event: updated },
+      "Keynote poster uploaded successfully"
+    );
+  }),
+
   deleteEvent: asyncHandler(async (req, res) => {
     const { id } = req.params;
     // For delete, we might want to fetch the event name before deleting or just log the ID

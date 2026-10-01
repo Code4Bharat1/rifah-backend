@@ -413,62 +413,68 @@ export const anniversaryService = {
     const seeded = [];
 
     for (const item of testItems) {
-      let user = await User.findOne({ email: item.email });
-      if (!user) {
-        user = await User.create({
-          name: item.name,
-          email: item.email,
-          passwordHash: defaultPassword,
-          phone: item.phone,
-          whatsapp: item.phone,
-          role: ROLES.BUSINESS_OWNER,
-          chapter: targetChapter,
-          chapterId: chapterDoc?._id,
-          status: "Active",
-          joiningDate: item.joiningDate,
-          lastAnniversaryWishYear: 0,
-        });
-      } else {
-        user.joiningDate = item.joiningDate;
-        user.lastAnniversaryWishYear = 0;
-        user.chapter = targetChapter;
-        user.chapterId = chapterDoc?._id;
-        await user.save();
-      }
+      // BUG-057: find-then-create left a race window — two server instances (or one
+      // restarted via `node --watch` while another was still up) could both find no
+      // existing user and both call User.create() for the same email, and the second
+      // one's insert dies on the unique index (E11000) instead of just updating the
+      // existing row. Since this seed runs unconditionally on every boot, that single
+      // unhandled error was enough to crash the whole server (see server.js
+      // startServer(), which process.exit(1)s on any startup error). findOneAndUpdate
+      // with upsert:true is atomic at the database level, so there is no window for a
+      // second process to "also" insert — it either updates the row created moments
+      // ago by the other process, or creates it itself; never both.
+      const user = await User.findOneAndUpdate(
+        { email: item.email },
+        {
+          $set: {
+            joiningDate: item.joiningDate,
+            lastAnniversaryWishYear: 0,
+            chapter: targetChapter,
+            chapterId: chapterDoc?._id,
+          },
+          $setOnInsert: {
+            name: item.name,
+            email: item.email,
+            passwordHash: defaultPassword,
+            phone: item.phone,
+            whatsapp: item.phone,
+            role: ROLES.BUSINESS_OWNER,
+            status: "Active",
+          },
+        },
+        { upsert: true, new: true }
+      );
 
-      let biz = await Business.findOne({ slug: item.slug });
-      if (!biz) {
-        biz = await Business.create({
-          name: item.businessName,
-          slug: item.slug,
-          owner: user._id,
-          industry: item.industry,
-          chapter: targetChapter,
-          chapterId: chapterDoc?._id,
-          city: targetChapter,
-          state: chapterDoc?.state || "Maharashtra",
-          phone: item.phone,
-          whatsapp: item.phone,
-          email: item.email,
-          ownerEmail: item.email,
-          status: "Active",
-          verification: "verified",
-          verificationStatus: "Verified",
-          isPaid: true,
-          membership: "Premium",
-          joiningDate: item.joiningDate,
-          createdAt: item.joiningDate,
-          lastAnniversaryWishYear: 0,
-        });
-      } else {
-        biz.joiningDate = item.joiningDate;
-        biz.createdAt = item.joiningDate;
-        biz.lastAnniversaryWishYear = 0;
-        biz.chapter = targetChapter;
-        biz.chapterId = chapterDoc?._id;
-        biz.status = "Active";
-        await biz.save();
-      }
+      const biz = await Business.findOneAndUpdate(
+        { slug: item.slug },
+        {
+          $set: {
+            joiningDate: item.joiningDate,
+            createdAt: item.joiningDate,
+            lastAnniversaryWishYear: 0,
+            chapter: targetChapter,
+            chapterId: chapterDoc?._id,
+            status: "Active",
+          },
+          $setOnInsert: {
+            name: item.businessName,
+            slug: item.slug,
+            owner: user._id,
+            industry: item.industry,
+            city: targetChapter,
+            state: chapterDoc?.state || "Maharashtra",
+            phone: item.phone,
+            whatsapp: item.phone,
+            email: item.email,
+            ownerEmail: item.email,
+            verification: "verified",
+            verificationStatus: "Verified",
+            isPaid: true,
+            membership: "Premium",
+          },
+        },
+        { upsert: true, new: true }
+      );
 
       seeded.push({
         businessName: item.businessName,
