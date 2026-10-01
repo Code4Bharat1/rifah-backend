@@ -2,20 +2,61 @@ import { Course } from "./course.model.js";
 import { CourseProgress } from "./courseProgress.model.js";
 import { Certificate } from "./certificate.model.js";
 import { Business } from "../businesses/business.model.js";
+import { User } from "../users/user.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
-import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
+import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
 
 /**
  * Creates a new course
  */
 export const createCourse = async (courseData, user) => {
+  if (!courseData.title || !String(courseData.title).trim()) {
+    throw new BadRequestError("Course title is required");
+  }
+  if (String(courseData.title).trim().length < 3) {
+    throw new BadRequestError("Course title must be at least 3 characters long");
+  }
+  if (!courseData.description || !String(courseData.description).trim()) {
+    throw new BadRequestError("Course description is required");
+  }
+  if (String(courseData.description).trim().length < 10) {
+    throw new BadRequestError("Course description must be at least 10 characters long");
+  }
+  const categoryStr = String(courseData.category || "").trim();
+  if (!categoryStr) {
+    throw new BadRequestError("Category is required");
+  }
+  const normalizedCategory = categoryStr === "all" || categoryStr.toLowerCase() === "all categories" ? "All Categories" : categoryStr;
+
+  const subcategoryStr = String(courseData.subcategory || "").trim();
+  const normalizedSubcategory = subcategoryStr && subcategoryStr !== "all" ? subcategoryStr : "";
+
+  const isPublishing = courseData.isActive === true || courseData.status === "published";
+  const totalLessons = (courseData.chapters || []).reduce((acc, ch) => acc + (ch.contents?.length || 0), 0) + (courseData.contents?.length || 0);
+
+  if (isPublishing && totalLessons === 0) {
+    throw new BadRequestError("Cannot publish an empty course. Please attach at least 1 video or PDF lesson.");
+  }
+
   const scope = getScopeFromRole(user.role);
   
+  let businessId = null;
+  if (user.role === ROLES.BUSINESS_OWNER) {
+    businessId = user.businessId || user.business?._id;
+    if (!businessId && (user.id || user._id)) {
+      const biz = await Business.findOne({ owner: user.id || user._id }).select('_id');
+      businessId = biz?._id || null;
+    }
+  }
+
   const course = new Course({
     ...courseData,
-    category: courseData.category ? String(courseData.category).trim() : "",
-    subcategory: courseData.subcategory ? String(courseData.subcategory).trim() : "",
+    title: String(courseData.title).trim(),
+    description: courseData.description ? String(courseData.description).trim() : "",
+    category: normalizedCategory,
+    subcategory: normalizedSubcategory,
     createdBy: user.id || user._id,
+    businessId,
     scope,
     state: scope === 'state' ? (user.state || user.stateId) : null,
     chapterId: scope === 'chapter' ? (user.chapterId || user.chapter) : null,
@@ -35,18 +76,42 @@ export const updateCourse = async (courseId, courseData, user) => {
     throw new ForbiddenError("You don't have permission to modify this course");
   }
 
-  // Prevent tampering with scope or target bindings via update
+  if (courseData.title !== undefined) {
+    if (!String(courseData.title).trim()) {
+      throw new BadRequestError("Course title cannot be empty");
+    }
+    if (String(courseData.title).trim().length < 3) {
+      throw new BadRequestError("Course title must be at least 3 characters long");
+    }
+  }
+
+  if (courseData.category !== undefined) {
+    const catStr = String(courseData.category).trim();
+    if (!catStr) {
+      throw new BadRequestError("Category is required");
+    }
+  }
+
+  if (courseData.description !== undefined && !String(courseData.description).trim()) {
+    throw new BadRequestError("Course description cannot be empty");
+  }
+
   const safeData = { ...courseData };
+  if (safeData.title !== undefined) safeData.title = String(safeData.title).trim();
+  if (safeData.description !== undefined) safeData.description = String(safeData.description).trim();
   if (safeData.category !== undefined) {
-    safeData.category = safeData.category ? String(safeData.category).trim() : "";
+    const catStr = String(safeData.category).trim();
+    safeData.category = catStr === "all" || catStr.toLowerCase() === "all categories" ? "All Categories" : catStr;
   }
   if (safeData.subcategory !== undefined) {
-    safeData.subcategory = safeData.subcategory ? String(safeData.subcategory).trim() : "";
+    const subStr = String(safeData.subcategory).trim();
+    safeData.subcategory = subStr && subStr !== "all" ? subStr : "";
   }
   delete safeData.scope;
   delete safeData.state;
   delete safeData.chapterId;
   delete safeData.createdBy;
+  delete safeData.businessId;
 
   Object.assign(course, safeData);
   return await course.save();
@@ -74,9 +139,31 @@ export const deleteCourse = async (courseId, user) => {
 export const getCourses = async (user, query = {}) => {
   let filter = { ...query };
 
+  // Support fetching strictly own created courses (for Business / Admin Creator Studio)
+  if (query.myCourses === 'true' || query.creator === 'me') {
+    const myFilter = { createdBy: user.id || user._id };
+    if (query.category && query.category !== 'all') {
+      myFilter.category = query.category;
+    }
+    if (query.subcategory && query.subcategory !== 'all') {
+      myFilter.subcategory = query.subcategory;
+    }
+    return await Course.find(myFilter)
+      .sort({ createdAt: -1 })
+      .populate('createdBy', 'name email')
+      .populate('businessId', 'name logo slug')
+      .lean();
+  }
+
+  delete filter.myCourses;
+  delete filter.creator;
+
   // Handle category / subcategory filters if provided
   if (filter.category === 'all' || !filter.category) {
     delete filter.category;
+  } else {
+    // When filtering by a specific category, also surface universal "All Categories" courses
+    filter.category = { $in: [filter.category, 'All Categories'] };
   }
   if (filter.subcategory === 'all' || !filter.subcategory) {
     delete filter.subcategory;
@@ -95,7 +182,7 @@ export const getCourses = async (user, query = {}) => {
     filter.scope = 'chapter';
     filter.chapterId = user.chapterId || user.chapter;
   } else if (user.role === ROLES.BUSINESS_OWNER) {
-    // Business owners see all courses targeted at them: Centre + their State + their Chapter
+    // Business owners see all courses targeted at them: Centre + their State + their Chapter + peer Business courses
     filter.isActive = true;
     
     let business = user.business;
@@ -106,7 +193,10 @@ export const getCourses = async (user, query = {}) => {
     const state = business?.state || user.state || user.stateId;
     const chapterId = business?.chapterId || user.chapterId || user.chapter;
 
-    const orConditions = [{ scope: 'centre' }];
+    const orConditions = [
+      { scope: 'centre' },
+      { scope: 'business' }
+    ];
     if (state) orConditions.push({ scope: 'state', state });
     if (chapterId) orConditions.push({ scope: 'chapter', chapterId });
     filter.$or = orConditions;
@@ -114,7 +204,11 @@ export const getCourses = async (user, query = {}) => {
      return [];
   }
 
-  const courses = await Course.find(filter).sort({ createdAt: -1 }).populate('createdBy', 'firstName lastName').lean();
+  const courses = await Course.find(filter)
+    .sort({ createdAt: -1 })
+    .populate('createdBy', 'name email')
+    .populate('businessId', 'name logo slug')
+    .lean();
 
   if (user.role === ROLES.BUSINESS_OWNER) {
     let businessId = user.business?._id || user.businessId;
@@ -148,7 +242,9 @@ export const getCourses = async (user, query = {}) => {
  * Gets a single course if user has access
  */
 export const getCourseById = async (courseId, user) => {
-  const course = await Course.findById(courseId).populate('createdBy', 'firstName lastName');
+  const course = await Course.findById(courseId)
+    .populate('createdBy', 'name email')
+    .populate('businessId', 'name logo slug');
   if (!course) throw new NotFoundError("Course not found");
   
   if (user.role !== ROLES.CENTRAL_ADMIN && !course.isActive) {
@@ -168,6 +264,7 @@ export const getCourseById = async (courseId, user) => {
     const chapterId = business?.chapterId || user.chapterId || user.chapter;
 
     const canAccess = course.scope === 'centre' || 
+                      course.scope === 'business' ||
                       (course.scope === 'state' && course.state === state) ||
                       (course.scope === 'chapter' && String(course.chapterId) === String(chapterId));
     
@@ -185,6 +282,7 @@ const getScopeFromRole = (role) => {
   if (role === ROLES.CENTRAL_ADMIN) return 'centre';
   if (role === ROLES.STATE_ADMIN) return 'state';
   if (role === ROLES.CHAPTER_ADMIN) return 'chapter';
+  if (role === ROLES.BUSINESS_OWNER) return 'business';
   return 'centre'; // fallback
 };
 
@@ -197,6 +295,11 @@ const canManageCourse = (user, course) => {
   if (user.role === ROLES.CHAPTER_ADMIN) {
     const userChapter = user.chapterId || user.chapter;
     return course.scope === 'chapter' && String(course.chapterId) === String(userChapter);
+  }
+  if (user.role === ROLES.BUSINESS_OWNER) {
+    const userId = user.id || user._id;
+    const creatorId = course.createdBy?._id || course.createdBy;
+    return String(creatorId) === String(userId);
   }
   return false;
 };
