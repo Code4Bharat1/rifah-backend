@@ -265,6 +265,7 @@ const eventSchema = new mongoose.Schema(
       {
         id: { type: String },
         name: { type: String, required: true },
+        category: { type: String, default: "" },
         mobile: { type: String, default: "" },
         email: { type: String, default: "" },
         type: { type: String, default: "Guest Speaker" },
