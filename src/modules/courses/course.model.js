@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+ import mongoose from "mongoose";
 
 const courseContentSchema = new mongoose.Schema({
   title: {
@@ -70,8 +70,14 @@ const courseSchema = new mongoose.Schema(
     },
     scope: {
       type: String,
-      enum: ["centre", "state", "chapter"],
+      enum: ["centre", "state", "chapter", "business"],
       required: true,
+    },
+    businessId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Business",
+      default: null,
+      index: true,
     },
     state: {
       type: String,

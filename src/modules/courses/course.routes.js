@@ -9,28 +9,28 @@ const router = Router();
 
 router.use(authMiddleware);
 
-// Admin Routes (Create, Update, Upload)
+// Course Management Routes (Admins & Business Owners)
 router.post(
   "/",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.BUSINESS_OWNER),
   courseController.createCourse
 );
 
 router.put(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.BUSINESS_OWNER),
   courseController.updateCourse
 );
 
 router.delete(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.BUSINESS_OWNER),
   courseController.deleteCourse
 );
 
 router.post(
   "/upload",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.BUSINESS_OWNER),
   upload.single("file"),
   courseController.uploadContent
 );

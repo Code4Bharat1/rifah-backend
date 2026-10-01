@@ -1,6 +1,6 @@
 import { Post } from "./post.model.js";
 import { User } from "../users/user.model.js";
-import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
+import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
 import { notificationService } from "../notifications/notification.service.js";
@@ -288,9 +288,23 @@ export const postService = {
   },
 
   /**
-   * Create a new post
+   * Create a new post (Central Admin, State Admin, Chapter Admin, Business can only upload 1 active post)
    */
   createPost: async (data, user) => {
+    const userId = user.id || user._id;
+
+    // 1-Post Limit: Verify if user already has an active (non-deleted) post
+    const existingActivePost = await Post.findOne({
+      author: userId,
+      isDeleted: false,
+    });
+
+    if (existingActivePost) {
+      throw new BadRequestError(
+        "You can only upload 1 post in the feed at a time. Please delete your existing post before creating a new one."
+      );
+    }
+
     let authorName = data.authorName || user.name || "";
     let authorAvatar = data.authorAvatar || user.avatar || "";
     let authorRole = user.role;
@@ -450,17 +464,141 @@ export const postService = {
   },
 
   /**
-   * Delete a post — only author or central_admin can delete
+   * Delete a post:
+   * - Central Admin & Secretariat: Can delete ANY post
+   * - State Admin: Can delete posts of chapters and businesses in their own state only
+   * - Chapter Admin: Can delete business posts of their own chapter only
+   * - Business / Member: Can delete ONLY their own created posts
    */
   deletePost: async (postId, user) => {
     const post = await Post.findOne({ _id: postId, isDeleted: false });
     if (!post) throw new NotFoundError("Post not found");
 
-    const isAuthor = String(post.author) === String(user.id || user._id);
-    const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+    const userIdStr = String(user.id || user._id || "");
+    const isAuthor = String(post.author) === userIdStr;
+    const isCentralAdmin = [
+      ROLES.CENTRAL_ADMIN,
+      ROLES.SECRETARIAT,
+      "super_admin",
+      "admin",
+      "central_admin",
+    ].includes(user.role);
 
-    if (!isAuthor && !isCentralAdmin) {
-      throw new ForbiddenError("Only the central admin or the creator of the post can delete this post");
+    let isAuthorized = isAuthor || isCentralAdmin;
+
+    // State Admin: Can delete posts belonging to their own state only
+    if (!isAuthorized && user.role === ROLES.STATE_ADMIN) {
+      let adminState = (user.state || "").trim().toLowerCase();
+      if (!adminState) {
+        const adminDoc = await User.findById(userIdStr).select("state").lean();
+        adminState = (adminDoc?.state || "").trim().toLowerCase();
+      }
+
+      if (adminState) {
+        const postState = (post.state || "").trim().toLowerCase();
+        if (postState && (postState === adminState || postState.includes(adminState) || adminState.includes(postState))) {
+          isAuthorized = true;
+        } else {
+          // Check if post's chapter belongs to this state
+          if (post.chapter || post.chapterId) {
+            try {
+              const { Chapter } = await import("../chapters/chapter.model.js");
+              let ch = null;
+              if (post.chapterId) {
+                ch = await Chapter.findById(post.chapterId).select("state").lean();
+              } else if (post.chapter) {
+                const cleanCh = post.chapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
+                ch = await Chapter.findOne({ name: new RegExp(cleanCh, "i") }).select("state").lean();
+              }
+              if (ch?.state && ch.state.trim().toLowerCase() === adminState) {
+                isAuthorized = true;
+              }
+            } catch (err) {
+              // ignore
+            }
+          }
+
+          // Check if author user/business is in admin's state
+          if (!isAuthorized && post.author) {
+            try {
+              const authorUser = await User.findById(post.author).select("state chapter").lean();
+              if (authorUser?.state && authorUser.state.trim().toLowerCase() === adminState) {
+                isAuthorized = true;
+              } else {
+                const { Business } = await import("../businesses/business.model.js");
+                const authorBiz = await Business.findOne({
+                  $or: [{ owner: post.author }, { user: post.author }, { userId: post.author }],
+                }).select("state chapter").lean();
+                if (authorBiz?.state && authorBiz.state.trim().toLowerCase() === adminState) {
+                  isAuthorized = true;
+                }
+              }
+            } catch (err) {
+              // ignore
+            }
+          }
+        }
+      }
+    }
+
+    // Chapter Admin: Can delete business posts of their own chapter only
+    if (!isAuthorized && user.role === ROLES.CHAPTER_ADMIN) {
+      let adminChapter = (user.chapter || "").trim().toLowerCase();
+      let adminChapterId = String(user.chapterId || "");
+
+      if (!adminChapter || !adminChapterId) {
+        const adminDoc = await User.findById(userIdStr).select("chapter chapterId").lean();
+        if (!adminChapter && adminDoc?.chapter) adminChapter = adminDoc.chapter.trim().toLowerCase();
+        if (!adminChapterId && adminDoc?.chapterId) adminChapterId = String(adminDoc.chapterId);
+      }
+
+      const cleanAdminChapter = adminChapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
+
+      if (adminChapterId && post.chapterId && String(post.chapterId) === adminChapterId) {
+        isAuthorized = true;
+      } else if (cleanAdminChapter) {
+        const postChapter = (post.chapter || "").toLowerCase().replace(/\b(chapter|chamber)\b/gi, "").trim();
+        if (
+          postChapter &&
+          (postChapter === cleanAdminChapter ||
+            postChapter.includes(cleanAdminChapter) ||
+            cleanAdminChapter.includes(postChapter))
+        ) {
+          isAuthorized = true;
+        } else {
+          // Check if author user or business belongs to this chapter
+          if (post.author) {
+            try {
+              const authorUser = await User.findById(post.author).select("chapter chapterId").lean();
+              const authorUserChapter = (authorUser?.chapter || "").toLowerCase().replace(/\b(chapter|chamber)\b/gi, "").trim();
+              if (
+                (authorUser?.chapterId && String(authorUser.chapterId) === adminChapterId) ||
+                (authorUserChapter && (authorUserChapter === cleanAdminChapter || authorUserChapter.includes(cleanAdminChapter)))
+              ) {
+                isAuthorized = true;
+              } else {
+                const { Business } = await import("../businesses/business.model.js");
+                const authorBiz = await Business.findOne({
+                  $or: [{ owner: post.author }, { user: post.author }, { userId: post.author }],
+                }).select("chapter chapterId").lean();
+                const authorBizChapter = (authorBiz?.chapter || "").toLowerCase().replace(/\b(chapter|chamber)\b/gi, "").trim();
+                if (
+                  (authorBiz?.chapterId && String(authorBiz.chapterId) === adminChapterId) ||
+                  (authorBizChapter && (authorBizChapter === cleanAdminChapter || authorBizChapter.includes(cleanAdminChapter)))
+                ) {
+                  isAuthorized = true;
+                }
+              }
+            } catch (err) {
+              // ignore
+            }
+          }
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      throw new ForbiddenError("You do not have permission to delete this post");
     }
 
     post.isDeleted = true;
