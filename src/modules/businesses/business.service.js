@@ -382,7 +382,12 @@ export const businessService = {
     }
 
     const [businesses, total] = await Promise.all([
-      Business.find(finalFilter).sort(sortOption).skip(skip).limit(limit).populate("owner", "name email phone avatar designation roleInBusiness"),
+      Business.find(finalFilter)
+        .sort(sortOption)
+        .skip(skip)
+        .limit(limit)
+        .populate("owner", "name email phone avatar designation roleInBusiness")
+        .lean(),
       Business.countDocuments(finalFilter),
     ]);
 
@@ -1068,19 +1073,24 @@ export const businessService = {
         console.error("Failed to send welcome email for admin-created business:", err);
       }
     } else {
-      // Existing User: Update their role to BUSINESS_OWNER if it isn't already
-      if (user.role !== ROLES.BUSINESS_OWNER) {
+      // Existing User: Update their role to BUSINESS_OWNER ONLY if they are not already an Admin
+      const ADMIN_ROLES = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.SECRETARIAT, "super_admin", "admin"];
+      const isExistingAdmin = ADMIN_ROLES.includes(user.role);
+
+      if (!isExistingAdmin && user.role !== ROLES.BUSINESS_OWNER) {
         await User.findByIdAndUpdate(user._id, { role: ROLES.BUSINESS_OWNER });
       }
       
       try {
-        // Send email notifying them of their upgraded role and new business profile
-        await emailService.sendRoleUpgradedEmail({
-          email: user.email,
-          name: user.name,
-          newRole: "Business Owner",
-          businessName: data.businessName,
-        });
+        if (!isExistingAdmin) {
+          // Send email notifying them of their upgraded role and new business profile
+          await emailService.sendRoleUpgradedEmail({
+            email: user.email,
+            name: user.name,
+            newRole: "Business Owner",
+            businessName: data.businessName,
+          });
+        }
       } catch (err) {
         console.error("Failed to send role upgrade email:", err);
       }

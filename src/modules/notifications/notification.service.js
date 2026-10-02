@@ -8,13 +8,14 @@ import { Payment } from "../payments/payment.model.js";
 import { Review } from "../reviews/review.model.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError } from "../../shared/errors/errors.js";
+import { emitToUser } from "../../infrastructure/socket/socket.js";
 
 export const notificationService = {
   /**
    * Create an in-app notification
    */
   createNotification: async ({ recipientId, type, title, body, entityId, link, eventDate, eventCity, eventTime, eventVenue, metadata }) => {
-    return Notification.create({
+    const notification = await Notification.create({
       recipient: recipientId,
       type: type || "System",
       title,
@@ -27,6 +28,14 @@ export const notificationService = {
       eventVenue: eventVenue || metadata?.eventVenue || "",
       metadata: metadata || {},
     });
+
+    try {
+      if (recipientId) {
+        emitToUser(String(recipientId), "notification:new", notification);
+      }
+    } catch {}
+
+    return notification;
   },
 
   /**
@@ -93,18 +102,18 @@ export const notificationService = {
    */
   syncRealUserNotifications: async (userId) => {
     try {
-      const business = await Business.findOne({ owner: userId });
+      const business = await Business.findOne({ owner: userId }).lean();
       const businessId = business?._id;
 
       // 1. Sync real assigned leads
       if (businessId) {
-        const leads = await Lead.find({ business: businessId }).populate("enquiry").sort({ createdAt: -1 }).limit(5);
+        const leads = await Lead.find({ business: businessId }).populate("enquiry").sort({ createdAt: -1 }).limit(5).lean();
         for (const l of leads) {
           const ref = l.enquiry?.referenceId || (l._id ? `ENQ-${l._id.toString().slice(-4).toUpperCase()}` : "ENQ");
           const reqTitle = l.enquiry?.title || "Buyer Requirement";
           const title = "New lead assigned";
           const body = `${ref} · ${reqTitle} matched your category.`;
-          const exists = await Notification.findOne({ recipient: userId, entityId: String(l._id) });
+          const exists = await Notification.findOne({ recipient: userId, entityId: String(l._id) }).lean();
           if (!exists) {
             await Notification.create({
               recipient: userId,
@@ -121,11 +130,11 @@ export const notificationService = {
       }
 
       // 2. Sync real payments
-      const payments = await Payment.find({ payer: userId }).sort({ createdAt: -1 }).limit(5);
+      const payments = await Payment.find({ payer: userId }).sort({ createdAt: -1 }).limit(5).lean();
       for (const p of payments) {
         const title = "Payment received";
         const body = `Invoice ${p.invoiceNumber} for ₹${p.amount} has been marked as paid.`;
-        const exists = await Notification.findOne({ recipient: userId, entityId: String(p._id) });
+        const exists = await Notification.findOne({ recipient: userId, entityId: String(p._id) }).lean();
         if (!exists) {
           await Notification.create({
             recipient: userId,
@@ -142,11 +151,11 @@ export const notificationService = {
 
       // 3. Sync real direct enquiries
       if (businessId) {
-        const enquiries = await Enquiry.find({ targetBusiness: businessId }).sort({ createdAt: -1 }).limit(5);
+        const enquiries = await Enquiry.find({ targetBusiness: businessId }).sort({ createdAt: -1 }).limit(5).lean();
         for (const e of enquiries) {
           const title = `New enquiry from ${e.requesterName || "Buyer"}`;
           const body = `${e.referenceId} · ${e.title}`;
-          const exists = await Notification.findOne({ recipient: userId, entityId: String(e._id) });
+          const exists = await Notification.findOne({ recipient: userId, entityId: String(e._id) }).lean();
           if (!exists) {
             await Notification.create({
               recipient: userId,
@@ -164,11 +173,11 @@ export const notificationService = {
 
       // 4. Sync real reviews
       if (businessId) {
-        const reviews = await Review.find({ business: businessId }).sort({ createdAt: -1 }).limit(3);
+        const reviews = await Review.find({ business: businessId }).sort({ createdAt: -1 }).limit(3).lean();
         for (const r of reviews) {
           const title = "New review received";
           const body = `A buyer left a ${r.rating || 5}-star review on your business profile.`;
-          const exists = await Notification.findOne({ recipient: userId, entityId: String(r._id) });
+          const exists = await Notification.findOne({ recipient: userId, entityId: String(r._id) }).lean();
           if (!exists) {
             await Notification.create({
               recipient: userId,

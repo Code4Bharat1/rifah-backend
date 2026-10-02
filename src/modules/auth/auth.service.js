@@ -1146,8 +1146,11 @@ export const authService = {
     // Set hashed password so user can log in with email/password anytime
     user.passwordHash = await hashPassword(password);
 
-    // Set role and profile details
-    user.role = role === ROLES.BUSINESS_OWNER ? ROLES.BUSINESS_OWNER : ROLES.CUSTOMER;
+    // Set role and profile details - protect any admin role from being demoted
+    const ADMIN_ROLES = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.SECRETARIAT, "super_admin", "admin"];
+    if (!ADMIN_ROLES.includes(user.role)) {
+      user.role = role === ROLES.BUSINESS_OWNER ? ROLES.BUSINESS_OWNER : ROLES.CUSTOMER;
+    }
     if (contactPerson && contactPerson.trim()) user.name = contactPerson.trim();
     if (phone) user.phone = phone.trim();
     if (city) user.city = city.trim();

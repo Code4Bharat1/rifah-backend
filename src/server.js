@@ -11,6 +11,8 @@ import { membershipService } from "./modules/memberships/membership.service.js";
 import { seedInitialCategories } from "./modules/categories/categories.data.js";
 import { Chapter } from "./modules/chapters/chapter.model.js";
 import dns from "dns";
+import cluster from "node:cluster";
+import os from "node:os";
 dns.setDefaultResultOrder("ipv4first");
 dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 let server;
@@ -139,11 +141,15 @@ const startServer = async () => {
       logger.error("[ANNIVERSARY SEED ERROR] Skipping demo data, server will continue starting:", err);
     }
 
-    // 2. Start Scheduled Background Tasks
-    eventService.startEventScheduler();
-    birthdayService.startBirthdayScheduler();
-    anniversaryService.startAnniversaryScheduler();
-    membershipService.startMembershipExpiryScheduler();
+    // 2. Start Scheduled Background Tasks (Only run schedulers on primary worker to prevent duplicate jobs)
+    const isPrimaryWorker = !cluster.isWorker || cluster.worker?.id === 1;
+    if (isPrimaryWorker) {
+      logger.info("[SCHEDULER] Primary worker initialized background schedulers.");
+      eventService.startEventScheduler();
+      birthdayService.startBirthdayScheduler();
+      anniversaryService.startAnniversaryScheduler();
+      membershipService.startMembershipExpiryScheduler();
+    }
 
     // 3. Start HTTP Server
     server = app.listen(env.PORT, "0.0.0.0", () => {
@@ -185,4 +191,23 @@ process.on("uncaughtException", (error) => {
   process.exit(1);
 });
 
-startServer();
+// Scaled for 10k users: Multi-core cluster mode
+const shouldCluster =
+  (process.env.NODE_ENV === "production" || process.env.ENABLE_CLUSTER === "true") &&
+  cluster.isPrimary;
+
+if (shouldCluster) {
+  const numCPUs = Math.min(os.cpus().length, 8);
+  logger.info(`[CLUSTER PRIMARY] Starting ${numCPUs} worker processes to handle 10k users on all CPU cores...`);
+
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
+
+  cluster.on("exit", (worker, code, signal) => {
+    logger.warn(`[CLUSTER] Worker ${worker.process.pid} exited (code: ${code}, signal: ${signal}). Spawning replacement worker...`);
+    cluster.fork();
+  });
+} else {
+  startServer();
+}

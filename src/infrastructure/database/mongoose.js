@@ -9,6 +9,11 @@ export const connectDatabase = async () => {
 
     logger.info(`Database connected successfully to ${conn.connection.host}`);
 
+    // Ensure all critical collection compound indexes are synced in MongoDB in the background
+    conn.syncIndexes().catch((err) => {
+      logger.warn("Non-fatal: Background index synchronization notice:", err?.message || err);
+    });
+
     mongoose.connection.on("error", (err) => {
       logger.error("Database runtime connection error:", err);
     });
