@@ -827,10 +827,21 @@ export const authService = {
   /**
    * Change password (forced or manual)
    */
-  changePassword: async (userId, { newPassword }) => {
+  changePassword: async (userId, { oldPassword, newPassword }) => {
     const user = await User.findById(userId).select("+passwordHash");
     if (!user) {
       throw new NotFoundError("User not found");
+    }
+
+    if (!user.forcePasswordChange) {
+      if (!oldPassword) {
+        throw new BadRequestError("Current password is required to change password.");
+      }
+      
+      const isMatch = await comparePassword(oldPassword, user.passwordHash);
+      if (!isMatch) {
+        throw new BadRequestError("Invalid current password");
+      }
     }
 
     user.passwordHash = await hashPassword(newPassword);
