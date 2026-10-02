@@ -833,6 +833,10 @@ export const authService = {
       throw new NotFoundError("User not found");
     }
 
+    if (oldPassword && oldPassword === newPassword) {
+      throw new BadRequestError("New password cannot be the same as the current password.");
+    }
+
     if (!user.forcePasswordChange) {
       if (!oldPassword) {
         throw new BadRequestError("Current password is required to change password.");
