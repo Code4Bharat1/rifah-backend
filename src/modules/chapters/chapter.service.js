@@ -9,6 +9,7 @@ import { resolveEligibleAdminBusiness, isBusinessVerified } from "../../shared/u
 import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
 import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { logger } from "../../infrastructure/logger/logger.js";
+import { memoryCache } from "../../shared/utils/memory-cache.js";
 import crypto from "crypto";
 
 // Normalizes a chapter name for duplicate detection: case-insensitive, strips the
@@ -24,6 +25,15 @@ const normalizeChapterName = (name) =>
 
 export const chapterService = {
   listChapters: async (filter = {}, user) => {
+    // Scaled for 10k/50k users: In-memory RAM cache for public/general chapter listings (15-min TTL)
+    const isPublicListing = !user || user.role === ROLES.CUSTOMER;
+    const cacheKey = `chapters_list_${JSON.stringify(filter || {})}`;
+
+    if (isPublicListing) {
+      const cached = memoryCache.get(cacheKey, 1000 * 60 * 15);
+      if (cached) return cached;
+    }
+
     const query = {};
     if (filter.status) query.status = filter.status;
     
@@ -60,7 +70,7 @@ export const chapterService = {
       countByChapterId.set(String(b._id), b.count);
     });
 
-    return chapters.map((ch) => {
+    const result = chapters.map((ch) => {
       const obj = ch.toObject();
       const admin = adminByChapterId.get(String(ch._id)) || null;
       return {
@@ -70,6 +80,12 @@ export const chapterService = {
         businessesCount: countByChapterId.get(String(ch._id)) || obj.businessesCount || 0,
       };
     });
+
+    if (isPublicListing) {
+      memoryCache.set(cacheKey, result);
+    }
+
+    return result;
   },
 
   getChapterById: async (id) => {
@@ -184,6 +200,7 @@ export const chapterService = {
       );
     }
 
+    memoryCache.invalidate("chapters_list");
     return chapter;
   },
 
@@ -213,6 +230,7 @@ export const chapterService = {
       ]);
     }
     const updated = await Chapter.findByIdAndUpdate(id, data, { new: true });
+    memoryCache.invalidate("chapters_list");
     return updated;
   },
 

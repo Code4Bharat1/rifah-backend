@@ -1,13 +1,21 @@
 import { Category } from "./category.model.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { NotFoundError, ConflictError } from "../../shared/errors/errors.js";
+import { memoryCache } from "../../shared/utils/memory-cache.js";
 
 export const categoryService = {
   listCategories: async (filter = {}) => {
+    // Scaled for 10k/50k users: In-memory RAM cache for category listings (30-min TTL)
+    const cacheKey = `categories_list_${JSON.stringify(filter || {})}`;
+    const cached = memoryCache.get(cacheKey, 1000 * 60 * 30);
+    if (cached) return cached;
+
     const query = {};
     if (filter.status) query.status = filter.status;
     if (filter.parent) query.parent = filter.parent;
-    return Category.find(query).sort({ name: 1 });
+    const categories = await Category.find(query).sort({ name: 1 }).lean();
+    memoryCache.set(cacheKey, categories);
+    return categories;
   },
 
   getCategoryBySlug: async (slug) => {
@@ -70,10 +78,12 @@ export const categoryService = {
       throw new ConflictError("Category already exists");
     }
 
-    return Category.create({
+    const created = await Category.create({
       ...data,
       slug,
     });
+    memoryCache.invalidate("categories_list");
+    return created;
   },
 
   updateCategory: async (id, data) => {
@@ -84,6 +94,7 @@ export const categoryService = {
     if (!updated) {
       throw new NotFoundError("Category not found");
     }
+    memoryCache.invalidate("categories_list");
     return updated;
   },
 
@@ -92,6 +103,7 @@ export const categoryService = {
     if (!deleted) {
       throw new NotFoundError("Category not found");
     }
+    memoryCache.invalidate("categories_list");
     return true;
   },
 };

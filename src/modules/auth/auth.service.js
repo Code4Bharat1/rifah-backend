@@ -77,9 +77,9 @@ export const authService = {
       isProfileComplete: true,
     });
 
-    try {
-      await emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role });
-    } catch (err) { }
+    // Scaled for 10k/50k users: Async non-blocking welcome email
+    emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role })
+      .catch((err) => logger.warn("[AUTH] Failed to send welcome email:", err?.message || err));
 
     const tokenPayload = {
       id: user._id,
@@ -421,20 +421,16 @@ export const authService = {
       await OtpVerification.deleteMany({ email: cleanEmail });
     }
 
-    // Send Rich Welcome Email to newly joined member
-    try {
-      await emailService.sendWelcomeEmail({
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        businessName: business.name,
-        chapter: business.chapter,
-        industry: business.industry,
-        membership: business.membership,
-      });
-    } catch (err) {
-      logger.warn("[AUTH] Failed to send welcome email:", err);
-    }
+    // Scaled for 10k/50k users: Send Rich Welcome Email asynchronously
+    emailService.sendWelcomeEmail({
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      businessName: business.name,
+      chapter: business.chapter,
+      industry: business.industry,
+      membership: business.membership,
+    }).catch((err) => logger.warn("[AUTH] Failed to send welcome email:", err?.message || err));
 
     // 1. Notify the Chapter Admin(s) of the chapter selected during registration
     try {
@@ -448,31 +444,27 @@ export const authService = {
       const chapterAdmins = await User.find(chapterAdminFilter);
       for (const admin of chapterAdmins) {
         // In-app notification
-        await notificationService.createNotification({
+        notificationService.createNotification({
           recipientId: admin._id,
           type: "Verification",
           title: `👋 New Member Joined: ${business.name}`,
           body: `New business "${business.name}" (${business.industry || "Business"}) has joined your chapter (${chapter || "your chapter"}). Say hello and welcome them to RIFAH!`,
           entityId: verification._id,
           link: `/biz/messages?recipient=${user._id}`,
-        });
+        }).catch(() => {});
 
-        // Email Alert to Chapter Admin
+        // Async Email Alert to Chapter Admin
         if (admin.email) {
-          try {
-            await emailService.sendNewMemberChapterAlertEmail({
-              adminEmail: admin.email,
-              adminName: admin.name,
-              memberName: user.name,
-              businessName: business.name,
-              chapter: business.chapter,
-              industry: business.industry,
-              phone: user.phone,
-              email: user.email,
-            });
-          } catch (adminMailErr) {
-            logger.warn("[AUTH] Failed to send new member chapter alert email to admin:", adminMailErr);
-          }
+          emailService.sendNewMemberChapterAlertEmail({
+            adminEmail: admin.email,
+            adminName: admin.name,
+            memberName: user.name,
+            businessName: business.name,
+            chapter: business.chapter,
+            industry: business.industry,
+            phone: user.phone,
+            email: user.email,
+          }).catch((adminMailErr) => logger.warn("[AUTH] Failed to send new member chapter alert email to admin:", adminMailErr?.message || adminMailErr));
         }
       }
 

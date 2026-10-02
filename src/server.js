@@ -149,6 +149,16 @@ const startServer = async () => {
       birthdayService.startBirthdayScheduler();
       anniversaryService.startAnniversaryScheduler();
       membershipService.startMembershipExpiryScheduler();
+
+      // Scaled for 10k/50k users: Periodic background sync of copilot knowledge base off the request path
+      setInterval(async () => {
+        try {
+          const { syncLiveEntitiesToFile } = await import("./modules/copilot/copilot.sync.js");
+          await syncLiveEntitiesToFile(true);
+        } catch (err) {
+          logger.warn("[SCHEDULER] Periodic knowledge base sync notice:", err?.message || err);
+        }
+      }, 1000 * 60 * 60); // Once every 1 hour
     }
 
     // 3. Start HTTP Server
@@ -203,6 +213,20 @@ if (shouldCluster) {
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
   }
+
+  // Scaled for 10k/50k users: Forward IPC WebSocket broadcasts across all worker processes
+  cluster.on("message", (worker, message) => {
+    if (message && message.type === "SOCKET_IPC_BROADCAST") {
+      for (const id in cluster.workers) {
+        const w = cluster.workers[id];
+        if (w && w.id !== worker.id) {
+          try {
+            w.send(message);
+          } catch {}
+        }
+      }
+    }
+  });
 
   cluster.on("exit", (worker, code, signal) => {
     logger.warn(`[CLUSTER] Worker ${worker.process.pid} exited (code: ${code}, signal: ${signal}). Spawning replacement worker...`);

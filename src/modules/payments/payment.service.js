@@ -381,7 +381,7 @@ export const paymentService = {
 
         const targetEmail = payload.billingEmail || userDoc?.email;
         if (targetEmail && isMembership) {
-          await emailService.sendMembershipInvoiceEmail({
+          emailService.sendMembershipInvoiceEmail({
             email: targetEmail,
             name: userDoc?.name || "Member",
             businessName: businessDoc?.name || payload.businessName || "Member Business",
@@ -395,7 +395,7 @@ export const paymentService = {
             paidAt: payment.paidAt,
             transactionId: payment.transactionId || razorpay_payment_id,
             paymentMethod: payment.method || "Razorpay Online Payment",
-          });
+          }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
         }
 
         // 1. Notify Chapter Admin of the specific Chapter only
@@ -651,7 +651,7 @@ export const paymentService = {
 
       const targetEmail = data.billingEmail || userDoc?.email;
       if (targetEmail) {
-        await emailService.sendMembershipInvoiceEmail({
+        emailService.sendMembershipInvoiceEmail({
           email: targetEmail,
           name: userDoc?.name || "Member",
           businessName: businessDoc?.name || data.businessName || "Member Business",
@@ -662,7 +662,7 @@ export const paymentService = {
           paidAt: payment.paidAt,
           transactionId: payment.transactionId,
           paymentMethod: data.method || "Online Transfer",
-        });
+        }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
       }
 
       // 1. Notify Chapter Admin of the specific Chapter only

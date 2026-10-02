@@ -1,7 +1,10 @@
 import rateLimit from "express-rate-limit";
 import { securityConfig } from "../config/security.js";
 
-export const rateLimitMiddleware = rateLimit(securityConfig.rateLimit);
+export const rateLimitMiddleware = rateLimit({
+  ...securityConfig.rateLimit,
+  keyGenerator: (req) => (req.user?._id ? `user_${req.user._id}` : req.ip),
+});
 
 export const authRateLimitMiddleware = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

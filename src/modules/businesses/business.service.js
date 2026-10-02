@@ -56,6 +56,35 @@ const resolveChapterFields = async (data) => {
   return {};
 };
 
+// Scaled for 10k/50k users: In-memory profile view buffer with periodic batch flush to MongoDB
+const pendingProfileViews = new Map();
+
+export const bufferProfileView = (businessId) => {
+  if (!businessId) return;
+  const key = String(businessId);
+  pendingProfileViews.set(key, (pendingProfileViews.get(key) || 0) + 1);
+};
+
+// Batch flush profile views to MongoDB once every 60 seconds (zero DB write locks on user browsing)
+setInterval(async () => {
+  if (pendingProfileViews.size === 0) return;
+  const entries = Array.from(pendingProfileViews.entries());
+  pendingProfileViews.clear();
+
+  const bulkOps = entries.map(([id, count]) => ({
+    updateOne: {
+      filter: { _id: id },
+      update: { $inc: { views: count } },
+    },
+  }));
+
+  try {
+    await Business.bulkWrite(bulkOps, { ordered: false });
+  } catch (err) {
+    // Non-fatal background analytics
+  }
+}, 60000);
+
 export const businessService = {
   /**
    * Public directory search & filtering
@@ -170,36 +199,29 @@ export const businessService = {
       andConditions.push({ $or: chapterOrConditions });
     }
 
-    // 2. Keyword Search
+    // 2. Keyword Search (Scaled for 10k/50k users: Indexed Text Search)
     const searchTerm = queryParams.search || queryParams.q;
     if (searchTerm && searchTerm !== "undefined" && searchTerm.trim()) {
-      const searchRegex = new RegExp(escapeRegex(searchTerm.trim()), "i");
+      const cleanTerm = searchTerm.trim();
 
-      // Also check if any catalogue items match keyword
+      // Fast catalogue text search matching keyword
       let catalogueBizIds = [];
       try {
-        const catItems = await Catalogue.find({
-          $or: [
-            { name: searchRegex },
-            { description: searchRegex },
-            { category: searchRegex },
-          ],
-        }).select("business");
+        const catItems = await Catalogue.find({ $text: { $search: cleanTerm } }).select("business").lean();
         catalogueBizIds = catItems.map((c) => c.business).filter(Boolean);
-      } catch {}
+      } catch {
+        try {
+          const searchRegex = new RegExp(escapeRegex(cleanTerm), "i");
+          const catItems = await Catalogue.find({
+            $or: [{ name: searchRegex }, { description: searchRegex }, { category: searchRegex }],
+          }).select("business").limit(30).lean();
+          catalogueBizIds = catItems.map((c) => c.business).filter(Boolean);
+        } catch {}
+      }
 
       andConditions.push({
         $or: [
-          { name: searchRegex },
-          { contactPerson: searchRegex },
-          { tagline: searchRegex },
-          { about: searchRegex },
-          { categories: { $in: [searchRegex] } },
-          { industry: searchRegex },
-          { subCategory: searchRegex },
-          { city: searchRegex },
-          { state: searchRegex },
-          { chapter: searchRegex },
+          { $text: { $search: cleanTerm } },
           ...(catalogueBizIds.length > 0 ? [{ _id: { $in: catalogueBizIds } }] : []),
         ],
       });
@@ -580,24 +602,7 @@ export const businessService = {
       throw new NotFoundError("Business profile not found");
     }
 
-    // Ensure 100% dynamic rating and reviewsCount from actual MongoDB reviews
-    const { Review } = await import("../reviews/review.model.js");
-    const reviews = await Review.find({
-      business: business._id,
-      status: { $in: ["approved", "published", "pending"] },
-    });
-    const count = reviews.length;
-    let avg = 0;
-    if (count > 0) {
-      const sum = reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0);
-      avg = Number((sum / count).toFixed(1));
-    }
-    if (business.rating !== avg || business.reviewsCount !== count) {
-      business.rating = avg;
-      business.reviewsCount = count;
-      await Business.findByIdAndUpdate(business._id, { rating: avg, reviewsCount: count });
-    }
-
+    // In-memory verification status safety check without blocking DB write
     if (business && Array.isArray(business.verificationHistory)) {
       const hasEverBeenApproved = business.verificationHistory.some(
         (h) => h.action === "verified" || h.action === "approved"
@@ -605,12 +610,11 @@ export const businessService = {
       if (hasEverBeenApproved && business.verification !== "verified" && business.verification !== "rejected") {
         business.verification = "verified";
         business.isVerified = true;
-        await Business.findByIdAndUpdate(business._id, { verification: "verified", isVerified: true });
       }
     }
 
-    // Increment public profile views count
-    Business.findByIdAndUpdate(business._id, { $inc: { views: 1 } }).catch(() => {});
+    // Scaled for 10k/50k users: In-memory view buffering (zero database write locks)
+    bufferProfileView(business._id);
 
     return business;
   },

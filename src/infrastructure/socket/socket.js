@@ -59,9 +59,20 @@ export const initSocket = (httpServer) => {
       if (data?.recipientId) {
         io.to(String(data.recipientId)).emit("receive_message", data);
         io.to(String(data.recipientId)).emit("update_conversations", data);
+        if (process.send) {
+          try {
+            process.send({ type: "SOCKET_IPC_BROADCAST", userId: String(data.recipientId), event: "receive_message", payload: data });
+            process.send({ type: "SOCKET_IPC_BROADCAST", userId: String(data.recipientId), event: "update_conversations", payload: data });
+          } catch {}
+        }
       }
       if (data?.senderId) {
         io.to(String(data.senderId)).emit("update_conversations", data);
+        if (process.send) {
+          try {
+            process.send({ type: "SOCKET_IPC_BROADCAST", userId: String(data.senderId), event: "update_conversations", payload: data });
+          } catch {}
+        }
       }
     });
 
@@ -69,6 +80,21 @@ export const initSocket = (httpServer) => {
       logger.info(`Socket disconnected: ${socket.id}`);
     });
   });
+
+  // Scaled for 10k/50k users: Listen for IPC broadcast messages from other cluster workers
+  if (process.on) {
+    process.on("message", (msg) => {
+      if (msg && msg.type === "SOCKET_IPC_BROADCAST" && io) {
+        if (msg.userId) {
+          io.to(String(msg.userId)).emit(msg.event, msg.payload);
+        } else if (msg.room) {
+          io.to(msg.room).emit(msg.event, msg.payload);
+        } else {
+          io.emit(msg.event, msg.payload);
+        }
+      }
+    });
+  }
 
   return io;
 };
@@ -81,7 +107,19 @@ export const getIO = () => {
 };
 
 export const emitToUser = (userId, event, payload) => {
-  if (io && userId) {
+  if (!userId) return;
+  if (io) {
     io.to(String(userId)).emit(event, payload);
+  }
+  // Scaled for 10k/50k users: Broadcast to other cluster workers via native Node IPC
+  if (process.send) {
+    try {
+      process.send({
+        type: "SOCKET_IPC_BROADCAST",
+        userId: String(userId),
+        event,
+        payload,
+      });
+    } catch {}
   }
 };
