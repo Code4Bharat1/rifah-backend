@@ -7,12 +7,38 @@ export const queryService = {
   create: async (data) => {
     const query = new Query(data);
     await query.save();
+
+    // Send notification to chapter admins
+    try {
+      const { User } = await import("../users/user.model.js");
+      const { notificationService } = await import("../notifications/notification.service.js");
+      
+      const admins = await User.find({
+        role: "chapter_admin",
+        "profile.chapter": query.chapter,
+        status: "Active"
+      }).select("_id");
+      
+      for (const admin of admins) {
+        await notificationService.createNotification({
+          recipientId: admin._id,
+          type: "System",
+          title: "New Query Received",
+          body: `A new query has been received from ${query.fullName} (${query.organization})`,
+          entityId: String(query._id),
+          link: "/chapter-admin/queries"
+        });
+      }
+    } catch (err) {
+      console.error("Failed to send query notification:", err);
+    }
+
     return query;
   },
 
   list: async (queryParams = {}, requester = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
-    const filter = {};
+    const filter = { desk: { $ne: "Payments" } };
 
     // Apply chapter scope so Chapter Admins only see their queries
     if (requester) {

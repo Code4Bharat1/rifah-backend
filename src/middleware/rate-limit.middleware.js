@@ -8,7 +8,7 @@ export const rateLimitMiddleware = rateLimit({
 
 export const authRateLimitMiddleware = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 30,
+  max: process.env.AUTH_RATE_LIMIT_MAX ? parseInt(process.env.AUTH_RATE_LIMIT_MAX) : 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
