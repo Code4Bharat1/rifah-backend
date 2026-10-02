@@ -40,8 +40,13 @@ export const validateRegisterBusiness = (data = {}) => {
   if (data.phone !== undefined && data.phone !== "" && !isValidPhone(data.phone)) {
     errors.push({ field: "phone", message: "Enter a valid phone number" });
   }
-  if (data.pincode !== undefined && data.pincode !== "" && !isValidPincode(data.pincode)) {
-    errors.push({ field: "pincode", message: "Enter a valid 6-digit pincode" });
+  const isInternational = data.region === "international" || data.currency === "USD" || (data.state && data.state.toLowerCase() === "international");
+  if (data.pincode !== undefined && data.pincode !== "") {
+    if (!isInternational && !isValidPincode(data.pincode)) {
+      errors.push({ field: "pincode", message: "Enter a valid 6-digit PIN code" });
+    } else if (isInternational && typeof data.pincode === "string" && data.pincode.trim().length > 16) {
+      errors.push({ field: "pincode", message: "Enter a valid postal / zip code" });
+    }
   }
   return { valid: errors.length === 0, errors };
 };

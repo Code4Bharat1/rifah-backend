@@ -13,8 +13,13 @@ const validateContactFields = (data, errors) => {
   if (data.whatsappNumber !== undefined && data.whatsappNumber !== "" && !isValidPhone(data.whatsappNumber)) {
     errors.push({ field: "whatsappNumber", message: "Enter a valid WhatsApp number" });
   }
-  if (data.pincode !== undefined && data.pincode !== "" && !isValidPincode(data.pincode)) {
-    errors.push({ field: "pincode", message: "Enter a valid 6-digit pincode" });
+  const isInternational = data.region === "international" || data.currency === "USD" || (data.state && String(data.state).toLowerCase() === "international");
+  if (data.pincode !== undefined && data.pincode !== "") {
+    if (!isInternational && !isValidPincode(data.pincode)) {
+      errors.push({ field: "pincode", message: "Enter a valid 6-digit PIN code" });
+    } else if (isInternational && typeof data.pincode === "string" && data.pincode.trim().length > 16) {
+      errors.push({ field: "pincode", message: "Enter a valid postal / zip code" });
+    }
   }
 };
 
