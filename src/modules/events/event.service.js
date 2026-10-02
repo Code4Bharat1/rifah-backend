@@ -476,6 +476,17 @@ export const eventService = {
       paymentId = paymentData.paymentId;
     }
 
+    const BusinessModel = mongoose.model("Business");
+    const business = await BusinessModel.findOne({ owner: userId });
+    let attendeeRole = "guest";
+    if (business) {
+      if (business.verification === "verified" || business.verification === "Verified") {
+        attendeeRole = "member";
+      } else {
+        attendeeRole = "non_member";
+      }
+    }
+
     const updatedEvent = await Event.findByIdAndUpdate(
       eventId,
       {
@@ -483,6 +494,7 @@ export const eventService = {
           registeredUsers: { 
             user: userId, 
             registeredAt: new Date(), 
+            role: attendeeRole,
             status: "Confirmed",
             paymentStatus: paymentStatus,
             amountPaid: paymentData?.amount || 0,
@@ -619,6 +631,20 @@ export const eventService = {
       if (!userId) continue;
 
       const userData = await User.findById(userId).select("name email phone role chapter businessName").lean();
+      const BusinessModel = mongoose.model("Business");
+      const business = await BusinessModel.findOne({ owner: userId }).lean();
+      
+      let computedRole = "guest";
+      if (business) {
+        if (business.verification === "verified" || business.verification === "Verified") {
+          computedRole = "member";
+        } else {
+          computedRole = "non_member";
+        }
+      } else if (entry.role) {
+        computedRole = entry.role; // Fallback to saved role if business not found
+      }
+
       registrations.push({
         _id,
         user: userData || { name: "Deleted User", email: "N/A" },
@@ -626,6 +652,7 @@ export const eventService = {
         status,
         gateStatus,
         attendanceStatus: entry.attendanceStatus || "Pending",
+        role: computedRole,
       });
     }
 
@@ -848,9 +875,10 @@ export const eventService = {
       },
       attendees: registeredUsers.map((reg, idx) => {
         const u = reg.user || {};
-        const isMem =
-          u.role === "business_owner" ||
-          (u.membershipStatus && u.membershipStatus !== "None" && u.membershipStatus !== "Expired");
+        let roleDisplay = "Guest";
+        if (reg.role === "member") roleDisplay = "Member";
+        else if (reg.role === "non_member") roleDisplay = "Non Member";
+
         return {
           id: reg._id || `att-${idx}`,
           userId: u._id || reg.user,
@@ -859,9 +887,10 @@ export const eventService = {
           mobile: u.phone || u.whatsapp || u.mobile || "Not provided",
           company: u.organization || u.company || "Enterprise",
           city: u.city || event.city || "Mumbai",
-          isMember: Boolean(isMem),
-          membership: isMem ? "Active Member" : "Non-Member",
-          membershipStatus: isMem ? "Active Member" : "Non-Member",
+          role: reg.role || "guest",
+          isMember: reg.role === "member",
+          membership: roleDisplay,
+          membershipStatus: roleDisplay,
           approvalStatus:
             reg.status === "Cancelled"
               ? "Rejected"

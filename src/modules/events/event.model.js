@@ -147,6 +147,11 @@ const eventSchema = new mongoose.Schema(
           type: Date,
           default: Date.now,
         },
+        role: {
+          type: String,
+          enum: ["guest", "non_member", "member"],
+          default: "guest",
+        },
         status: {
           type: String,
           enum: ["Confirmed", "Cancelled", "Attended"],

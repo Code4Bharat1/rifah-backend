@@ -40,9 +40,23 @@ export const authService = {
   /**
    * Register a new standard user / customer / buyer
    */
-  register: async ({ name, email, password, phone, chapter, organization, city, sourcingInterest }) => {
+  register: async ({ name, email, password, phone, chapter, organization, city, sourcingInterest, isGuestCheckout }) => {
     const existing = await User.findOne({ email: email.toLowerCase() });
     if (existing) {
+      if (isGuestCheckout && existing.role === ROLES.CUSTOMER) {
+        // For guest checkouts, if the account is just a customer/guest, log them in seamlessly.
+        const tokenPayload = {
+          id: existing._id,
+          email: existing.email,
+          role: existing.role,
+          chapter: existing.chapter,
+          chapterId: existing.chapterId,
+          state: existing.state || "",
+        };
+        const accessToken = signAccessToken(tokenPayload);
+        const refreshToken = signRefreshToken(tokenPayload);
+        return { user: existing, accessToken, refreshToken };
+      }
       throw new ConflictError("An account with this email address already exists");
     }
 
