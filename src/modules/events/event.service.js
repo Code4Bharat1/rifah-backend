@@ -145,57 +145,74 @@ export const computeEventStatus = (event, now = new Date()) => {
 export const isEventLive = (event) =>
   event?.stageStatus === "LIVE" || event?.status === STATUSES.EVENT.ONGOING || computeEventStatus(event) === "Live";
 
-const broadcastEventToAudience = async (event) => {
-  if (!event.targetAudience || event.targetAudience.length === 0 || event.status !== STATUSES.EVENT.UPCOMING) {
+const broadcastEventToAudience = (event) => {
+  if (event.status !== STATUSES.EVENT.UPCOMING) {
     return;
   }
 
-  try {
-    const rolesToTarget = [];
-    if (event.targetAudience.includes("Consumers")) rolesToTarget.push(ROLES.CUSTOMER);
-    if (event.targetAudience.includes("Businesses")) rolesToTarget.push(ROLES.BUSINESS_OWNER);
-    if (event.targetAudience.includes("Chapter Admins")) rolesToTarget.push(ROLES.CHAPTER_ADMIN);
+  // Fire-and-forget: send emails + notifications without blocking response
+  setImmediate(async () => {
+    try {
+      let rolesToTarget = [];
+      const targetArray = event.targetAudience || [];
+      const isAll = targetArray.length === 0 || targetArray.some(a => a.toLowerCase() === "all");
 
-    if (rolesToTarget.length === 0) return;
-
-    const users = await User.find({ role: { $in: rolesToTarget }, status: STATUSES.USER.ACTIVE });
-
-    // Send notifications and emails
-    for (const user of users) {
-      await notificationService.createNotification({
-        recipientId: (user.id || user._id),
-        type: "Event",
-        title: "New Event: " + event.title,
-        body: `You're invited to ${event.title} on ${event.date}`,
-        entityId: event._id,
-        eventDate: event.date,
-        eventCity: event.city,
-        eventTime: event.time,
-        eventVenue: event.venue || event.location,
-        metadata: {
-          eventDate: event.date,
-          eventCity: event.city,
-          eventTime: event.time,
-          eventVenue: event.venue || event.location,
-          eventTitle: event.title,
-        },
-        link: "/events",
-      });
-
-      if (user.email) {
-        await emailService.sendEventInvitationEmail({
-          email: user.email,
-          userName: user.name,
-          eventTitle: event.title,
-          eventDate: event.date,
-          location: event.city || "Virtual",
-          mode: event.mode || "In-person",
-        });
+      if (isAll) {
+        rolesToTarget = [ROLES.CUSTOMER, ROLES.BUSINESS_OWNER, ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN];
+      } else {
+        if (targetArray.includes("Consumers")) rolesToTarget.push(ROLES.CUSTOMER);
+        if (targetArray.includes("Businesses")) rolesToTarget.push(ROLES.BUSINESS_OWNER);
+        if (targetArray.includes("Chapter Admins")) rolesToTarget.push(ROLES.CHAPTER_ADMIN);
+        if (targetArray.includes("State Admins")) rolesToTarget.push(ROLES.STATE_ADMIN);
       }
+
+      if (rolesToTarget.length === 0) return;
+
+      const users = await User.find({ role: { $in: rolesToTarget }, status: STATUSES.USER.ACTIVE });
+
+      // Send notifications and emails concurrently for instant delivery
+      await Promise.allSettled(
+        users.map(async (user) => {
+          try {
+            await notificationService.createNotification({
+              recipientId: (user.id || user._id),
+              type: "Event",
+              title: "New Event: " + event.title,
+              body: `You're invited to ${event.title} on ${event.date}`,
+              entityId: event._id,
+              eventDate: event.date,
+              eventCity: event.city,
+              eventTime: event.time,
+              eventVenue: event.venue || event.location,
+              metadata: {
+                eventDate: event.date,
+                eventCity: event.city,
+                eventTime: event.time,
+                eventVenue: event.venue || event.location,
+                eventTitle: event.title,
+              },
+              link: "/events",
+            });
+
+            if (user.email) {
+              await emailService.sendEventInvitationEmail({
+                email: user.email,
+                userName: user.name,
+                eventTitle: event.title,
+                eventDate: event.date,
+                location: event.city || "Virtual",
+                mode: event.mode || "In-person",
+              });
+            }
+          } catch (innerErr) {
+            console.error(`Failed to broadcast to user ${user.email}:`, innerErr);
+          }
+        })
+      );
+    } catch (err) {
+      console.error("Error broadcasting event to audience:", err);
     }
-  } catch (err) {
-    console.error("Error broadcasting event to audience:", err);
-  }
+  });
 };
 
 // Same creator-scope RBAC as listEvents' strictAdminScope branch: a state/chapter
@@ -436,7 +453,7 @@ export const eventService = {
       console.error("Failed to auto-create feed post for event:", err);
     }
 
-    if (data.targetAudience && data.targetAudience.length > 0 && event.status === STATUSES.EVENT.UPCOMING) {
+    if (event.status === STATUSES.EVENT.UPCOMING) {
       broadcastEventToAudience(event);
     }
 
@@ -456,7 +473,11 @@ export const eventService = {
       (reg) => String(reg.user || reg) === String(userId)
     );
 
-    if (isAlreadyRegistered) {
+    const user = await User.findById(userId);
+    const isGuest = user && user.role === "customer";
+
+    // Allow guests to register multiple times for the same event (e.g., buying for friends)
+    if (isAlreadyRegistered && !isGuest) {
       throw new BadRequestError("You are already registered for this event");
     }
 

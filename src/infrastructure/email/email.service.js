@@ -1860,4 +1860,43 @@ RIFAH Chamber of Commerce & Industry
     const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
     return emailService.sendEmail({ to: email, subject, html, attachments });
   },
+
+  /**
+   * Sends an invitation email for a new event
+   */
+  sendEventInvitationEmail: async ({ email, userName, eventTitle, eventDate, location, mode }) => {
+    const subject = `You're invited: ${eventTitle} by RIFAH Chamber`;
+    const portalUrl = env.FRONTEND_URL || "https://rifah.org";
+    
+    const formattedDate = new Date(eventDate).toLocaleDateString("en-IN", {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <h2 style="color: #0060df; margin-top: 0;">Event Invitation</h2>
+        <p style="color: #334155;">Dear <strong>${userName}</strong>,</p>
+        <p style="color: #334155; line-height: 1.5;">You are cordially invited to attend our upcoming event: <strong>${eventTitle}</strong>.</p>
+        
+        <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+          <p style="margin: 5px 0;"><strong>📅 Date:</strong> ${formattedDate}</p>
+          <p style="margin: 5px 0;"><strong>📍 Location:</strong> ${location}</p>
+          <p style="margin: 5px 0;"><strong>🎥 Mode:</strong> ${mode}</p>
+        </div>
+        
+        <p style="color: #334155; line-height: 1.5;">Please visit our platform to view more details and register for the event.</p>
+        
+        <div style="margin-top: 30px; text-align: center;">
+          <a href="${portalUrl}/events" style="background-color: #0060df; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">View Event Details</a>
+        </div>
+        
+        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
+        <p style="font-size: 12px; color: #64748b; text-align: center;">
+          RIFAH Chamber of Commerce & Industry
+        </p>
+      </div>
+    `;
+    
+    return emailService.sendEmail({ to: email, subject, html });
+  },
 };
