@@ -69,5 +69,10 @@ const notificationSchema = new mongoose.Schema(
   }
 );
 
+// Scaled for 10k users: compound indexes for instant sorting, lookup, and unread badges
+notificationSchema.index({ recipient: 1, createdAt: -1 });
+notificationSchema.index({ recipient: 1, isRead: 1 });
+notificationSchema.index({ broadcastId: 1 });
+
 export const Notification = mongoose.model("Notification", notificationSchema);
 export default Notification;

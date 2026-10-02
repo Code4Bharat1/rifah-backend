@@ -343,6 +343,11 @@ const businessSchema = new mongoose.Schema(
 );
 
 businessSchema.index({ name: "text", about: "text", tagline: "text", productsSummary: "text" });
+// Scaled for 10k users: indexes for email lookup on login/switch and directory filtering
+businessSchema.index({ ownerEmail: 1 });
+businessSchema.index({ email: 1 });
+businessSchema.index({ chapter: 1, status: 1 });
+businessSchema.index({ state: 1, status: 1 });
 
 businessSchema.pre("save", function (next) {
   if (!this.membershipId && this._id) {

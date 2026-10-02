@@ -88,7 +88,8 @@ export const messageService = {
       .populate("sender", "name avatar role")
       .populate("recipient", "name avatar role")
       .populate("enquiry", "referenceId title")
-      .sort({ createdAt: 1 });
+      .sort({ createdAt: 1 })
+      .lean();
 
     // Mark received messages as read
     await Message.updateMany(
@@ -109,7 +110,8 @@ export const messageService = {
       .populate("sender", "name email phone avatar role whatsapp")
       .populate("recipient", "name email phone avatar role whatsapp")
       .populate("enquiry", "referenceId title")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     const conversationMap = new Map();
 
