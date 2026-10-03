@@ -45,6 +45,39 @@ export const enquiryService = {
     let userBusiness = null;
     if (user) {
       userBusiness = await Business.findOne({ owner: user.id });
+
+      // Enforce plan-based enquiry limits
+      const userDoc = await User.findById(user.id).select("membershipPlan membership role");
+      const isAdmin = ["central_admin", "state_admin", "chapter_admin"].includes(userDoc?.role || user.role);
+      if (!isAdmin) {
+        let plan = userDoc?.membershipPlan || userDoc?.membership;
+        if (!plan && userBusiness) plan = userBusiness.membership;
+        plan = plan || "Tier I (Free)";
+        const norm = String(plan).toLowerCase().trim();
+
+        let maxEnquiries = 2;
+        if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
+          maxEnquiries = Infinity;
+        } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
+          maxEnquiries = 30;
+        } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
+          maxEnquiries = 10;
+        } else {
+          maxEnquiries = 2;
+        }
+
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const count = await Enquiry.countDocuments({
+          requester: user.id,
+          createdAt: { $gte: thirtyDaysAgo },
+        });
+
+        if (isFinite(maxEnquiries) && count >= maxEnquiries) {
+          throw new ForbiddenError(
+            `Monthly enquiry posting limit reached (${count}/${maxEnquiries} enquiries used on ${plan}). Please upgrade your membership plan for higher capacity.`
+          );
+        }
+      }
     }
 
     let requesterRole = "Guest Customer";

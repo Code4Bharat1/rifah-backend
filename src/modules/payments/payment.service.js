@@ -248,6 +248,10 @@ export const paymentService = {
         }
         const bizIndustry = (payload.industry && payload.industry.trim()) || userDoc.sourcingInterest || "";
 
+        const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || 
+                           String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
+                           String(planId || "").toLowerCase() === "free";
+
         businessDoc = await Business.create({
           name: rawBizName,
           slug,
@@ -263,20 +267,32 @@ export const paymentService = {
           chapterId: bizChapterId,
           industry: bizIndustry,
           categories: bizIndustry ? [bizIndustry] : [],
-          status: "Pending Verification",
-          verificationStatus: "Pending",
-          verification: "pending",
+          status: isUserTier ? "Active" : "Pending Verification",
+          verificationStatus: isUserTier ? "Unverified" : "Pending",
+          verification: "unverified",
           membership: formattedTier,
+          subscriberTier: isUserTier ? (planId || "tier_1") : undefined,
           rating: 5,
         });
         finalBusinessId = businessDoc._id;
       } else {
-        // Business exists: update membership & reset verification state to pending for Chapter Admin review
+        // Business exists: update membership & reset verification state to pending for Chapter Admin review ONLY if chamber plan
         const formattedTier = membershipPlan.name;
+        const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || 
+                           String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
+                           String(planId || "").toLowerCase() === "free";
 
         businessDoc.membership = formattedTier;
         businessDoc.paymentStatus = "Paid";
         businessDoc.isPaid = true;
+        if (isUserTier) {
+          businessDoc.subscriberTier = planId || "tier_1";
+          if (!businessDoc.isVerified) {
+            businessDoc.status = "Active";
+            businessDoc.verification = "unverified";
+            businessDoc.verificationStatus = "Unverified";
+          }
+        }
         if (payload.billingPhone && !businessDoc.phone) {
           businessDoc.phone = payload.billingPhone;
         }
@@ -306,7 +322,7 @@ export const paymentService = {
             } catch (e) {}
           }
         }
-        if (!businessDoc.isVerified) {
+        if (!isUserTier && !businessDoc.isVerified) {
           businessDoc.status = "Pending Verification";
           businessDoc.verificationStatus = "Pending";
           businessDoc.verification = "pending";
@@ -319,34 +335,41 @@ export const paymentService = {
         }
         businessDoc.verificationHistory.push({
           action: "payment",
-          reason: `Membership payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Queued for Chapter Administrator verification review.`,
+          reason: isUserTier
+            ? `Subscriber plan payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Account activated.`
+            : `Membership payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Queued for Chapter Administrator verification review.`,
           reviewer: userDoc._id,
           createdAt: new Date(),
         });
         await businessDoc.save();
       }
 
-      // Sync Verification document in database
-      try {
-        const { Verification } = await import("../verification/verification.model.js");
-        let verificationDoc = await Verification.findOne({ business: businessDoc._id });
-        if (verificationDoc) {
-          if (verificationDoc.status !== "verified") {
-            verificationDoc.status = "pending";
-            verificationDoc.remarks = `Membership payment verified (Invoice #${invoiceNumber}). Awaiting Chapter Administrator review.`;
-            await verificationDoc.save();
+      // Sync Verification document in database ONLY for Chamber Multi-Year plans (Silver/Gold/Platinum/Diamond)
+      const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || 
+                         String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
+                         String(planId || "").toLowerCase() === "free";
+      if (!isUserTier) {
+        try {
+          const { Verification } = await import("../verification/verification.model.js");
+          let verificationDoc = await Verification.findOne({ business: businessDoc._id });
+          if (verificationDoc) {
+            if (verificationDoc.status !== "verified") {
+              verificationDoc.status = "pending";
+              verificationDoc.remarks = `Membership payment verified (Invoice #${invoiceNumber}). Awaiting Chapter Administrator review.`;
+              await verificationDoc.save();
+            }
+          } else {
+            await Verification.create({
+              business: businessDoc._id,
+              status: "pending",
+              remarks: `Membership payment verified (Invoice #${invoiceNumber}).`,
+              submittedBy: userDoc._id,
+              documents: businessDoc.documents || [],
+            });
           }
-        } else {
-          await Verification.create({
-            business: businessDoc._id,
-            status: "pending",
-            remarks: `Membership payment verified (Invoice #${invoiceNumber}).`,
-            submittedBy: userDoc._id,
-            documents: businessDoc.documents || [],
-          });
+        } catch (verifErr) {
+          console.error("Error updating verification on payment:", verifErr);
         }
-      } catch (verifErr) {
-        console.error("Error updating verification on payment:", verifErr);
       }
     }
 
@@ -416,40 +439,42 @@ export const paymentService = {
           }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
         }
 
-        // 1. Notify Chapter Admin of the specific Chapter only
-        const bizChapter = (businessDoc?.chapter || userDoc?.chapter || "").trim();
-        const bizChapterId = businessDoc?.chapterId || userDoc?.chapterId || null;
-        let chapterAdmins = [];
-        if (bizChapter || bizChapterId) {
-          const cleanChapter = bizChapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
-          chapterAdmins = await User.find({
-            role: ROLES.CHAPTER_ADMIN,
-            $or: [
-              ...(bizChapterId ? [{ chapterId: bizChapterId }] : []),
-              ...(cleanChapter ? [{ chapter: new RegExp(cleanChapter, "i") }] : []),
-              ...(bizChapter ? [{ chapter: new RegExp(`^${bizChapter}$`, "i") }] : []),
-            ],
-          }).select("_id email name chapter");
-        }
+        // 1. Notify Chapter Admin of the specific Chapter only (Chamber multi-year tiers only)
+        if (!isUserTier) {
+          const bizChapter = (businessDoc?.chapter || userDoc?.chapter || "").trim();
+          const bizChapterId = businessDoc?.chapterId || userDoc?.chapterId || null;
+          let chapterAdmins = [];
+          if (bizChapter || bizChapterId) {
+            const cleanChapter = bizChapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
+            chapterAdmins = await User.find({
+              role: ROLES.CHAPTER_ADMIN,
+              $or: [
+                ...(bizChapterId ? [{ chapterId: bizChapterId }] : []),
+                ...(cleanChapter ? [{ chapter: new RegExp(cleanChapter, "i") }] : []),
+                ...(bizChapter ? [{ chapter: new RegExp(`^${bizChapter}$`, "i") }] : []),
+              ],
+            }).select("_id email name chapter");
+          }
 
-        for (const ca of chapterAdmins) {
-          notificationService.createNotification({
-            recipientId: ca._id,
-            type: "Verification",
-            title: "New Membership Payment & Verification Request",
-            body: `Business "${businessDoc?.name || userDoc?.name}" (${bizChapter || "Your Chapter"}) has completed ${planId || "Membership"} payment (Invoice #${payment.invoiceNumber}) and is awaiting verification approval.`,
-            entityId: businessDoc?._id,
-            link: "/chapter-admin/verification",
-          }).catch(() => {});
-
-          if (ca.email) {
-            emailService.sendAdminVerificationAlert({
-              adminEmail: ca.email,
-              businessName: businessDoc?.name || userDoc?.name,
-              ownerName: userDoc?.name,
-              chapter: bizChapter || "General",
-              notes: `Membership payment completed for ${planId || "Membership"} tier (Invoice #${payment.invoiceNumber}). Awaiting verification approval.`,
+          for (const ca of chapterAdmins) {
+            notificationService.createNotification({
+              recipientId: ca._id,
+              type: "Verification",
+              title: "New Membership Payment & Verification Request",
+              body: `Business "${businessDoc?.name || userDoc?.name}" (${bizChapter || "Your Chapter"}) has completed ${planId || "Membership"} payment (Invoice #${payment.invoiceNumber}) and is awaiting verification approval.`,
+              entityId: businessDoc?._id,
+              link: "/chapter-admin/verification",
             }).catch(() => {});
+
+            if (ca.email) {
+              emailService.sendAdminVerificationAlert({
+                adminEmail: ca.email,
+                businessName: businessDoc?.name || userDoc?.name,
+                ownerName: userDoc?.name,
+                chapter: bizChapter || "General",
+                notes: `Membership payment completed for ${planId || "Membership"} tier (Invoice #${payment.invoiceNumber}). Awaiting verification approval.`,
+              }).catch(() => {});
+            }
           }
         }
 
@@ -565,6 +590,10 @@ export const paymentService = {
         const bizChapter = userDoc.chapter || "";
         const bizIndustry = (data.industry && data.industry.trim()) || userDoc.sourcingInterest || "";
 
+        const isUserTier = String(data.planId || "").toLowerCase().startsWith("tier_") || 
+                           String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
+                           String(data.planId || "").toLowerCase() === "free";
+
         businessDoc = await Business.create({
           name: rawBizName,
           slug,
@@ -578,18 +607,29 @@ export const paymentService = {
           chapter: bizChapter,
           industry: bizIndustry,
           categories: bizIndustry ? [bizIndustry] : [],
-          status: "Pending Verification",
-          verificationStatus: "Pending",
-          verification: "pending",
+          status: isUserTier ? "Active" : "Pending Verification",
+          verificationStatus: isUserTier ? "Unverified" : "Pending",
+          verification: "unverified",
           membership: formattedTier,
+          subscriberTier: isUserTier ? (data.planId || "tier_1") : undefined,
           rating: 5,
         });
         finalBusinessId = businessDoc._id;
       } else {
         const formattedTier = membershipPlan.name;
+        const isUserTier = String(data.planId || "").toLowerCase().startsWith("tier_") || 
+                           String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
+                           String(data.planId || "").toLowerCase() === "free";
 
         businessDoc.membership = formattedTier;
-        if (!businessDoc.isVerified) {
+        if (isUserTier) {
+          businessDoc.subscriberTier = data.planId || "tier_1";
+          if (!businessDoc.isVerified) {
+            businessDoc.status = "Active";
+            businessDoc.verification = "unverified";
+            businessDoc.verificationStatus = "Unverified";
+          }
+        } else if (!businessDoc.isVerified) {
           businessDoc.status = "Pending Verification";
           businessDoc.verificationStatus = "Pending";
           businessDoc.verification = "pending";
@@ -602,7 +642,9 @@ export const paymentService = {
         }
         businessDoc.verificationHistory.push({
           action: "payment",
-          reason: `Membership payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Queued for Chapter Administrator verification review.`,
+          reason: isUserTier
+            ? `Subscriber plan payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Account activated.`
+            : `Membership payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Queued for Chapter Administrator verification review.`,
           reviewer: userDoc._id,
           createdAt: new Date(),
         });
@@ -613,27 +655,32 @@ export const paymentService = {
         await membershipService.upgradePlan(finalBusinessId, data.planId);
       }
 
-      // Sync Verification document in database
-      try {
-        const { Verification } = await import("../verification/verification.model.js");
-        let verificationDoc = await Verification.findOne({ business: businessDoc._id });
-        if (verificationDoc) {
-          if (verificationDoc.status !== "verified") {
-            verificationDoc.status = "pending";
-            verificationDoc.remarks = `Membership payment completed (Invoice #${invoiceNumber}). Awaiting Chapter Administrator review.`;
-            await verificationDoc.save();
+      // Sync Verification document in database ONLY for chamber tiers
+      const isUserTier = String(data.planId || "").toLowerCase().startsWith("tier_") || 
+                         String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
+                         String(data.planId || "").toLowerCase() === "free";
+      if (!isUserTier) {
+        try {
+          const { Verification } = await import("../verification/verification.model.js");
+          let verificationDoc = await Verification.findOne({ business: businessDoc._id });
+          if (verificationDoc) {
+            if (verificationDoc.status !== "verified") {
+              verificationDoc.status = "pending";
+              verificationDoc.remarks = `Membership payment completed (Invoice #${invoiceNumber}). Awaiting Chapter Administrator review.`;
+              await verificationDoc.save();
+            }
+          } else {
+            await Verification.create({
+              business: businessDoc._id,
+              status: "pending",
+              remarks: `Membership payment completed (Invoice #${invoiceNumber}).`,
+              submittedBy: userDoc._id,
+              documents: businessDoc.documents || [],
+            });
           }
-        } else {
-          await Verification.create({
-            business: businessDoc._id,
-            status: "pending",
-            remarks: `Membership payment completed (Invoice #${invoiceNumber}).`,
-            submittedBy: userDoc._id,
-            documents: businessDoc.documents || [],
-          });
+        } catch (verifErr) {
+          console.error("Error updating verification on createPayment:", verifErr);
         }
-      } catch (verifErr) {
-        console.error("Error updating verification on createPayment:", verifErr);
       }
     }
 

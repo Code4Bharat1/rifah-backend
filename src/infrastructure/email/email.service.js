@@ -5,15 +5,38 @@ import { env } from "../../config/env.js";
 import { logger } from "../logger/logger.js";
 import { generateInvoicePdfBuffer } from "../../shared/utils/pdf-generator.js";
 
-const transporter = nodemailer.createTransport({
-  host: env.EMAIL?.HOST || "smtp.gmail.com",
-  port: env.EMAIL?.PORT || 465,
-  secure: (env.EMAIL?.PORT || 465) === 465,
-  auth: {
-    user: env.EMAIL?.USER,
-    pass: env.EMAIL?.PASS,
-  },
-});
+const getTransporter = () => {
+  const user = String(env.EMAIL?.USER || process.env.SMTP_USER || "").trim();
+  const pass = String(env.EMAIL?.PASS || process.env.SMTP_PASS || "").replace(/\s+/g, "");
+  const host = String(env.EMAIL?.HOST || process.env.SMTP_HOST || "smtp.gmail.com").trim();
+  const port = parseInt(env.EMAIL?.PORT || process.env.SMTP_PORT || "465", 10);
+
+  if (host.includes("gmail") || user.endsWith("@gmail.com")) {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user,
+        pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+    });
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: {
+      user,
+      pass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+};
 
 export const emailService = {
   /**
@@ -23,15 +46,19 @@ export const emailService = {
    */
   sendEmail: async ({ to, subject, html, text, attachments }) => {
     try {
-      if (!env.EMAIL?.USER || !env.EMAIL?.PASS) {
+      const user = String(env.EMAIL?.USER || process.env.SMTP_USER || "").trim();
+      const pass = String(env.EMAIL?.PASS || process.env.SMTP_PASS || "").replace(/\s+/g, "");
+
+      if (!user || !pass) {
         logger.warn(`[EMAIL SIMULATED - NO CREDS] To: ${to} | Subject: ${subject}`);
         return true;
       }
 
       const senderDisplayName = "RIFAH Chamber of Commerce";
+      const transporter = getTransporter();
       const info = await transporter.sendMail({
-        from: `"${senderDisplayName}" <${env.EMAIL.USER}>`,
-        replyTo: env.EMAIL.USER,
+        from: `"${senderDisplayName}" <${user}>`,
+        replyTo: user,
         to,
         subject,
         text,

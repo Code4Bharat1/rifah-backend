@@ -293,16 +293,46 @@ export const postService = {
   createPost: async (data, user) => {
     const userId = user.id || user._id;
 
-    // 1-Post Limit: Verify if user already has an active (non-deleted) post
-    const existingActivePost = await Post.findOne({
-      author: userId,
-      isDeleted: false,
-    });
+    // Check plan permissions: Tier I (Free) cannot create feed posts
+    const isAdmin = ["central_admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
+    if (!isAdmin) {
+      const userDoc = await User.findById(userId).select("membershipPlan membership membershipExpiresAt");
+      let plan = userDoc?.membershipPlan || userDoc?.membership;
+      if (!plan) {
+        const businessDoc = await Business.findOne({ owner: userId }).select("membership membershipExpiryDate");
+        plan = businessDoc?.membership;
+      }
+      plan = plan || "Tier I (Free)";
+      const norm = String(plan).toLowerCase().trim();
+      const isFree = norm === "free" || norm.includes("tier i ") || norm.includes("tier 1") || norm === "tier i" || norm === "tier_1";
+      if (isFree) {
+        throw new ForbiddenError(
+          "Feed posting is not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above to publish posts in the community feed."
+        );
+      }
 
-    if (existingActivePost) {
-      throw new BadRequestError(
-        "You can only upload 1 post in the feed at a time. Please delete your existing post before creating a new one."
-      );
+      let maxPosts = 5;
+      if (norm.includes("diamond") || norm.includes("platinum")) {
+        maxPosts = Infinity;
+      } else if (norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
+        maxPosts = 20;
+      } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
+        maxPosts = 10;
+      } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
+        maxPosts = 5;
+      }
+
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const monthlyPostCount = await Post.countDocuments({
+        author: userId,
+        createdAt: { $gte: thirtyDaysAgo },
+      });
+
+      if (isFinite(maxPosts) && monthlyPostCount >= maxPosts) {
+        throw new ForbiddenError(
+          `Monthly feed posting limit reached (${monthlyPostCount}/${maxPosts} posts used this month on ${plan}). Please upgrade your subscription plan to publish more posts.`
+        );
+      }
     }
 
     let authorName = data.authorName || user.name || "";

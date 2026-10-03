@@ -304,6 +304,46 @@ export const leadService = {
       throw new ForbiddenError("Security Violation: You are not authorized to quote on this business lead");
     }
 
+    // 1.1 ENFORCE PLAN-BASED QUOTATION LIMITS
+    if (!isAdmin) {
+      let plan = user.membershipPlan || user.membership;
+      if (!plan && lead.business) {
+        plan = lead.business.membership;
+      }
+      if (!plan) {
+        const uDoc = await User.findById(user.id).select("membershipPlan membership");
+        plan = uDoc?.membershipPlan || uDoc?.membership;
+      }
+      plan = plan || "Tier I (Free)";
+      const norm = String(plan).toLowerCase().trim();
+      const isFree = norm === "free" || norm.includes("tier i ") || norm.includes("tier 1") || norm === "tier i" || norm === "tier_1";
+
+      if (isFree) {
+        throw new ForbiddenError("Quotation posting is not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above.");
+      }
+
+      let maxQuotes = 5;
+      if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
+        maxQuotes = Infinity;
+      } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
+        maxQuotes = 20;
+      } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
+        maxQuotes = 5;
+      }
+
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const monthlyQuotesCount = await Lead.countDocuments({
+        business: lead.business?._id,
+        "quotation.submittedAt": { $gte: thirtyDaysAgo },
+      });
+
+      if (isFinite(maxQuotes) && monthlyQuotesCount >= maxQuotes) {
+        throw new ForbiddenError(
+          `Monthly quotation posting limit reached (${monthlyQuotesCount}/${maxQuotes} quotes used this month on ${plan}). Please upgrade your subscription plan to submit more quotations.`
+        );
+      }
+    }
+
     // 2. ROBUST TARGET CUSTOMER RESOLUTION (Guaranteed Message Box Delivery)
     let enquiry = lead.enquiry;
     if (!enquiry || !enquiry._id) {
@@ -515,6 +555,44 @@ export const leadService = {
       if (user.role === "chapter_admin") {
         if (lead.business && lead.business.chapterId && String(lead.business.chapterId) !== String(user.chapterId)) {
           throw new ForbiddenError("You are not authorized to update leads outside your chapter");
+        }
+      }
+
+      // Enforce lead unlock limit when accepting/advancing a lead
+      if (!isAdmin && ["In Progress", "Accepted", "Contacted"].includes(status) && lead.status === "New") {
+        let plan = user.membershipPlan || user.membership;
+        if (!plan && lead.business) {
+          plan = lead.business.membership;
+        }
+        if (!plan) {
+          const uDoc = await User.findById(user.id).select("membershipPlan membership");
+          plan = uDoc?.membershipPlan || uDoc?.membership;
+        }
+        plan = plan || "Tier I (Free)";
+        const norm = String(plan).toLowerCase().trim();
+
+        let maxLeads = 1;
+        if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
+          maxLeads = Infinity;
+        } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
+          maxLeads = 15;
+        } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
+          maxLeads = 5;
+        } else {
+          maxLeads = 1;
+        }
+
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const unlockedCount = await Lead.countDocuments({
+          business: lead.business?._id,
+          status: { $in: ["In Progress", "Accepted", "Contacted", "Responded", "Won", "Closed"] },
+          createdAt: { $gte: thirtyDaysAgo },
+        });
+
+        if (isFinite(maxLeads) && unlockedCount >= maxLeads) {
+          throw new ForbiddenError(
+            `Monthly lead unlock limit reached (${unlockedCount}/${maxLeads} leads unlocked this month on ${plan}). Please upgrade your subscription plan to unlock more leads.`
+          );
         }
       }
     }

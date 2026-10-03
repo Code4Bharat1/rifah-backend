@@ -285,20 +285,15 @@ export const birthdayService = {
   },
 
   /**
-   * Starts periodic scheduler to check and send birthday emails hourly
+   * Starts periodic scheduler to check and send birthday emails (Runs once every 24 hours)
    */
   startBirthdayScheduler: () => {
-    // Initial check after 10 seconds of startup
-    setTimeout(() => {
-      birthdayService.checkAndSendBirthdayEmails().catch(() => {});
-    }, 10000);
-
-    // Run hourly
+    // Run daily check every 24 hours (avoid spamming on server restarts)
     setInterval(() => {
       birthdayService.checkAndSendBirthdayEmails().catch(() => {});
-    }, 60 * 60 * 1000);
+    }, 24 * 60 * 60 * 1000);
 
-    logger.info("[BIRTHDAY SCHEDULER] Birthday hourly wish scheduler started.");
+    logger.info("[BIRTHDAY SCHEDULER] Birthday daily wish scheduler started.");
   },
 };
 

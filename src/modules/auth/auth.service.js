@@ -182,16 +182,22 @@ export const authService = {
     );
 
     // Send email
+    let emailDelivered = false;
     try {
-      await emailService.sendRegisterOtpEmail({ email: cleanEmail, otp });
+      emailDelivered = await emailService.sendRegisterOtpEmail({ email: cleanEmail, otp });
     } catch (err) {
       console.error("Failed to send registration OTP email:", err);
     }
 
+    console.log(`\n========================================\n[REGISTRATION OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? 'YES' : 'NO - SMTP LIMIT REACHED'})\n========================================\n`);
+
     return {
-      message: "Verification code sent to your email.",
+      message: emailDelivered
+        ? "Verification code sent to your email."
+        : `Verification code: ${otp} (Pre-filled due to SMTP limit)`,
       email: cleanEmail,
-      otp, // included for seamless local dev / testing if mail credentials are simulated
+      otp, // included for testing and fallback when Google SMTP quota is reached
+      emailDelivered: Boolean(emailDelivered),
     };
   },
 

@@ -55,6 +55,44 @@ export const oneToOneService = {
       throw new BadRequestError("You cannot log a one-to-one meeting with yourself.");
     }
 
+    // --- Enforce Plan Tier One-to-One Meeting Request limits ---
+    const { User } = await import("../users/user.model.js");
+    const userDoc = await User.findById(userId).select("membershipPlan membership role");
+    const isAdmin = ["central_admin", "state_admin", "chapter_admin"].includes(userDoc?.role);
+
+    if (!isAdmin) {
+      let plan = userDoc?.membershipPlan || userDoc?.membership || initiatorBusiness.membership || "Tier I (Free)";
+      const norm = String(plan).toLowerCase().trim();
+      const isFree = norm === "free" || norm.includes("tier i ") || norm.includes("tier 1") || norm === "tier i" || norm === "tier_1";
+
+      if (isFree) {
+        throw new ForbiddenError(
+          "One-to-One Meeting Requests are not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above."
+        );
+      }
+
+      let maxMeetings = 5;
+      if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
+        maxMeetings = Infinity;
+      } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
+        maxMeetings = 15;
+      } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
+        maxMeetings = 5;
+      }
+
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const monthlyCount = await OneToOne.countDocuments({
+        initiatorUser: userId,
+        createdAt: { $gte: thirtyDaysAgo },
+      });
+
+      if (isFinite(maxMeetings) && monthlyCount >= maxMeetings) {
+        throw new ForbiddenError(
+          `Monthly One-to-One meeting request limit reached (${monthlyCount}/${maxMeetings} meetings logged this month on ${plan}). Please upgrade your plan for higher capacity.`
+        );
+      }
+    }
+
     const memberBusiness = await resolveMemberBusiness(memberBusinessId);
 
     const record = await OneToOne.create({

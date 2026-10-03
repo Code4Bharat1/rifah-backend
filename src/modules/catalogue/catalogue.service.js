@@ -316,42 +316,51 @@ export const catalogueService = {
     }
 
     // --- Enforce plan-based limits ---
-    const tier = (business.membership || "Free").toLowerCase();
+    let planName = business.membership || "Tier I (Free)";
+    if (user?.id) {
+      try {
+        const { User } = await import("../users/user.model.js");
+        const userDoc = await User.findById(user.id).select("membershipPlan membership");
+        if (userDoc?.membershipPlan || userDoc?.membership) {
+          planName = userDoc.membershipPlan || userDoc.membership;
+        }
+      } catch (e) {}
+    }
 
-    // Map every real plan name to its catalogue limit.
-    // Paid plans (Silver / Gold / Platinum / Diamond and legacy names)
-    // have NO catalogue limit — Infinity means the count check below never fires.
-    // Only a truly free/unregistered tier gets a hard cap.
-    const tierCatalogueLimits = {
-      // Free / unregistered
-      free: 5,
-      // Legacy names (kept for backward-compat)
-      basic: Infinity,
-      premium: Infinity,
-      enterprise: Infinity,
-      // Current RIFAH plan names
-      silver: Infinity,
-      gold: Infinity,
-      platinum: Infinity,
-      diamond: Infinity,
-    };
+    const norm = String(planName || "Free").toLowerCase().trim();
+    let maxProducts = 1;
+    let maxServices = 1;
+
+    if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
+      maxProducts = Infinity;
+      maxServices = Infinity;
+    } else if (norm.includes("gold")) {
+      maxProducts = 15;
+      maxServices = 15;
+    } else if (norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
+      maxProducts = 10;
+      maxServices = 10;
+    } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
+      maxProducts = 5;
+      maxServices = 5;
+    } else {
+      // Tier I (Free) / Unregistered / Free
+      maxProducts = 1;
+      maxServices = 1;
+    }
+
+    const itemType = (data.type || "Product").toLowerCase() === "service" ? "Service" : "Product";
+    const currentTypeCount = await Catalogue.countDocuments({ business: business._id, type: itemType });
+    const limit = itemType === "Service" ? maxServices : maxProducts;
+
+    if (isFinite(limit) && currentTypeCount >= limit) {
+      throw new ForbiddenError(
+        `${itemType} catalogue limit reached (${limit} item allowed on ${planName}). Please upgrade your membership plan to list more ${itemType.toLowerCase()}s.`
+      );
+    }
 
     const globalSettings = await Settings.findOne({ isSingleton: "global" });
-    // Guard: if the setting is missing, zero, or negative, default to a safe value.
-    const rawGlobalMax = globalSettings?.maxCatalogueItems;
-    const safeGlobalMax = (typeof rawGlobalMax === "number" && rawGlobalMax > 0) ? rawGlobalMax : 50;
-
-    // Use the tier limit if it is defined (including Infinity), otherwise fall back
-    // to the global settings value.
-    const maxItems = (tierCatalogueLimits[tier] !== undefined)
-      ? tierCatalogueLimits[tier]
-      : safeGlobalMax;
     const maxImages = globalSettings?.maxImagesPerItem ?? 5;
-
-    const currentCount = await Catalogue.countDocuments({ business: business._id });
-    if (isFinite(maxItems) && currentCount >= maxItems) {
-      throw new ForbiddenError(`Catalogue limit reached for ${business.membership || "Free"} plan. Maximum ${maxItems} items allowed. Please upgrade your plan for higher catalogue capacity.`);
-    }
 
     if (data.images && Array.isArray(data.images) && data.images.length > maxImages) {
       throw new ForbiddenError(`Too many images. Maximum ${maxImages} images allowed per item.`);

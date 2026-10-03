@@ -343,20 +343,15 @@ export const anniversaryService = {
   },
 
   /**
-   * Starts periodic scheduler to check and send anniversary emails hourly
+   * Starts periodic scheduler to check and send anniversary emails (Runs once every 24 hours)
    */
   startAnniversaryScheduler: () => {
-    // Initial check after 15 seconds of startup
-    setTimeout(() => {
-      anniversaryService.checkAndSendAnniversaryEmails().catch(() => {});
-    }, 15000);
-
-    // Run hourly
+    // Run daily check every 24 hours (avoid spamming on server restarts)
     setInterval(() => {
       anniversaryService.checkAndSendAnniversaryEmails().catch(() => {});
-    }, 60 * 60 * 1000);
+    }, 24 * 60 * 60 * 1000);
 
-    logger.info("[ANNIVERSARY SCHEDULER] Anniversary hourly wish scheduler started.");
+    logger.info("[ANNIVERSARY SCHEDULER] Anniversary daily wish scheduler started.");
   },
 
   /**
