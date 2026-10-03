@@ -81,6 +81,14 @@ const eventSchema = new mongoose.Schema(
       enum: ENUMS.EVENT_MODES,
       default: "In-person",
     },
+    totalSeats: {
+      type: Number,
+      default: 0, // 0 means unlimited
+    },
+    registeredCount: {
+      type: Number,
+      default: 0,
+    },
     meetingLink: {
       type: String,
       trim: true,
@@ -116,14 +124,6 @@ const eventSchema = new mongoose.Schema(
     fee: {
       type: String,
       default: "Complimentary for Members",
-    },
-    seats: {
-      type: Number,
-      default: 100,
-    },
-    registeredCount: {
-      type: Number,
-      default: 0,
     },
     status: {
       type: String,

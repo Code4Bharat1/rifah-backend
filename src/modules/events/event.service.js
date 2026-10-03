@@ -481,7 +481,7 @@ export const eventService = {
       throw new BadRequestError("You are already registered for this event");
     }
 
-    if (event.registeredCount >= event.seats) {
+    if (event.totalSeats > 0 && event.registeredCount >= event.totalSeats) {
       throw new BadRequestError("Event capacity has been reached");
     }
 
