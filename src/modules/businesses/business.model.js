@@ -283,6 +283,43 @@ const businessSchema = new mongoose.Schema(
         type: String,
       },
     ],
+    testimonials: [
+      {
+        userName: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        businessName: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        photo: {
+          type: String,
+          default: "",
+        },
+        testimonial: {
+          type: String,
+          trim: true,
+          default: "",
+        },
+        rating: {
+          type: Number,
+          default: 5,
+          min: 1,
+          max: 5,
+        },
+        isHidden: {
+          type: Boolean,
+          default: false,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     rating: {
       type: Number,
       default: 0,

@@ -726,7 +726,7 @@ export const businessService = {
       "city", "state", "address", "pincode", "chapter", "chapterId", "employees",
       "founded", "website", "instagram", "linkedin", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
       "accent", "logo", "coverImage", "gallery", "productsSummary",
-      "servicesSummary", "certifications", "dob", "timezone"
+      "servicesSummary", "certifications", "testimonials", "dob", "timezone"
     ];
 
     const sanitizedData = {};
@@ -801,7 +801,7 @@ export const businessService = {
         "city", "state", "address", "pincode", "chapter", "employees",
         "founded", "website", "instagram", "linkedin", "taxId", "phone", "whatsapp", "whatsappNumber", "email", "hours",
         "accent", "logo", "coverImage", "gallery", "productsSummary",
-        "certifications", "dob", "timezone",
+        "certifications", "testimonials", "dob", "timezone",
         "contactPerson", "roleInBusiness", "designation", "contactPersonRole", "adminUpdateAcknowledged"
       ];
       sanitizedData = {};
