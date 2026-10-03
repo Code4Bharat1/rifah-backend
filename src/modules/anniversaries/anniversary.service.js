@@ -296,39 +296,43 @@ export const anniversaryService = {
       let sentCount = 0;
 
       for (const biz of candidateBusinesses) {
-        const joinDate = biz.joiningDate || biz.createdAt;
-        const bizTz = biz.timezone || "Asia/Kolkata";
-        const { isToday, yearsCompleted } = isAnniversaryToday(joinDate, bizTz);
-        const currentYear = getCurrentYear(bizTz);
+        try {
+          const joinDate = biz.joiningDate || biz.createdAt;
+          const bizTz = biz.timezone || "Asia/Kolkata";
+          const { isToday, yearsCompleted } = isAnniversaryToday(joinDate, bizTz);
+          const currentYear = getCurrentYear(bizTz);
 
-        if (isToday && yearsCompleted >= 1 && Number(biz.lastAnniversaryWishYear || 0) !== currentYear) {
-          const user = biz.owner;
-          if (user && user.email) {
-            await emailService.sendAnniversaryWishEmail({
-              email: user.email,
-              name: user.name,
-              businessName: biz.name,
-              chapter: biz.chapter || "",
-              yearsCompleted,
-            });
+          if (isToday && yearsCompleted >= 1 && Number(biz.lastAnniversaryWishYear || 0) !== currentYear) {
+            const user = biz.owner;
+            if (user && user.email) {
+              await emailService.sendAnniversaryWishEmail({
+                email: user.email,
+                name: user.name,
+                businessName: biz.name,
+                chapter: biz.chapter || "",
+                yearsCompleted,
+              });
 
-            const ordinal = yearsCompleted === 1 ? "1st" : yearsCompleted === 2 ? "2nd" : yearsCompleted === 3 ? "3rd" : `${yearsCompleted}th`;
-            await notificationService.createNotification({
-              recipientId: user._id,
-              type: "System",
-              title: `🎉 Happy ${ordinal} Anniversary with RIFAH Chamber! 🎊`,
-              body: `Congratulations on completing ${yearsCompleted} year${yearsCompleted > 1 ? "s" : ""} with RIFAH Chamber of Commerce & Industry. Together for a brighter tomorrow!`,
-              link: "/biz",
-            });
+              const ordinal = yearsCompleted === 1 ? "1st" : yearsCompleted === 2 ? "2nd" : yearsCompleted === 3 ? "3rd" : `${yearsCompleted}th`;
+              await notificationService.createNotification({
+                recipientId: user._id,
+                type: "System",
+                title: `🎉 Happy ${ordinal} Anniversary with RIFAH Chamber! 🎊`,
+                body: `Congratulations on completing ${yearsCompleted} year${yearsCompleted > 1 ? "s" : ""} with RIFAH Chamber of Commerce & Industry. Together for a brighter tomorrow!`,
+                link: "/biz",
+              });
 
-            user.lastAnniversaryWishYear = currentYear;
-            await user.save();
+              user.lastAnniversaryWishYear = currentYear;
+              await user.save();
+            }
+
+            biz.lastAnniversaryWishYear = currentYear;
+            await biz.save();
+            sentCount++;
+            logger.info(`[ANNIVERSARY CRON] Sent to: ${biz.name} (${yearsCompleted} Year(s))`);
           }
-
-          biz.lastAnniversaryWishYear = currentYear;
-          await biz.save();
-          sentCount++;
-          logger.info(`[ANNIVERSARY CRON] Sent to: ${biz.name} (${yearsCompleted} Year(s))`);
+        } catch (innerErr) {
+          logger.error(`[ANNIVERSARY CRON] Error processing business ${biz._id}:`, innerErr);
         }
       }
 
