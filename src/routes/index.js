@@ -37,6 +37,7 @@ import { postRoutes } from "../modules/posts/post.routes.js";
 import { fileRoutes } from "../modules/files/file.routes.js";
 import { galleryRoutes } from "../modules/gallery/gallery.routes.js";
 import { copilotRoutes } from "../modules/copilot/copilot.routes.js";
+import { advertisementRoutes } from "../modules/advertisements/advertisement.routes.js";
 
 const apiRouter = Router();
 
@@ -81,6 +82,7 @@ apiRouter.use("/central-admin", centralAdminRoutes);
 apiRouter.use("/posts", postRoutes);
 apiRouter.use("/gallery", galleryRoutes);
 apiRouter.use("/copilot", copilotRoutes);
+apiRouter.use("/advertisements", advertisementRoutes);
 
 export { apiRouter };
 export default apiRouter;
