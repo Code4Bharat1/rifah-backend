@@ -59,6 +59,9 @@ export const env = {
   GOOGLE: {
     CLIENT_ID: process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
     CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
+    MEET_REFRESH_TOKEN: process.env.GOOGLE_MEET_REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN || "",
+    MEET_API_KEY: process.env.GOOGLE_MEET_API_KEY || process.env.GOOGLE_CALENDAR_API_KEY || "",
+    REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || "http://localhost:5000/api/v1/events/google/oauth-callback",
   },
 
   GSTINAPI: {

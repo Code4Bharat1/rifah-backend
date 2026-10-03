@@ -1,4 +1,5 @@
 import { eventService } from "./event.service.js";
+import { googleMeetService } from "../../infrastructure/google/google-meet.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
@@ -359,5 +360,63 @@ export const eventController = {
     const { id } = req.params;
     const data = await eventService.getMyDuty(id, req.user);
     return ApiResponse.success(res, data, "Duty details retrieved");
+  }),
+
+  generateMeetLink: asyncHandler(async (req, res) => {
+    const { title, description, date, startTime, endTime } = req.body || {};
+    const result = await googleMeetService.generateMeetingLink({
+      title,
+      description,
+      date,
+      startTime,
+      endTime,
+    });
+    return ApiResponse.success(res, result, "Google Meet link generated successfully");
+  }),
+
+  getGoogleMeetAuthUrl: asyncHandler(async (req, res) => {
+    const authUrl = googleMeetService.getAuthUrl();
+    return ApiResponse.success(res, { authUrl }, "Google OAuth URL generated");
+  }),
+
+  handleGoogleMeetCallback: asyncHandler(async (req, res) => {
+    const { code } = req.query;
+    if (!code) {
+      return res.status(400).send("<h3>Authorization code missing</h3>");
+    }
+    try {
+      const tokens = await googleMeetService.exchangeCodeForTokens(code);
+      const refreshToken = tokens.refresh_token;
+
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Google Meet Authorization Success</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+            .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; max-width: 600px; width: 100%; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
+            h2 { color: #10b981; margin-top: 0; }
+            .token-box { background: #0f172a; border: 1px dashed #64748b; padding: 12px; border-radius: 8px; word-break: break-all; font-family: monospace; font-size: 14px; color: #38bdf8; margin: 16px 0; user-select: all; }
+            .instructions { font-size: 14px; line-height: 1.6; color: #94a3b8; }
+            .badge { display: inline-block; background: rgba(16, 185, 129, 0.2); color: #34d399; font-weight: 600; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <span class="badge">Google Meet Connected</span>
+            <h2>Google Authorization Successful!</h2>
+            <p class="instructions">Here is your Google Refresh Token. Copy this key and add it to your <code>rifah-backend/.env</code>:</p>
+            <div class="token-box">${refreshToken || "Token already granted or refresh token was not returned (try revoking app access in Google Security settings if you need a new refresh token)."}</div>
+            <p class="instructions">Set in <strong>rifah-backend/.env</strong>:</p>
+            <div class="token-box">GOOGLE_MEET_REFRESH_TOKEN=${refreshToken || ""}</div>
+            <p class="instructions">Once added, restart your backend server. Google Meet generation will be fully live!</p>
+          </div>
+        </body>
+        </html>
+      `);
+    } catch (err) {
+      return res.status(500).send(`<h3>Failed to exchange code:</h3><pre>${err.message}</pre>`);
+    }
   }),
 };

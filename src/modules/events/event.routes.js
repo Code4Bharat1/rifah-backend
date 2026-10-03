@@ -14,6 +14,21 @@ import { requireEventRoleOrAdmin } from "../../middleware/event-role.middleware.
 
 const router = Router();
 
+// Google Meet Integration routes (Must be declared before /:identifier)
+router.post(
+  "/generate-meet",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  eventController.generateMeetLink
+);
+router.get(
+  "/google/auth-url",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  eventController.getGoogleMeetAuthUrl
+);
+router.get("/google/oauth-callback", eventController.handleGoogleMeetCallback);
+
 // Public routes
 router.get("/", optionalAuthMiddleware, eventController.listEvents);
 router.get("/detail/:identifier", optionalAuthMiddleware, eventController.getEventBySlugOrId);
