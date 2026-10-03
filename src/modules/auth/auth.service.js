@@ -1181,10 +1181,14 @@ export const authService = {
       const finalBizName = (businessName && businessName.trim()) || `${user.name}'s Enterprise`;
 
       const selectedPlanId = String(membershipTier || "").trim().toLowerCase();
-      const selectedPlan = selectedPlanId
+      let selectedPlan = selectedPlanId
         ? await Plan.findOne({ planId: selectedPlanId, isActive: { $ne: false } }).lean()
         : null;
       if (selectedPlanId && !selectedPlan) {
+        const { DEFAULT_MEMBERSHIP_PLANS } = await import("../memberships/membership.service.js");
+        selectedPlan = DEFAULT_MEMBERSHIP_PLANS[selectedPlanId];
+      }
+      if (selectedPlanId && !selectedPlan && selectedPlanId !== "free") {
         throw new BadRequestError("Selected membership plan is unavailable");
       }
       const formattedTier = selectedPlan?.name || "Free";

@@ -15,6 +15,18 @@ import { ROLES } from "../../shared/constants/roles.js";
 import { signAccessToken, signRefreshToken } from "../../infrastructure/auth/jwt.js";
 import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 
+const BUILTIN_MEMBERSHIP_PLANS = {
+  free: { planId: "free", name: "Free Starter", price: 0, priceUsd: 0, durationYears: 0, gstRate: 0 },
+  silver: { planId: "silver", name: "Silver", price: 3000, priceUsd: 60, durationYears: 1, gstRate: 18 },
+  gold: { planId: "gold", name: "Gold", price: 5000, priceUsd: 100, durationYears: 2, gstRate: 18 },
+  platinum: { planId: "platinum", name: "Platinum", price: 25000, priceUsd: 325, durationYears: 10, gstRate: 18 },
+  diamond: { planId: "diamond", name: "Diamond", price: 50000, priceUsd: 650, durationYears: 25, gstRate: 18 },
+  tier_1: { planId: "tier_1", name: "Tier I (Free)", price: 0, priceUsd: 0, durationYears: 1, gstRate: 0 },
+  tier_2: { planId: "tier_2", name: "Tier II (Starter)", price: 50, priceUsd: 1, durationYears: 1, gstRate: 0 },
+  tier_3: { planId: "tier_3", name: "Tier III (Growth)", price: 100, priceUsd: 2, durationYears: 1, gstRate: 0 },
+  tier_4: { planId: "tier_4", name: "Tier IV (Enterprise)", price: 200, priceUsd: 4, durationYears: 1, gstRate: 0 },
+};
+
 async function getActivePlan(planId) {
   const cleanId = String(planId || "").trim();
   const query = {
@@ -29,8 +41,14 @@ async function getActivePlan(planId) {
       }
     ]
   };
-  const plan = await Plan.findOne(query).lean();
-  if (!plan) throw new BadRequestError("Selected membership plan is unavailable");
+  let plan = await Plan.findOne(query).lean();
+  if (!plan) {
+    const fallback = BUILTIN_MEMBERSHIP_PLANS[cleanId.toLowerCase()];
+    if (fallback) {
+      return fallback;
+    }
+    throw new BadRequestError("Selected membership plan is unavailable");
+  }
   return plan;
 }
 

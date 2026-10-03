@@ -13,27 +13,6 @@ import { User } from "../users/user.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 
 export const DEFAULT_MEMBERSHIP_PLANS = {
-  free: {
-    name: "Free",
-    price: 0,
-    priceUsd: 0,
-    durationYears: 0,
-    gstRate: 0,
-    displayOrder: 0,
-    isRecommended: false,
-    summary: "Basic Directory & Community Presence",
-    features: [
-      "Directory listing on RIFAH Connect",
-      "Basic business profile",
-      "Search visibility",
-    ],
-    missingFeatures: [
-      "Verified Chamber Badge",
-      "Matched buyer lead enquiries",
-      "Direct B2B buyer messaging",
-      "Priority RFQ & high-value lead routing",
-    ],
-  },
   silver: {
     name: "Silver",
     price: 3000,
@@ -127,28 +106,78 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     ],
     missingFeatures: [],
   },
+  tier_1: {
+    name: "Tier I (Free)",
+    price: 0,
+    priceUsd: 0,
+    durationYears: 1,
+    gstRate: 0,
+    displayOrder: 5,
+    isRecommended: false,
+    summary: "Essential access to Rifah Connect directory and basic networking.",
+    features: ["Directory listing on RIFAH Connect", "Basic business presence", "2 Inquiries/month", "1 Lead unlock/month"],
+    missingFeatures: [],
+  },
+  tier_2: {
+    name: "Tier II (Starter)",
+    price: 50,
+    priceUsd: 1,
+    durationYears: 1,
+    gstRate: 0,
+    displayOrder: 6,
+    isRecommended: false,
+    summary: "Starter monthly subscription with direct chat and post feeds.",
+    features: ["5 Feed posts/month", "5 Direct chats", "10 Inquiries/month", "5 Lead unlocks/month", "5 Catalogue products"],
+    missingFeatures: [],
+  },
+  tier_3: {
+    name: "Tier III (Growth)",
+    price: 100,
+    priceUsd: 2,
+    durationYears: 1,
+    gstRate: 0,
+    displayOrder: 7,
+    isRecommended: true,
+    summary: "Most popular monthly plan for active business lead generation.",
+    features: ["10 Feed posts/month", "15 Direct chats", "30 Inquiries/month", "15 Lead unlocks/month", "10 Catalogue products", "Featured business visibility"],
+    missingFeatures: [],
+  },
+  tier_4: {
+    name: "Tier IV (Enterprise)",
+    price: 200,
+    priceUsd: 4,
+    durationYears: 1,
+    gstRate: 0,
+    displayOrder: 8,
+    isRecommended: false,
+    summary: "Complete scale for business teams with unlimited chats and leads.",
+    features: ["20 Feed posts/month", "Unlimited Direct chats", "Unlimited Inquiries", "Unlimited Lead unlocks", "Unlimited Catalogue products", "Featured business visibility", "5 Team member seats"],
+    missingFeatures: [],
+  },
 };
 
 export const membershipService = {
   getPlans: async () => {
     let plansArray = await Plan.find().sort({ displayOrder: 1, createdAt: 1 }).lean();
 
-    // Seed defaults only for a brand-new database. Never replace plans an admin has
-    // already created or edited.
-    if (plansArray.length === 0) {
-      for (const [id, data] of Object.entries(DEFAULT_MEMBERSHIP_PLANS)) {
-        await Plan.create({ planId: id, ...data });
+    // Ensure all default plans (chamber + subscriber tiers) exist in database
+    const existingPlanIds = new Set(plansArray.map(p => (p.planId || "").toLowerCase()));
+    for (const [id, data] of Object.entries(DEFAULT_MEMBERSHIP_PLANS)) {
+      if (!existingPlanIds.has(id.toLowerCase())) {
+        try {
+          await Plan.create({ planId: id, ...data });
+        } catch (e) {}
       }
-      plansArray = await Plan.find().sort({ displayOrder: 1, createdAt: 1 }).lean();
     }
+    plansArray = await Plan.find().sort({ displayOrder: 1, createdAt: 1 }).lean();
 
-    const CANONICAL_ORDER = { silver: 1, gold: 2, platinum: 3, diamond: 4 };
+    const CANONICAL_ORDER = { silver: 1, gold: 2, platinum: 3, diamond: 4, tier_1: 5, tier_2: 6, tier_3: 7, tier_4: 8, free: 0 };
     plansArray.sort((a, b) => {
-      const orderA = a.displayOrder && Number(a.displayOrder) > 0 ? Number(a.displayOrder) : (CANONICAL_ORDER[a.planId?.toLowerCase()] || null);
-      const orderB = b.displayOrder && Number(b.displayOrder) > 0 ? Number(b.displayOrder) : (CANONICAL_ORDER[b.planId?.toLowerCase()] || null);
-      if (orderA && orderB && orderA !== orderB) return orderA - orderB;
-      if (orderA) return -1;
-      if (orderB) return 1;
+      const idA = (a.planId || "").toLowerCase();
+      const idB = (b.planId || "").toLowerCase();
+      const orderA = a.displayOrder && Number(a.displayOrder) > 0 ? Number(a.displayOrder) : (CANONICAL_ORDER[idA] ?? 99);
+      const orderB = b.displayOrder && Number(b.displayOrder) > 0 ? Number(b.displayOrder) : (CANONICAL_ORDER[idB] ?? 99);
+      if (orderA !== orderB) return orderA - orderB;
       return (Number(a.price) || 0) - (Number(b.price) || 0);
     });
 
@@ -365,25 +394,33 @@ export const membershipService = {
       return membership;
     }
 
-    const plan = await Plan.findOne({ planId: planKey, isActive: { $ne: false } }).lean();
+    let plan = await Plan.findOne({ planId: planKey, isActive: { $ne: false } }).lean();
+    if (!plan) {
+      plan = DEFAULT_MEMBERSHIP_PLANS[planKey.toLowerCase()];
+    }
     if (!plan) {
       throw new NotFoundError("Selected membership plan is unavailable");
     }
 
-    const durationYears = Number(plan.durationYears) || 1;
+    const isUserPlan = String(planKey).toLowerCase().startsWith("tier_") || String(plan.planId).toLowerCase().startsWith("tier_");
+    const durationYears = Number(plan.durationYears) || (isUserPlan ? 0 : 1);
+    const durationDays = isUserPlan ? 30 : 365 * durationYears;
 
     membership.planId = planKey;
     membership.planName = plan.name;
     membership.price = plan.price || 0;
-    membership.billingCycle = `${durationYears} Year${durationYears > 1 ? "s" : ""}`;
+    membership.billingCycle = isUserPlan ? "Monthly" : `${durationYears} Year${durationYears > 1 ? "s" : ""}`;
     membership.startDate = new Date();
-    membership.endDate = addDays(365 * durationYears);
+    membership.endDate = addDays(durationDays);
     membership.status = "Active";
     membership.features = plan.features || [];
     membership.remindersSent = []; // Reset reminders for the new cycle
     await membership.save();
 
     business.membership = plan.name;
+    if (isUserPlan) {
+      business.subscriberTier = planKey;
+    }
     await business.save();
 
     return membership;
