@@ -30,26 +30,50 @@ const loadImageBuffer = async (imageRef) => {
 // concrete layout variant so the selected design actually changes the output.
 const resolveStyleKey = (style) => {
   const s = String(style || "").toLowerCase();
+  
+  // New styles
+  if (s.includes("rifah-signature")) return "rifah-signature";
+  if (s.includes("royal-heritage")) return "royal-heritage";
+  if (s.includes("executive-gold")) return "executive-gold";
+  if (s.includes("professional-frame")) return "professional-frame";
+  if (s.includes("premium-achievement")) return "premium-achievement";
+  if (s.includes("clean-prestige")) return "clean-prestige";
+
+  // Old styles (for backward compatibility of generated certificates)
   if (s.includes("corporate") || s.includes("navy")) return "corporate";
   if (s.includes("modern") || s.includes("minimal")) return "modern";
   if (s.includes("elegant") || s.includes("floral")) return "elegant";
   if (s.includes("gold") || s.includes("classic")) return "classic";
-  return "classic";
+  
+  return "rifah-signature"; // Default to new signature style
 };
 
 export const generateCertificate = async (attendee, eventDetails, options = {}) => {
-  // Resolve signatory signature images up-front (async DB lookups), since the
-  // PDFDocument drawing below runs synchronously inside the Promise executor.
-  const [sig1ImageBuffer, sig2ImageBuffer] = await Promise.all([
+  // Safe extraction of design overrides if provided
+  const design = eventDetails.certificateDesign || {};
+  const dTitle = design.title?.text || "CERTIFICATE OF PARTICIPATION";
+  const dTitleFont = design.title?.fontFamily === "Times-Bold" || design.title?.fontFamily === "Times-BoldItalic" ? "Times-Bold" : (design.title?.fontFamily || "Helvetica-Bold");
+  const dPartFont = design.participantName?.fontFamily === "Times-Bold" || design.participantName?.fontFamily === "Times-BoldItalic" ? "Times-BoldItalic" : (design.participantName?.fontFamily || "Helvetica-Bold");
+  const dBody = design.body?.text || "This is proudly presented to\n{{participantName}}\nfor participating in\n{{eventName}}\nheld on {{eventDate}} by RIFAH {{chapterName}}";
+  
+  const parsedBody = dBody.replace("{{participantName}}", attendee.name || "Participant Name")
+                          .replace("{{eventName}}", eventDetails.title || "RIFAH Event")
+                          .replace("{{eventDate}}", eventDetails.date || "")
+                          .replace("{{chapterName}}", eventDetails.chapter || "Chapter");
+
+  const hasBorder = design.border?.enabled !== false;
+  const bgColor = design.background?.color || "#ffffff";
+  const accentColor = eventDetails.certificateAccentColor || options.accentColor || "#0088d1";
+
+  // Resolve signatory signature images up-front (async DB lookups)
+  const [sig1ImageBuffer, sig2ImageBuffer, logoImageBuffer] = await Promise.all([
     loadImageBuffer(eventDetails.signatory1Image),
     loadImageBuffer(eventDetails.signatory2Image),
+    loadImageBuffer(eventDetails.logoImage),
   ]);
 
   return new Promise((resolve, reject) => {
     try {
-      const { style = "classic", accentColor = "#06b6d4" } = options;
-      const styleKey = resolveStyleKey(style);
-
       const doc = new PDFDocument({
         layout: "landscape",
         size: "A4",
@@ -67,119 +91,81 @@ export const generateCertificate = async (attendee, eventDetails, options = {}) 
       const height = 595;
 
       // Draw background
-      doc.rect(0, 0, width, height).fill("#ffffff");
+      doc.rect(0, 0, width, height).fill(bgColor);
 
-      const isCorporate = styleKey === "corporate";
-      const isModern = styleKey === "modern";
+      // Draw Border
+      if (hasBorder) {
+        const borderWidth = design.border?.width || 8;
+        const borderColor = design.border?.color || accentColor || '#0b1f33';
+        doc.rect(borderWidth/2, borderWidth/2, width - borderWidth, height - borderWidth)
+           .lineWidth(borderWidth)
+           .stroke(borderColor);
+      }
 
-      let headerTop = 130;
-
-      if (isCorporate) {
-        // "Corporate" design: navy band across the top with a gold rule beneath it,
-        // clean typography — matches the schema's own default style description,
-        // which the renderer never actually implemented.
-        const bandHeight = 90;
-        doc.rect(0, 0, width, bandHeight).fill("#0b1f3a");
-        doc.rect(0, bandHeight, width, 4).fill(accentColor);
-        doc.fontSize(30)
-           .fillColor("#ffffff")
-           .font("Helvetica-Bold")
-           .text("CERTIFICATE OF PARTICIPATION", 0, bandHeight / 2 - 15, { align: "center", tracking: 2 });
-        headerTop = bandHeight + 40;
-      } else {
-        // Classic / modern / elegant: bordered card. Corner accents are skipped for
-        // the "modern/minimal" variant to keep the frame clean.
-        const margin = 30;
-        doc.rect(margin, margin, width - margin * 2, height - margin * 2)
-           .lineWidth(4)
-           .stroke(accentColor);
-
-        const innerMargin = 38;
-        doc.rect(innerMargin, innerMargin, width - innerMargin * 2, height - innerMargin * 2)
-           .lineWidth(1)
-           .stroke(accentColor);
-
-        if (!isModern) {
-          const cornerSize = 25;
-          const drawCorner = (x, y, dx, dy) => {
-            doc.moveTo(x + dx, y)
-               .lineTo(x, y)
-               .lineTo(x, y + dy)
-               .lineWidth(3)
-               .stroke(accentColor);
-          };
-          drawCorner(innerMargin - 4, innerMargin - 4, cornerSize, cornerSize); // Top-Left
-          drawCorner(width - innerMargin + 4, innerMargin - 4, -cornerSize, cornerSize); // Top-Right
-          drawCorner(innerMargin - 4, height - innerMargin + 4, cornerSize, -cornerSize); // Bottom-Left
-          drawCorner(width - innerMargin + 4, height - innerMargin + 4, -cornerSize, -cornerSize); // Bottom-Right
+      // Draw Logo
+      if (design.logo?.enabled !== false) {
+        let actualLogoBuffer = logoImageBuffer;
+        if (!actualLogoBuffer) {
+           const fallbackLogoPath = path.resolve(process.cwd(), "..", "rifah-frontend", "public", "rifah-logo.png");
+           if (fs.existsSync(fallbackLogoPath)) {
+             actualLogoBuffer = fs.readFileSync(fallbackLogoPath);
+           }
+        }
+        
+        if (actualLogoBuffer) {
+           const logoWidth = design.logo?.width || 120;
+           try {
+             doc.image(actualLogoBuffer, width / 2 - logoWidth / 2, 40, { width: logoWidth });
+           } catch {
+             // fallback
+           }
         }
       }
 
-      // Logo
-      const logoPath = path.resolve(process.cwd(), "..", "rifah-frontend", "public", "rifah-logo.png");
-      if (fs.existsSync(logoPath) && !isCorporate) {
-        doc.image(logoPath, width / 2 - 60, 50, { width: 120 });
-      }
+      // Draw Header Text (RIFAH Chamber)
+      doc.fontSize(28)
+         .fillColor('#0b1f33')
+         .font("Times-Bold")
+         .text("RIFAH CHAMBER", 0, 110, { align: "center", tracking: 4 });
 
-      if (!isCorporate) {
-        // Header
-        doc.fontSize(42)
-           .fillColor(accentColor)
-           .font("Helvetica-Bold")
-           .text("CERTIFICATE", 0, headerTop, { align: "center", tracking: 4 });
+      // Draw Title
+      doc.fontSize(design.title?.fontSize || 42)
+         .fillColor(design.title?.color || accentColor)
+         .font(dTitleFont)
+         .text(dTitle.toUpperCase(), 0, 160, { align: "center", tracking: 2 });
 
-        doc.fontSize(18)
-           .fillColor("#666666")
-           .font("Helvetica")
-           .text("OF PARTICIPATION", 0, headerTop + 50, { align: "center", tracking: 2 });
-      }
-
-      const bodyTop = isCorporate ? headerTop + 20 : 240;
-
-      // Body text
-      doc.fontSize(16)
-         .fillColor("#444444")
-         .font("Helvetica-Oblique")
-         .text("This is proudly presented to", 0, bodyTop, { align: "center" });
-
-      // Attendee Name
-      doc.fontSize(38)
-         .fillColor(accentColor)
-         .font("Helvetica-Bold")
-         .text(attendee.name.toUpperCase(), 0, bodyTop + 40, { align: "center" });
-
-      // Separator line under name
-      doc.moveTo(width / 2 - 200, bodyTop + 85)
-         .lineTo(width / 2 + 200, bodyTop + 85)
-         .lineWidth(1.5)
-         .stroke("#cccccc");
-
-      // Event details
-      doc.fontSize(16)
-         .fillColor("#444444")
-         .font("Helvetica")
-         .text(`For participating in`, 0, bodyTop + 110, { align: "center" });
-
-      doc.fontSize(20)
-         .fillColor("#222222")
-         .font("Helvetica-Bold")
-         .text(`${eventDetails.title}`, 0, bodyTop + 135, { align: "center" });
-
-      doc.fontSize(14)
-         .fillColor("#666666")
-         .font("Helvetica")
-         .text(`Held on ${eventDetails.date} by RIFAH ${eventDetails.chapter}`, 0, bodyTop + 165, { align: "center" });
+      // Body text template rendering
+      // We will render it line by line based on the parsed string
+      let bodyY = 240;
+      const lines = parsedBody.split('\n');
+      lines.forEach(line => {
+         if (line === attendee.name || line.toUpperCase() === attendee.name.toUpperCase()) {
+            doc.fontSize(design.participantName?.fontSize || 38)
+               .fillColor(design.participantName?.color || accentColor)
+               .font(dPartFont)
+               .text(line, 0, bodyY, { align: "center" });
+            bodyY += 50;
+         } else if (line === eventDetails.title || line.toUpperCase() === eventDetails.title.toUpperCase()) {
+            doc.fontSize(20)
+               .fillColor("#222222")
+               .font("Helvetica-Bold")
+               .text(line, 0, bodyY, { align: "center" });
+            bodyY += 30;
+         } else {
+            doc.fontSize(16)
+               .fillColor("#444444")
+               .font("Helvetica")
+               .text(line, 0, bodyY, { align: "center" });
+            bodyY += 25;
+         }
+      });
 
       // Signatures
-      // BUG-039: previously only the *role* label (e.g. "Chapter Secretary") was ever
-      // drawn for either signatory — the signatory's actual name and uploaded
-      // signature image were captured in the settings form but never rendered, so a
-      // "second signature" never appeared (and neither did the first, meaningfully).
       const sigY = 485;
       const drawSignatory = (x, name, role, imageBuffer) => {
         if (imageBuffer) {
           try {
-            doc.image(imageBuffer, x + 20, sigY - 42, { width: 120, height: 40, fit: [120, 40] });
+            doc.image(imageBuffer, x + 20, sigY - 50, { width: 120, height: 40, fit: [120, 40] });
           } catch {
             // Ignore unreadable/corrupt image data — fall back to the text line below.
           }
@@ -207,8 +193,12 @@ export const generateCertificate = async (attendee, eventDetails, options = {}) 
         }
       };
 
-      drawSignatory(180, eventDetails.signatory1Name, eventDetails.signatory1Role || "Chapter President", sig1ImageBuffer);
-      drawSignatory(502, eventDetails.signatory2Name, eventDetails.signatory2Role || "Chapter Secretary", sig2ImageBuffer);
+      if (eventDetails.signatory1Name || eventDetails.signatory1Role || sig1ImageBuffer) {
+         drawSignatory(180, eventDetails.signatory1Name, eventDetails.signatory1Role, sig1ImageBuffer);
+      }
+      if (eventDetails.signatory2Name || eventDetails.signatory2Role || sig2ImageBuffer) {
+         drawSignatory(502, eventDetails.signatory2Name, eventDetails.signatory2Role, sig2ImageBuffer);
+      }
 
       // Serial Number & Footer
       const cleanChapter = (eventDetails.chapter || "").replace(/\s+/g, "").substring(0, 3).toUpperCase();
@@ -217,11 +207,11 @@ export const generateCertificate = async (attendee, eventDetails, options = {}) 
       doc.fontSize(10)
          .fillColor("#999999")
          .font("Helvetica")
-         .text(`Serial No: ${serialNumber}`, 60, height - 60);
+         .text(`Serial No: ${serialNumber}`, 60, height - 40);
 
       doc.fontSize(10)
          .fillColor("#999999")
-         .text(`RIFAH Chamber of Commerce and Industry`, 0, height - 60, { align: "center" });
+         .text(`RIFAH Chamber of Commerce and Industry`, 0, height - 40, { align: "center" });
 
       doc.end();
     } catch (error) {

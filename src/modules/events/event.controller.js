@@ -142,8 +142,12 @@ export const eventController = {
     if (!req.file) {
       return ApiResponse.error(res, "No image uploaded", 400);
     }
-    const slot = req.body?.slot === "2" ? "2" : "1";
-    const field = slot === "2" ? "signatory2Image" : "signatory1Image";
+    const slot = req.body?.slot === "logo" ? "logo" : req.body?.slot === "2" ? "2" : "1";
+    
+    let field;
+    if (slot === "logo") field = "logoImage";
+    else if (slot === "2") field = "signatory2Image";
+    else field = "signatory1Image";
     const imageUrl = await storageService.uploadFile(req.file, "signatures");
     const updated = await eventService.updateOperations(id, { [field]: imageUrl }, req.user);
     return ApiResponse.success(

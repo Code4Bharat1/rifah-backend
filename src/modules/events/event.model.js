@@ -366,14 +366,58 @@ const eventSchema = new mongoose.Schema(
     repeatGuestThreshold: { type: Number, default: 3 },
     remindRepeatGuests: { type: Boolean, default: true },
     downloadListPermission: { type: String, default: "Everyone (members and guests)" },
-    certificateStyle: { type: String, default: "5 — Corporate (navy band, gold rule, clean typography)" },
-    certificateAccentColor: { type: String, default: "#059669" },
+    certificateStyle: { type: String, default: "rifah-signature" }, // legacy fallback
+    certificateAccentColor: { type: String, default: "#059669" }, // legacy fallback
     signatory1Role: { type: String, default: "Chapter President" },
     signatory1Name: { type: String, default: "" },
     signatory1Image: { type: String, default: "" },
     signatory2Role: { type: String, default: "Chapter Secretary" },
     signatory2Name: { type: String, default: "" },
     signatory2Image: { type: String, default: "" },
+    logoImage: { type: String, default: "" },
+    certificateDesign: {
+      preset: { type: String, default: "rifah-signature" },
+      logo: {
+        enabled: { type: Boolean, default: true },
+        x: { type: Number, default: 50 },
+        y: { type: Number, default: 30 },
+        width: { type: Number, default: 120 }
+      },
+      title: {
+        text: { type: String, default: "CERTIFICATE OF PARTICIPATION" },
+        fontFamily: { type: String, default: "Helvetica-Bold" },
+        fontSize: { type: Number, default: 42 },
+        color: { type: String, default: "#0f172a" },
+        y: { type: Number, default: 130 }
+      },
+      participantName: {
+        fontFamily: { type: String, default: "Helvetica-Bold" },
+        fontSize: { type: Number, default: 38 },
+        color: { type: String, default: "#0f172a" },
+        y: { type: Number, default: 240 }
+      },
+      body: {
+        text: { type: String, default: "This is proudly presented to\n{{participantName}}\nfor participating in\n{{eventName}}\nheld on {{eventDate}} by RIFAH {{chapterName}}" },
+        fontFamily: { type: String, default: "Helvetica" },
+        fontSize: { type: Number, default: 16 },
+        color: { type: String, default: "#444444" },
+        y: { type: Number, default: 200 }
+      },
+      border: {
+        enabled: { type: Boolean, default: true },
+        width: { type: Number, default: 4 },
+        color: { type: String, default: "#0ea5e9" }
+      },
+      background: {
+        type: { type: String, default: "solid" }, // solid, image
+        color: { type: String, default: "#ffffff" }
+      }
+    },
+    // V2 Studio: stores full element array from the canvas-based editor
+    certificateDesignV2: {
+      type: Object,
+      default: null,
+    },
     sponsors: [
       {
         id: { type: String },
