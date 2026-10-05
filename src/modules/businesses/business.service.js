@@ -211,18 +211,42 @@ export const businessService = {
         catalogueBizIds = catItems.map((c) => c.business).filter(Boolean);
       } catch {
         try {
-          const searchRegex = new RegExp(escapeRegex(cleanTerm), "i");
+          const searchRegexForCat = new RegExp(escapeRegex(cleanTerm), "i");
           const catItems = await Catalogue.find({
-            $or: [{ name: searchRegex }, { description: searchRegex }, { category: searchRegex }],
+            $or: [{ name: searchRegexForCat }, { description: searchRegexForCat }, { category: searchRegexForCat }],
           }).select("business").limit(30).lean();
           catalogueBizIds = catItems.map((c) => c.business).filter(Boolean);
         } catch {}
       }
 
+      // Find user/founders matching the search term
+      const searchRegex = new RegExp(escapeRegex(cleanTerm), "i");
+      let matchedOwnerIds = [];
+      try {
+        const users = await User.find({
+          $or: [{ name: searchRegex }, { firstName: searchRegex }, { lastName: searchRegex }]
+        }).select("_id").lean();
+        matchedOwnerIds = users.map(u => u._id);
+      } catch (err) {
+        console.error("Error finding owner by name:", err);
+      }
+
+      // Pre-fetch businesses matching the text index to avoid $text + $or index errors
+      let textMatchedBizIds = [];
+      try {
+        const textMatches = await Business.find({ $text: { $search: cleanTerm } }).select("_id").limit(100).lean();
+        textMatchedBizIds = textMatches.map(b => b._id);
+      } catch (err) {
+        console.error("Error with text search:", err);
+      }
+
       andConditions.push({
         $or: [
-          { $text: { $search: cleanTerm } },
+          { name: searchRegex },
+          { contactPerson: searchRegex },
+          ...(matchedOwnerIds.length > 0 ? [{ owner: { $in: matchedOwnerIds } }] : []),
           ...(catalogueBizIds.length > 0 ? [{ _id: { $in: catalogueBizIds } }] : []),
+          ...(textMatchedBizIds.length > 0 ? [{ _id: { $in: textMatchedBizIds } }] : []),
         ],
       });
     }
