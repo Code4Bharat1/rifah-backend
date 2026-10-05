@@ -346,17 +346,56 @@ export const enquiryService = {
       }
     }
 
-    const [enquiries, total] = await Promise.all([
+    const [rawEnquiries, total] = await Promise.all([
       Enquiry.find(filter)
-        .populate("targetBusiness", "name slug chapter")
+        .populate("targetBusiness", "name slug chapter logo phone email")
         .sort(sort)
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Enquiry.countDocuments(filter),
     ]);
 
+    const enquiryIds = rawEnquiries.map((e) => e._id);
+    let enrichedEnquiries = rawEnquiries;
+    if (enquiryIds.length > 0) {
+      const { Lead } = await import("../leads/lead.model.js");
+      const leads = await Lead.find({ enquiry: { $in: enquiryIds } })
+        .populate("business", "name slug chapter logo phone email")
+        .lean();
+
+      const leadsByEnquiry = new Map();
+      leads.forEach((l) => {
+        const eId = String(l.enquiry);
+        if (!leadsByEnquiry.has(eId)) leadsByEnquiry.set(eId, []);
+        leadsByEnquiry.get(eId).push(l);
+      });
+
+      enrichedEnquiries = rawEnquiries.map((e) => {
+        const eLeads = leadsByEnquiry.get(String(e._id)) || [];
+        const quotes = eLeads
+          .filter((l) => l.quotation && l.quotation.amount)
+          .map((l) => ({
+            ...l.quotation,
+            leadId: l._id,
+            business: l.business,
+            leadStatus: l.status,
+          }));
+        const hasAccepted = eLeads.some((l) =>
+          ["In Progress", "Accepted", "Responded", "Won"].includes(l.status)
+        );
+        return {
+          ...e,
+          leads: eLeads,
+          quotes,
+          hasAccepted,
+          latestQuote: quotes[0] || null,
+        };
+      });
+    }
+
     return {
-      enquiries,
+      enquiries: enrichedEnquiries,
       meta: buildPaginationMeta(total, page, limit),
     };
   },

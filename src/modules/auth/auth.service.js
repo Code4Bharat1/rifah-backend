@@ -33,7 +33,8 @@ const WORKSPACE_BY_ROLE = {
   [ROLES.STATE_ADMIN]: "state",
   [ROLES.CHAPTER_ADMIN]: "chapter",
   [ROLES.BUSINESS_OWNER]: "business",
-  [ROLES.CUSTOMER]: "business",
+  [ROLES.CUSTOMER]: "customer",
+  [ROLES.BUYER]: "customer",
 };
 
 export const authService = {
@@ -610,14 +611,16 @@ export const authService = {
       throw new UnauthorizedError("Invalid email or password", ERROR_CODES.INVALID_CREDENTIALS);
     }
 
-    // Workspace switching (switchRole) persists the active role to user.role and stashes the
-    // prior one in previousRole. Restore the higher-ranked role as the default identity on every
-    // fresh login, so picking the "Business" workspace once doesn't permanently demote an admin —
-    // they still have to explicitly switch to the business workspace each session if they want it.
-    if (user.previousRole && (ROLE_HIERARCHY[user.previousRole] || 0) > (ROLE_HIERARCHY[user.role] || 0)) {
-      const demoted = user.role;
+    // Restore an administrative role (central/state/chapter admin) if previously demoted,
+    // and clear previousRole so the account does not perpetually toggle on every login.
+    // Crucially: never auto-swap standard customer or business_owner identities.
+    if (
+      user.previousRole &&
+      ["central_admin", "state_admin", "chapter_admin"].includes(user.previousRole) &&
+      (ROLE_HIERARCHY[user.previousRole] || 0) > (ROLE_HIERARCHY[user.role] || 0)
+    ) {
       user.role = user.previousRole;
-      user.previousRole = demoted;
+      user.previousRole = "";
       await user.save();
     }
 

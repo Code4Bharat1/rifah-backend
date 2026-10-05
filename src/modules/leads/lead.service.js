@@ -494,15 +494,16 @@ export const leadService = {
       console.error("Error delivering quotation message to customer inbox:", msgErr);
     }
 
-    // 6. REALTIME NOTIFICATION LINKED STRAIGHT TO MESSAGE BOX
+    // 6. REALTIME NOTIFICATION LINKED STRAIGHT TO MESSAGE BOX OR CUSTOMER PORTAL
     try {
+      const isCustomer = customerUser?.role === "customer" || customerUser?.role === "buyer";
       await notificationService.createNotification({
         recipientId: customerUserId,
         type: "Message",
         title: "New Quotation Received",
-        body: `${lead.business?.name || 'A supplier'} sent a quotation of ${formattedAmount} for "${enquiry.title}". Check your message box.`,
+        body: `${lead.business?.name || 'A supplier'} sent a quotation of ${formattedAmount} for "${enquiry.title}". Check your quotation details and messages.`,
         entityId: lead._id,
-        link: `/biz/messages?userId=${user.id}`
+        link: isCustomer ? `/customer/enquiries` : `/biz/messages?userId=${user.id}`,
       });
     } catch (err) {
       console.error("Failed to create quotation notification:", err);
@@ -601,6 +602,26 @@ export const leadService = {
     lead.lastActivityAt = new Date();
     if (notes !== undefined) lead.notes = notes;
     await lead.save();
+
+    if (["Accepted", "In Progress"].includes(status)) {
+      try {
+        const enquiryDoc = await Enquiry.findById(lead.enquiry);
+        if (enquiryDoc?.requester) {
+          const custUser = await User.findById(enquiryDoc.requester);
+          const isCust = custUser?.role === "customer" || custUser?.role === "buyer";
+          await notificationService.createNotification({
+            recipientId: enquiryDoc.requester,
+            type: "Enquiry",
+            title: "Enquiry Accepted",
+            body: `${lead.business?.name || "A business"} has accepted your enquiry for "${enquiryDoc.title}".`,
+            entityId: enquiryDoc._id,
+            link: isCust ? "/customer/enquiries" : "/biz/my-enquiries",
+          });
+        }
+      } catch (notifErr) {
+        console.error("Failed to send acceptance notification to customer:", notifErr);
+      }
+    }
 
     return lead;
   },
