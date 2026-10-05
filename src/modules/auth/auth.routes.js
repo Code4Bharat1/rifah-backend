@@ -102,6 +102,18 @@ router.post(
 );
 
 router.post(
+  "/login-otp/send",
+  authRateLimitMiddleware,
+  authController.sendLoginOtp
+);
+
+router.post(
+  "/login-otp/verify",
+  authRateLimitMiddleware,
+  authController.verifyLoginOtp
+);
+
+router.post(
   "/check-email",
   authRateLimitMiddleware,
   authController.checkEmail

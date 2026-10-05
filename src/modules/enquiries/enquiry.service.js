@@ -143,12 +143,15 @@ export const enquiryService = {
     // 1. "b2b": Sent by an authenticated business member
     // 2. "guest": Sent without login directly to a specific business
     // 3. "general": Sent via homepage RFQ / public broadcast
+    // 4. "marketplace": Sent by a registered customer/buyer from the customer portal or marketplace
     let sourceType = data.sourceType;
-    if (!sourceType || !["b2b", "guest", "general"].includes(sourceType)) {
+    if (!sourceType || !["b2b", "guest", "general", "marketplace"].includes(sourceType)) {
       if (user && (user.role === "business" || userBusiness)) {
         sourceType = "b2b";
       } else if (!user && targetType === "business") {
         sourceType = "guest";
+      } else if (user && (user.role === "customer" || user.role === "buyer")) {
+        sourceType = "marketplace";
       } else {
         sourceType = "general";
       }
@@ -510,9 +513,12 @@ export const enquiryService = {
         : (lead?.status || enq.status || "New");
       enqObj.myQuotation = hasValidQuotation ? lead.quotation : null;
       enqObj.isMarketplace =
-        (enq.targetType === "all" || enq.targetType === "chamber") &&
-        !lead &&
-        String(enq.targetBusiness?._id || enq.targetBusiness || "") !== String(userBusiness._id);
+        enq.sourceType === "marketplace" ||
+        enq.sourceType === "general" ||
+        Boolean(enq.requesterRole && (enq.requesterRole.toLowerCase().includes("customer") || enq.requesterRole.toLowerCase().includes("buyer"))) ||
+        ((enq.targetType === "all" || enq.targetType === "chamber") &&
+          !lead &&
+          String(enq.targetBusiness?._id || enq.targetBusiness || "") !== String(userBusiness._id));
       return enqObj;
     });
 

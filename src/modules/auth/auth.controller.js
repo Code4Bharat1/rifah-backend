@@ -85,15 +85,27 @@ export const authController = {
   }),
 
   sendRegisterOtp: asyncHandler(async (req, res) => {
-    const { email } = req.body;
-    const result = await authService.sendRegistrationOtp(email);
+    const { email, type = "business" } = req.body;
+    const result = await authService.sendRegistrationOtp(email, type);
     return ApiResponse.success(res, result, result.message || "Verification code sent to your email");
   }),
 
   verifyRegisterOtp: asyncHandler(async (req, res) => {
-    const { email, otp } = req.body;
-    const result = await authService.verifyRegistrationOtp({ email, otp });
+    const { email, otp, type = "business" } = req.body;
+    const result = await authService.verifyRegistrationOtp({ email, otp, type });
     return ApiResponse.success(res, result, result.message || "Email verified successfully");
+  }),
+
+  sendLoginOtp: asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const result = await authService.sendLoginOtp(email);
+    return ApiResponse.success(res, result, result.message || "Sign-in code sent to your email");
+  }),
+
+  verifyLoginOtp: asyncHandler(async (req, res) => {
+    const { email, otp } = req.body;
+    const result = await authService.verifyLoginOtp({ email, otp });
+    return ApiResponse.success(res, result, "Signed in successfully");
   }),
 
   checkEmail: asyncHandler(async (req, res) => {

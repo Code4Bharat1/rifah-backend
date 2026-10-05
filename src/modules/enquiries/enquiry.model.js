@@ -68,7 +68,7 @@ const enquirySchema = new mongoose.Schema(
     },
     sourceType: {
       type: String,
-      enum: ["b2b", "guest", "general"],
+      enum: ["b2b", "guest", "general", "marketplace"],
       default: "general",
       index: true,
     },

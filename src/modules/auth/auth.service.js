@@ -41,8 +41,9 @@ export const authService = {
   /**
    * Register a new standard user / customer / buyer
    */
-  register: async ({ name, email, password, phone, chapter, organization, city, sourcingInterest, isGuestCheckout }) => {
-    const existing = await User.findOne({ email: email.toLowerCase() });
+  register: async ({ name, email, password, phone, chapter, organization, city, sourcingInterest, isGuestCheckout, verifiedToken }) => {
+    const cleanEmail = email.toLowerCase().trim();
+    const existing = await User.findOne({ email: cleanEmail });
     if (existing) {
       if (isGuestCheckout && existing.role === ROLES.CUSTOMER) {
         // For guest checkouts, if the account is just a customer/guest, log them in seamlessly.
@@ -59,6 +60,19 @@ export const authService = {
         return { user: existing, accessToken, refreshToken };
       }
       throw new ConflictError("An account with this email address already exists");
+    }
+
+    // Verify OTP token if provided
+    if (verifiedToken) {
+      const record = await OtpVerification.findOne({
+        email: cleanEmail,
+        verifiedToken,
+        verified: true,
+      });
+      if (!record) {
+        throw new BadRequestError("Email verification is required or has expired. Please verify your email again.");
+      }
+      await OtpVerification.deleteMany({ email: cleanEmail });
     }
 
     const passwordHash = await hashPassword(password);
@@ -152,9 +166,9 @@ export const authService = {
   },
 
   /**
-   * Send Registration OTP
+   * Send Registration OTP (supports business & customer)
    */
-  sendRegistrationOtp: async (email) => {
+  sendRegistrationOtp: async (email, type = "business") => {
     if (!email || !email.includes("@")) {
       throw new BadRequestError("A valid email address is required");
     }
@@ -169,10 +183,11 @@ export const authService = {
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    const purpose = type === "customer" ? "register_customer" : "register_business";
 
     // Upsert OtpVerification record
     await OtpVerification.findOneAndUpdate(
-      { email: cleanEmail, purpose: "register_business" },
+      { email: cleanEmail, purpose },
       {
         otp,
         verified: false,
@@ -185,12 +200,16 @@ export const authService = {
     // Send email
     let emailDelivered = false;
     try {
-      emailDelivered = await emailService.sendRegisterOtpEmail({ email: cleanEmail, otp });
+      if (type === "customer" && emailService.sendCustomerRegisterOtpEmail) {
+        emailDelivered = await emailService.sendCustomerRegisterOtpEmail({ email: cleanEmail, otp });
+      } else {
+        emailDelivered = await emailService.sendRegisterOtpEmail({ email: cleanEmail, otp });
+      }
     } catch (err) {
       console.error("Failed to send registration OTP email:", err);
     }
 
-    console.log(`\n========================================\n[REGISTRATION OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? 'YES' : 'NO - SMTP LIMIT REACHED'})\n========================================\n`);
+    console.log(`\n========================================\n[${type.toUpperCase()} REGISTRATION OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? 'YES' : 'NO - SMTP LIMIT REACHED'})\n========================================\n`);
 
     return {
       message: emailDelivered
@@ -205,16 +224,20 @@ export const authService = {
   /**
    * Verify Registration OTP
    */
-  verifyRegistrationOtp: async ({ email, otp }) => {
+  verifyRegistrationOtp: async ({ email, otp, type = "business" }) => {
     if (!email || !otp) {
       throw new BadRequestError("Email and 6-digit verification code are required");
     }
     const cleanEmail = email.toLowerCase().trim();
     const cleanOtp = String(otp).trim();
 
+    const allowedPurposes = type === "customer"
+      ? ["register_customer", "register_business"]
+      : ["register_business", "register_customer"];
+
     const record = await OtpVerification.findOne({
       email: cleanEmail,
-      purpose: "register_business",
+      purpose: { $in: allowedPurposes },
       otp: cleanOtp,
       expiresAt: { $gt: new Date() },
     });
@@ -233,6 +256,117 @@ export const authService = {
       valid: true,
       message: "Email verified successfully.",
       verifiedToken,
+    };
+  },
+
+  /**
+   * Send Login OTP for Instant / Passwordless Customer Sign In
+   */
+  sendLoginOtp: async (email) => {
+    if (!email || !email.includes("@")) {
+      throw new BadRequestError("A valid email address is required");
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      throw new NotFoundError("No account found with this email address. Please register as a customer first.");
+    }
+    if (user.status === "Suspended" || user.status === "Deactivated") {
+      throw new UnauthorizedError(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    await OtpVerification.findOneAndUpdate(
+      { email: cleanEmail, purpose: "login_otp" },
+      {
+        otp,
+        verified: false,
+        verifiedToken: null,
+        expiresAt,
+      },
+      { upsert: true, new: true }
+    );
+
+    let emailDelivered = false;
+    try {
+      emailDelivered = await emailService.sendLoginOtpEmail({ email: cleanEmail, otp });
+    } catch (err) {
+      console.error("Failed to send login OTP email:", err);
+    }
+
+    console.log(`\n========================================\n[LOGIN OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? 'YES' : 'NO - SMTP LIMIT REACHED'})\n========================================\n`);
+
+    return {
+      message: emailDelivered
+        ? "One-time sign-in code sent to your email."
+        : `Sign-in code: ${otp} (Pre-filled due to SMTP limit)`,
+      email: cleanEmail,
+      otp,
+      emailDelivered: Boolean(emailDelivered),
+    };
+  },
+
+  /**
+   * Verify Login OTP & Authenticate
+   */
+  verifyLoginOtp: async ({ email, otp }) => {
+    if (!email || !otp) {
+      throw new BadRequestError("Email and 6-digit verification code are required");
+    }
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanOtp = String(otp).trim();
+
+    const record = await OtpVerification.findOne({
+      email: cleanEmail,
+      purpose: "login_otp",
+      otp: cleanOtp,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!record) {
+      throw new BadRequestError("Invalid or expired sign-in code. Please try again.");
+    }
+
+    const user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      throw new NotFoundError("User account not found");
+    }
+    if (user.status === "Suspended" || user.status === "Deactivated") {
+      throw new UnauthorizedError(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+    }
+
+    // Clean up OTP
+    await OtpVerification.deleteMany({ email: cleanEmail, purpose: "login_otp" });
+
+    await User.findByIdAndUpdate(user._id, { $set: { lastLoginAt: new Date() } });
+    await user.populate("savedBusinesses");
+
+    const tokenPayload = {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      chapter: user.chapter,
+      chapterId: user.chapterId,
+      state: user.state || "",
+      forcePasswordChange: user.forcePasswordChange,
+    };
+
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshToken = signRefreshToken(tokenPayload);
+
+    const userObj = user.toJSON ? user.toJSON() : { ...user._doc };
+    if (Array.isArray(userObj.savedBusinesses)) {
+      userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
+    }
+
+    return {
+      user: userObj,
+      accessToken,
+      refreshToken,
+      requiresRoleSelection: false,
+      availableRoles: [userObj.role],
     };
   },
 
@@ -842,22 +976,24 @@ export const authService = {
   /**
    * Change password (forced or manual)
    */
-  changePassword: async (userId, { oldPassword, newPassword }) => {
+  changePassword: async (userId, { oldPassword, currentPassword, newPassword }) => {
     const user = await User.findById(userId).select("+passwordHash");
     if (!user) {
       throw new NotFoundError("User not found");
     }
 
-    if (oldPassword && oldPassword === newPassword) {
+    const previousPassword = oldPassword || currentPassword;
+
+    if (previousPassword && previousPassword === newPassword) {
       throw new BadRequestError("New password cannot be the same as the current password.");
     }
 
     if (!user.forcePasswordChange) {
-      if (!oldPassword) {
+      if (!previousPassword) {
         throw new BadRequestError("Current password is required to change password.");
       }
       
-      const isMatch = await comparePassword(oldPassword, user.passwordHash);
+      const isMatch = await comparePassword(previousPassword, user.passwordHash);
       if (!isMatch) {
         throw new BadRequestError("Invalid current password");
       }

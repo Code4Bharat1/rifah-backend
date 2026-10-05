@@ -72,7 +72,8 @@ export const validateRefreshToken = (data = {}) => {
 
 export const validateChangePassword = (data = {}) => {
   const errors = [];
-  if (!data.currentPassword || typeof data.currentPassword !== "string") {
+  const current = data.currentPassword || data.oldPassword;
+  if (!current || typeof current !== "string") {
     errors.push({ field: "currentPassword", message: "Current password is required" });
   }
   if (!data.newPassword || typeof data.newPassword !== "string" || data.newPassword.length < 6) {
