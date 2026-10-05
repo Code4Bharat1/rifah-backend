@@ -376,19 +376,20 @@ export const membershipService = {
     // (see DEFAULT_MEMBERSHIP_PLANS below: Silver/Gold/Platinum/Diamond) never
     // seeds a "free" Plan row, so looking it up via Plan.findOne always 404'd and
     // the activation silently failed. Handle it directly instead.
-    if (planKey === "free") {
-      membership.planId = "free";
-      membership.planName = "Free";
+    if (planKey === "free" || planKey === "tier_1") {
+      membership.planId = "tier_1";
+      membership.planName = "Tier I (Free)";
       membership.price = 0;
       membership.billingCycle = "Free";
       membership.startDate = new Date();
       membership.endDate = null;
       membership.status = "Active";
-      membership.features = [];
+      membership.features = DEFAULT_MEMBERSHIP_PLANS.tier_1?.features || [];
       membership.remindersSent = [];
       await membership.save();
 
-      business.membership = "Free";
+      business.membership = "Tier I (Free)";
+      business.subscriberTier = "tier_1";
       await business.save();
 
       return membership;
