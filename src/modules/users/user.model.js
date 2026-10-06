@@ -227,12 +227,19 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Session revocation: access/refresh tokens issued before this instant are rejected.
+    // Set on logout and password change/reset (stateless JWTs otherwise live for days).
+    tokensValidAfter: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
     toJSON: {
       transform: (doc, ret) => {
         delete ret.passwordHash;
+        delete ret.tokensValidAfter;
         delete ret.resetPasswordToken;
         delete ret.resetPasswordExpires;
         delete ret.__v;

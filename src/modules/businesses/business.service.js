@@ -650,16 +650,18 @@ export const businessService = {
     let business = await Business.findOne({ owner: ownerId });
     if (!business) {
       const user = await User.findById(ownerId);
-      if (user) {
-        const emailFilter = user.email ? [{ email: user.email }, { ownerEmail: user.email }] : [];
-        const phoneFilter = user.phone ? [{ phone: user.phone }, { whatsapp: user.phone }] : [];
-        const orConditions = [...emailFilter, ...phoneFilter];
-
-        if (orConditions.length > 0) {
-          business = await Business.findOne({ $or: orConditions });
-          if (business) {
-            business.owner = user._id;
-            await business.save().catch(() => {});
+      // Only business accounts may own/auto-provision a business. Admins and customers used to get
+      // a verified business created here, which getMe() then used to re-role them.
+      if (user && user.role === ROLES.BUSINESS_OWNER) {
+        // Re-link a legacy business by the owner's *email* only, and only when its recorded owner no
+        // longer exists. Phone numbers are unverified free text, so matching on them let any user
+        // take over another member's business.
+        if (user.email) {
+          const candidate = await Business.findOne({ $or: [{ email: user.email }, { ownerEmail: user.email }] });
+          if (candidate && !(await User.exists({ _id: candidate.owner }))) {
+            candidate.owner = user._id;
+            await candidate.save().catch(() => {});
+            business = candidate;
           }
         }
 
@@ -834,7 +836,12 @@ export const businessService = {
   /**
    * Update business profile (Owner or Admin)
    */
-  updateBusiness: async (id, updateData, user) => {
+  /**
+   * Throws unless `user` may manage the business (owner, central admin, or the business's own
+   * chapter/state admin). Returns the business and the resolved role flags. Call this BEFORE
+   * doing any side-effecting work (e.g. file uploads) on behalf of the user.
+   */
+  assertCanManage: async (id, user) => {
     const business = await Business.findById(id);
     if (!business) {
       throw new NotFoundError("Business not found");
@@ -850,6 +857,11 @@ export const businessService = {
     if (!isOwner && !isAdmin && !isOwnChapterAdmin && !isOwnStateAdmin) {
       throw new ForbiddenError("You are not authorized to update this business profile");
     }
+    return { business, isAdmin, isChapterAdmin, isStateAdmin };
+  },
+
+  updateBusiness: async (id, updateData, user) => {
+    const { business, isAdmin, isChapterAdmin, isStateAdmin } = await businessService.assertCanManage(id, user);
 
     let sanitizedData = { ...updateData };
     if (!isAdmin && !isChapterAdmin && !isStateAdmin) {

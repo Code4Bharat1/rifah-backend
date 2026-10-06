@@ -5,16 +5,40 @@ import { ApiResponse } from "../../shared/utils/response.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
 import { auditService } from "../audit/audit.service.js";
 
+// Fields that only the owning member or a chamber admin may see. The directory endpoints are
+// readable anonymously, so owner personal contact details, tax IDs and admin/verification
+// notes must never be serialized for anyone else.
+const PRIVATE_BUSINESS_FIELDS = [
+  "ownerEmail", "taxId", "dob", "adminRemark", "adminUpdateAcknowledged", "adminUpdateChanges",
+  "verificationHistory", "verificationRemarks", "verificationReviewReason", "membershipId",
+  "paymentStatus", "isPaid", "lastBirthdayWishYear", "lastAnniversaryWishYear", "__v",
+];
+const ADMIN_VIEW_ROLES = ["central_admin", "secretariat", "state_admin", "chapter_admin"];
+
+const forViewer = (business, user) => {
+  if (!business) return business;
+  if (user && ADMIN_VIEW_ROLES.includes(user.role)) return business;
+  const plain = typeof business.toObject === "function" ? business.toObject() : { ...business };
+  const ownerId = String(plain.owner?._id || plain.owner || "");
+  if (user && ownerId && ownerId === String(user.id)) return plain;
+  for (const f of PRIVATE_BUSINESS_FIELDS) delete plain[f];
+  if (plain.owner && typeof plain.owner === "object") {
+    const { email, phone, ...safeOwner } = plain.owner;
+    plain.owner = safeOwner;
+  }
+  return plain;
+};
+
 export const businessController = {
   searchDirectory: asyncHandler(async (req, res) => {
     const { businesses, meta } = await businessService.searchDirectory(req.query, req.user);
-    return ApiResponse.success(res, businesses, "Businesses directory retrieved", 200, meta);
+    return ApiResponse.success(res, businesses.map((b) => forViewer(b, req.user)), "Businesses directory retrieved", 200, meta);
   }),
 
   getBusinessByIdOrSlug: asyncHandler(async (req, res) => {
     const { identifier } = req.params;
     const business = await businessService.getBusinessBySlugOrId(identifier);
-    return ApiResponse.success(res, business, "Business details retrieved");
+    return ApiResponse.success(res, forViewer(business, req.user), "Business details retrieved");
   }),
 
   getMyBusiness: asyncHandler(async (req, res) => {
@@ -55,6 +79,7 @@ export const businessController = {
 
   uploadLogo: asyncHandler(async (req, res) => {
     const { id } = req.params;
+    await businessService.assertCanManage(id, req.user); // authorize before storing any file
     // req.files is populated by upload.fields([...]) with one array per accepted
     // field name alias — pick whichever alias the client actually used.
     const files = req.files || {};
@@ -69,6 +94,7 @@ export const businessController = {
 
   uploadCover: asyncHandler(async (req, res) => {
     const { id } = req.params;
+    await businessService.assertCanManage(id, req.user); // authorize before storing any file
     const files = req.files || {};
     const file = (files.cover || files.coverImage || files.banner || files.bannerImage || files.file || files.image || [])[0];
     if (!file) {
@@ -81,6 +107,7 @@ export const businessController = {
 
   uploadGallery: asyncHandler(async (req, res) => {
     const { id } = req.params;
+    await businessService.assertCanManage(id, req.user); // authorize before storing any file
     const files = req.files || {};
     const galleryFiles = [
       ...(files.gallery || []),
@@ -100,6 +127,7 @@ export const businessController = {
 
   uploadCertificate: asyncHandler(async (req, res) => {
     const { id } = req.params;
+    await businessService.assertCanManage(id, req.user); // authorize before storing any file
     if (!req.file) {
       return ApiResponse.error(res, "No certificate file uploaded", 400);
     }

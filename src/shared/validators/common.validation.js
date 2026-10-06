@@ -1,6 +1,6 @@
 export const VALIDATION_PATTERNS = Object.freeze({
   EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-  PHONE: /^\+?[1-9]\d{1,14}$/,
+  PHONE: /^\+?[1-9]\d{6,14}$/, // E.164: 7-15 digits total
   PASSWORD: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
   GST_NUMBER: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
   PAN_NUMBER: /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,

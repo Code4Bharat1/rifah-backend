@@ -40,7 +40,7 @@ export const authController = {
   }),
 
   getMe: asyncHandler(async (req, res) => {
-    const user = await authService.getMe(req.user.id);
+    const user = await authService.getMe(req.user.id, req.user.role);
     return ApiResponse.success(res, user, "Session profile retrieved");
   }),
 
@@ -50,6 +50,7 @@ export const authController = {
   }),
 
   logout: asyncHandler(async (req, res) => {
+    await authService.logout(req.user.id);
     return ApiResponse.success(res, null, "Logged out successfully");
   }),
 

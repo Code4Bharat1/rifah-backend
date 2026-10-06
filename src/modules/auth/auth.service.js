@@ -95,6 +95,7 @@ export const authService = {
 
     const passwordHash = await hashPassword(password);
     const chapterId = await resolveChapterIdByName(chapter);
+    const resolvedOrg = (businessName || organization || "").trim();
     const isCustomerAccount = !resolvedOrg && !subscriberTier;
     const resolvedAccountType = isCustomerAccount ? "customer" : "user";
     const resolvedTier = isCustomerAccount ? "" : (subscriberTier || "Tier I (Free)");
@@ -1000,6 +1001,13 @@ export const authService = {
   },
 
   /**
+   * End every session of the user: tokens issued before now are rejected.
+   */
+  logout: async (userId) => {
+    await User.updateOne({ _id: userId }, { $set: { tokensValidAfter: new Date() } });
+  },
+
+  /**
    * Refresh Access Token using valid Refresh Token
    */
   refreshToken: async (incomingRefreshToken) => {
@@ -1010,11 +1018,16 @@ export const authService = {
       if (!user || user.status !== "Active") {
         throw new UnauthorizedError("Invalid session or account deactivated");
       }
+      if (user.tokensValidAfter && decoded.iat < Math.floor(user.tokensValidAfter.getTime() / 1000)) {
+        throw new UnauthorizedError("Session has ended");
+      }
 
+      // Preserve a valid workspace switch (e.g. central_admin -> business_owner) across refresh.
+      const { role: sessionRole } = await authService.resolveSessionRole(user, decoded.role);
       const tokenPayload = {
         id: user._id,
         email: user.email,
-        role: user.role,
+        role: sessionRole,
         chapter: user.chapter,
         chapterId: user.chapterId,
         state: user.state || "",
@@ -1031,6 +1044,24 @@ export const authService = {
     } catch (err) {
       throw new UnauthorizedError("Invalid or expired refresh token", ERROR_CODES.TOKEN_EXPIRED);
     }
+  },
+
+  /**
+   * Resolve the workspace role a session may legitimately act as. An admin who owns a
+   * business may hold a business_owner session; every other mismatch with the DB role is
+   * ignored so a forged/stale token claim can never elevate or change identity.
+   * Returns { role, ownedBusiness } where role === user.role unless a valid switch applies.
+   */
+  resolveSessionRole: async (user, requestedRole) => {
+    if (!requestedRole || requestedRole === user.role) return { role: user.role, ownedBusiness: null };
+    if (
+      requestedRole === "business_owner" &&
+      ["central_admin", "state_admin", "chapter_admin"].includes(user.role)
+    ) {
+      const ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
+      if (ownedBusiness) return { role: "business_owner", ownedBusiness };
+    }
+    return { role: user.role, ownedBusiness: null };
   },
 
   /**
@@ -1096,7 +1127,7 @@ export const authService = {
   /**
    * Get current authenticated user details
    */
-  getMe: async (userId) => {
+  getMe: async (userId, sessionRole) => {
     const user = await User.findById(userId).populate("savedBusinesses");
     if (!user) {
       throw new NotFoundError("User not found");
@@ -1139,6 +1170,18 @@ export const authService = {
       userObj.accountType = "customer";
     }
 
+    // Reflect the session's workspace (token role) without touching the stored role.
+    const { role: activeRole, ownedBusiness: switchedBusiness } =
+      await authService.resolveSessionRole(user, sessionRole);
+    if (activeRole !== user.role) {
+      userObj.previousRole = user.role;
+      userObj.role = activeRole;
+      if (switchedBusiness) {
+        userObj.businessId = switchedBusiness._id;
+        userObj.businessSlug = switchedBusiness.slug;
+      }
+    }
+
     return userObj;
   },
 
@@ -1170,6 +1213,7 @@ export const authService = {
 
     user.passwordHash = await hashPassword(newPassword);
     user.forcePasswordChange = false;
+    user.tokensValidAfter = new Date(); // revoke every session issued before this password change
     await user.save();
 
     const tokenPayload = {
@@ -1263,6 +1307,7 @@ export const authService = {
       throw new BadRequestError("Invalid or expired password reset code");
     }
 
+    user.tokensValidAfter = new Date(); // a reset must end any session an attacker may hold
     user.passwordHash = await hashPassword(newPassword);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;

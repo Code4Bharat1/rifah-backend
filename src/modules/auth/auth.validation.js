@@ -53,7 +53,7 @@ export const validateRegisterBusiness = (data = {}) => {
 
 export const validateLogin = (data = {}) => {
   const errors = [];
-  if (!data.email || !isValidEmail(data.email)) {
+  if (!data.email || typeof data.email !== "string" || !isValidEmail(data.email)) {
     errors.push({ field: "email", message: "Valid email address is required" });
   }
   if (!data.password || typeof data.password !== "string") {
