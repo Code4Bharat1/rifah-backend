@@ -497,14 +497,16 @@ export const eventService = {
       paymentId = paymentData.paymentId;
     }
 
-    const BusinessModel = mongoose.model("Business");
-    const business = await BusinessModel.findOne({ owner: userId });
     let attendeeRole = "guest";
-    if (business) {
-      if (business.verification === "verified" || business.verification === "Verified") {
-        attendeeRole = "member";
-      } else {
-        attendeeRole = "non_member";
+    if (user && user.role !== "customer") {
+      const BusinessModel = mongoose.model("Business");
+      const business = await BusinessModel.findOne({ owner: userId });
+      if (business) {
+        if (business.verification === "verified" || business.verification === "Verified") {
+          attendeeRole = "member";
+        } else {
+          attendeeRole = "non_member";
+        }
       }
     }
 
@@ -656,14 +658,19 @@ export const eventService = {
       const business = await BusinessModel.findOne({ owner: userId }).lean();
       
       let computedRole = "guest";
-      if (business) {
-        if (business.verification === "verified" || business.verification === "Verified") {
-          computedRole = "member";
-        } else {
-          computedRole = "non_member";
+      if (userData && userData.role !== "customer") {
+        if (business) {
+          if (business.verification === "verified" || business.verification === "Verified") {
+            computedRole = "member";
+          } else {
+            computedRole = "non_member";
+          }
+        } else if (entry.role) {
+          computedRole = entry.role; // Fallback to saved role if business not found
         }
-      } else if (entry.role) {
-        computedRole = entry.role; // Fallback to saved role if business not found
+      } else if (entry.role && entry.role !== "customer") {
+         // If it's a customer, ensure we stick to guest unless explicitly saved as something else that's valid
+         computedRole = entry.role === "member" ? "guest" : entry.role; 
       }
 
       registrations.push({

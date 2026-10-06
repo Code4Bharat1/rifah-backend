@@ -149,7 +149,7 @@ const eventSchema = new mongoose.Schema(
         },
         role: {
           type: String,
-          enum: ["guest", "non_member", "member"],
+          enum: ["guest", "non_member", "member", "customer"],
           default: "guest",
         },
         status: {
