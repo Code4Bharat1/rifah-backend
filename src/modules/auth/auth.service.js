@@ -95,8 +95,9 @@ export const authService = {
 
     const passwordHash = await hashPassword(password);
     const chapterId = await resolveChapterIdByName(chapter);
-    const resolvedOrg = (businessName || organization || "").trim();
-    const resolvedTier = subscriberTier || "Tier I (Free)";
+    const isCustomerAccount = !resolvedOrg && !subscriberTier;
+    const resolvedAccountType = isCustomerAccount ? "customer" : "user";
+    const resolvedTier = isCustomerAccount ? "" : (subscriberTier || "Tier I (Free)");
 
     const user = await User.create({
       name: name.trim(),
@@ -118,6 +119,7 @@ export const authService = {
       subscriberTier: resolvedTier,
       membershipPlan: resolvedTier,
       role: ROLES.CUSTOMER,
+      accountType: resolvedAccountType,
       isProfileComplete: true,
     });
 
@@ -403,13 +405,57 @@ export const authService = {
     // Clean up OTP
     await OtpVerification.deleteMany({ email: cleanEmail, purpose: "login_otp" });
 
+    let userOwnedBiz = null;
+    try {
+      const { Business } = await import("../businesses/business.model.js");
+      const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      userOwnedBiz = await Business.findOne({
+        $or: [
+          { owner: user._id },
+          { ownerEmail: { $regex: emailRegex } },
+          { email: { $regex: emailRegex } },
+        ],
+        status: { $nin: ["Deactivated", "Suspended", "Deleted"] },
+      });
+
+      if (userOwnedBiz) {
+        if (!userOwnedBiz.owner || String(userOwnedBiz.owner) !== String(user._id)) {
+          userOwnedBiz.owner = user._id;
+          await userOwnedBiz.save().catch(() => {});
+        }
+        const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
+        if (!isAdmin) {
+          user.role = ROLES.BUSINESS_OWNER;
+          user.accountType = "business";
+          await user.save().catch(() => {});
+        }
+      }
+    } catch (bizErr) {
+      console.error("Error auto-healing business_owner role on OTP login:", bizErr);
+    }
+
     await User.findByIdAndUpdate(user._id, { $set: { lastLoginAt: new Date() } });
     await user.populate("savedBusinesses");
+
+    const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
+    let determinedAccountType = user.accountType;
+    if (isAdmin) {
+      determinedAccountType = "admin";
+    } else if (user.role === ROLES.BUSINESS_OWNER || userOwnedBiz) {
+      determinedAccountType = "business";
+      user.role = ROLES.BUSINESS_OWNER;
+      user.accountType = "business";
+    } else if (user.accountType === "user" || Boolean(user.subscriberTier)) {
+      determinedAccountType = "user";
+    } else {
+      determinedAccountType = "customer";
+    }
 
     const tokenPayload = {
       id: user._id,
       email: user.email,
       role: user.role,
+      accountType: determinedAccountType,
       chapter: user.chapter,
       chapterId: user.chapterId,
       state: user.state || "",
@@ -420,6 +466,11 @@ export const authService = {
     const refreshToken = signRefreshToken(tokenPayload);
 
     const userObj = user.toJSON ? user.toJSON() : { ...user._doc };
+    userObj.accountType = determinedAccountType;
+    if (userOwnedBiz) {
+      userObj.businessId = userOwnedBiz._id;
+      userObj.businessSlug = userOwnedBiz.slug;
+    }
     if (Array.isArray(userObj.savedBusinesses)) {
       userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
     }
@@ -521,6 +572,9 @@ export const authService = {
       if (parsedDob && !isNaN(parsedDob.getTime())) user.dob = parsedDob;
       if (parsedJoiningDate && !isNaN(parsedJoiningDate.getTime())) user.joiningDate = parsedJoiningDate;
       if (cleanTimezone) user.timezone = cleanTimezone;
+      user.role = ROLES.BUSINESS_OWNER;
+      user.accountType = "business";
+      user.isProfileComplete = true;
       await user.save();
     } else {
       const passwordHash = await hashPassword(password);
@@ -539,6 +593,7 @@ export const authService = {
         joiningDate: parsedJoiningDate && !isNaN(parsedJoiningDate.getTime()) ? parsedJoiningDate : new Date(),
         timezone: cleanTimezone,
         role: ROLES.BUSINESS_OWNER,
+        accountType: "business",
         isProfileComplete: true,
       });
     }
@@ -821,24 +876,41 @@ export const authService = {
       await user.save();
     }
 
-    // Business Auto-Healing: reattach an orphaned business (no owner) that was registered with
-    // this exact account email. Never reassigns a business away from its existing owner — that
-    // would let anyone hijack another business just by sharing/matching its contact email.
+    // Robust Business Owner Auto-Healing:
+    // If this account owns or is registered to a business in the database (by owner ID or matching email),
+    // firmly link the business to this user, and ensure non-admin accounts have role: "business_owner"
+    let userOwnedBiz = null;
     try {
       const { Business } = await import("../businesses/business.model.js");
-      const biz = await Business.findOne({ owner: null, email: user.email });
-      if (biz) {
-        biz.owner = user._id;
-        if (biz.status !== "Deactivated" && biz.status !== "Suspended") {
-          biz.status = "Live";
-          biz.verification = "verified";
-          biz.verificationStatus = "approved";
-          biz.isVerified = true;
+      const cleanEmail = (user.email || "").toLowerCase().trim();
+      const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+
+      userOwnedBiz = await Business.findOne({
+        $or: [
+          { owner: user._id },
+          { ownerEmail: { $regex: emailRegex } },
+          { email: { $regex: emailRegex } },
+        ],
+        status: { $nin: ["Deactivated", "Suspended", "Deleted"] },
+      });
+
+      if (userOwnedBiz) {
+        // Firmly attach owner reference to this user if not already set
+        if (!userOwnedBiz.owner || String(userOwnedBiz.owner) !== String(user._id)) {
+          userOwnedBiz.owner = user._id;
+          await userOwnedBiz.save().catch(() => {});
         }
-        await biz.save();
+
+        // For non-administrative users, permanently ensure role is business_owner and accountType is business
+        const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
+        if (!isAdmin) {
+          user.role = ROLES.BUSINESS_OWNER;
+          user.accountType = "business";
+          await user.save().catch(() => {});
+        }
       }
-    } catch (bizErr) {
-      console.error("Error dynamically auto-healing business on login:", bizErr);
+    } catch (bizOwnerCheckErr) {
+      console.error("Error auto-healing business_owner role on login:", bizOwnerCheckErr);
     }
 
     // Check chapter status if user is associated with a chapter and is not Super Admin / State Admin
@@ -852,10 +924,27 @@ export const authService = {
     await User.findByIdAndUpdate(user._id, { $set: { lastLoginAt: new Date() } });
     await user.populate("savedBusinesses");
 
+    const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
+
+    // Determine accountType for deterministic frontend workspace routing
+    let determinedAccountType = user.accountType;
+    if (isAdmin) {
+      determinedAccountType = "admin";
+    } else if (user.role === ROLES.BUSINESS_OWNER || userOwnedBiz) {
+      determinedAccountType = "business";
+      user.role = ROLES.BUSINESS_OWNER;
+      user.accountType = "business";
+    } else if (user.accountType === "user" || Boolean(user.subscriberTier)) {
+      determinedAccountType = "user";
+    } else {
+      determinedAccountType = "customer";
+    }
+
     const tokenPayload = {
       id: user._id,
       email: user.email,
       role: user.role,
+      accountType: determinedAccountType,
       chapter: user.chapter,
       chapterId: user.chapterId,
       state: user.state || "",
@@ -866,22 +955,19 @@ export const authService = {
     const refreshToken = signRefreshToken(tokenPayload);
 
     const userObj = user.toJSON();
+    userObj.accountType = determinedAccountType;
+    if (userOwnedBiz) {
+      userObj.businessId = userOwnedBiz._id;
+      userObj.businessSlug = userOwnedBiz.slug;
+    }
     if (Array.isArray(userObj.savedBusinesses)) {
       userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
     }
 
     // Only add business_owner as available role if the admin actually has a registered business.
-    // previousRole is not consulted here - it belongs to the admin-assignment/revocation flows,
-    // not to workspace choice (see switchRole above).
     const candidateRoles = new Set([userObj.role]);
-    if (["central_admin", "state_admin", "chapter_admin"].includes(userObj.role)) {
-      // Check if user actually has a business profile
-      const ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
-      if (ownedBusiness) {
-        candidateRoles.add("business_owner");
-        userObj.businessId = ownedBusiness._id;
-        userObj.businessSlug = ownedBusiness.slug;
-      }
+    if (isAdmin && userOwnedBiz) {
+      candidateRoles.add("business_owner");
     }
 
     // The picker exists to choose a WORKSPACE, not a role. business_owner and customer both
@@ -1019,20 +1105,40 @@ export const authService = {
     if (Array.isArray(userObj.savedBusinesses)) {
       userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
     }
-    // Attach businessId/businessSlug for admins who own a business.
-    // This lets the frontend sidebar always show the "Switch to Business Panel" button
-    // without requiring the user to have explicitly called switchRole in the current session.
-    if (["central_admin", "state_admin", "chapter_admin"].includes(userObj.role)) {
-      try {
-        const ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
-        if (ownedBusiness) {
-          userObj.businessId = ownedBusiness._id;
-          userObj.businessSlug = ownedBusiness.slug;
-        }
-      } catch (err) {
-        // non-fatal
-      }
+    const { Business } = await import("../businesses/business.model.js");
+    const cleanEmail = (user.email || "").toLowerCase().trim();
+    const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+    const ownedBusiness = await Business.findOne({
+      $or: [
+        { owner: user._id },
+        { ownerEmail: { $regex: emailRegex } },
+        { email: { $regex: emailRegex } },
+      ],
+      status: { $nin: ["Deactivated", "Suspended", "Deleted"] },
+    }).select("_id slug name");
+
+    if (ownedBusiness) {
+      userObj.businessId = ownedBusiness._id;
+      userObj.businessSlug = ownedBusiness.slug;
     }
+
+    const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(userObj.role);
+    if (isAdmin) {
+      userObj.accountType = "admin";
+    } else if (userObj.role === ROLES.BUSINESS_OWNER || ownedBusiness) {
+      userObj.accountType = "business";
+      userObj.role = ROLES.BUSINESS_OWNER;
+      if (user.role !== ROLES.BUSINESS_OWNER || user.accountType !== "business") {
+        user.role = ROLES.BUSINESS_OWNER;
+        user.accountType = "business";
+        await user.save().catch(() => {});
+      }
+    } else if (userObj.accountType === "user" || Boolean(userObj.subscriberTier)) {
+      userObj.accountType = "user";
+    } else {
+      userObj.accountType = "customer";
+    }
+
     return userObj;
   },
 

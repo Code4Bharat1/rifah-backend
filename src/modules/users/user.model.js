@@ -93,6 +93,12 @@ const userSchema = new mongoose.Schema(
       default: ROLES.CUSTOMER,
       index: true,
     },
+    accountType: {
+      type: String,
+      enum: ["admin", "business", "user", "customer"],
+      default: "customer",
+      index: true,
+    },
     designation: {
       type: String,
       trim: true,
@@ -165,15 +171,21 @@ const userSchema = new mongoose.Schema(
       default: "",
       index: true,
     },
+    accountType: {
+      type: String,
+      enum: ["customer", "user", "business", "admin"],
+      default: "user",
+      index: true,
+    },
     subscriberTier: {
       type: String,
       trim: true,
-      default: "Tier I (Free)",
+      default: "",
     },
     membershipPlan: {
       type: String,
       trim: true,
-      default: "Tier I (Free)",
+      default: "",
     },
     sourcingInterest: {
       type: String,

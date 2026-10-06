@@ -171,7 +171,9 @@ export const membershipService = {
     }
     plansArray = await Plan.find().sort({ displayOrder: 1, createdAt: 1 }).lean();
 
-    const CANONICAL_ORDER = { silver: 1, gold: 2, platinum: 3, diamond: 4, tier_1: 5, tier_2: 6, tier_3: 7, tier_4: 8, free: 0 };
+    plansArray = plansArray.filter(p => !["basic", "premium", "enterprise", "free"].includes((p.planId || "").toLowerCase()));
+
+    const CANONICAL_ORDER = { silver: 1, gold: 2, platinum: 3, diamond: 4, tier_1: 5, tier_2: 6, tier_3: 7, tier_4: 8 };
     plansArray.sort((a, b) => {
       const idA = (a.planId || "").toLowerCase();
       const idB = (b.planId || "").toLowerCase();
