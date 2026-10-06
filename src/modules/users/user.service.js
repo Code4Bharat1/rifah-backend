@@ -22,7 +22,24 @@ export const userService = {
    * Update own user profile
    */
   updateProfile: async (userId, updateData) => {
-    const allowedUpdates = ["name", "email", "phone", "chapter", "organization", "city", "state", "taxId", "avatar"];
+    const allowedUpdates = [
+      "name",
+      "email",
+      "phone",
+      "chapter",
+      "organization",
+      "businessName",
+      "category",
+      "subCategory",
+      "country",
+      "countryCode",
+      "city",
+      "state",
+      "taxId",
+      "avatar",
+      "subscriberTier",
+      "membershipPlan",
+    ];
     const filteredUpdates = {};
     for (const key of allowedUpdates) {
       if (updateData[key] !== undefined) {

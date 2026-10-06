@@ -41,7 +41,25 @@ export const authService = {
   /**
    * Register a new standard user / customer / buyer
    */
-  register: async ({ name, email, password, phone, chapter, organization, city, sourcingInterest, isGuestCheckout, verifiedToken }) => {
+  register: async ({
+    name,
+    email,
+    password,
+    phone,
+    chapter,
+    organization,
+    businessName,
+    category,
+    subCategory,
+    country,
+    countryCode,
+    state,
+    city,
+    sourcingInterest,
+    subscriberTier,
+    isGuestCheckout,
+    verifiedToken,
+  }) => {
     const cleanEmail = email.toLowerCase().trim();
     const existing = await User.findOne({ email: cleanEmail });
     if (existing) {
@@ -77,6 +95,9 @@ export const authService = {
 
     const passwordHash = await hashPassword(password);
     const chapterId = await resolveChapterIdByName(chapter);
+    const resolvedOrg = (businessName || organization || "").trim();
+    const resolvedTier = subscriberTier || "Tier I (Free)";
+
     const user = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
@@ -84,13 +105,55 @@ export const authService = {
       phone: phone || "",
       chapter: chapter || "",
       chapterId,
-      organization: organization || "",
-      city: city || "",
-      sourcingInterest: sourcingInterest ? sourcingInterest.trim() : "",
-      sourcingInterests: sourcingInterest ? [sourcingInterest.trim()] : [],
+      organization: resolvedOrg,
+      businessName: resolvedOrg,
+      category: category ? category.trim() : "",
+      subCategory: subCategory ? subCategory.trim() : "",
+      country: country ? country.trim() : "India",
+      countryCode: countryCode ? countryCode.trim() : "+91",
+      state: state ? state.trim() : "",
+      city: city ? city.trim() : "",
+      sourcingInterest: sourcingInterest ? sourcingInterest.trim() : (category ? `${category}${subCategory ? ` - ${subCategory}` : ""}` : ""),
+      sourcingInterests: sourcingInterest ? [sourcingInterest.trim()] : (category ? [category] : []),
+      subscriberTier: resolvedTier,
+      membershipPlan: resolvedTier,
       role: ROLES.CUSTOMER,
       isProfileComplete: true,
     });
+
+    if (resolvedOrg) {
+      try {
+        const baseSlug = generateSlug(resolvedOrg);
+        const uniqueSlug = `${baseSlug}-${user._id.toString().slice(-6)}`;
+        await Business.create({
+          name: resolvedOrg,
+          slug: uniqueSlug,
+          owner: user._id,
+          email: user.email,
+          ownerEmail: user.email,
+          phone: user.phone || "",
+          contactPerson: user.name,
+          chapter: user.chapter || "",
+          chapterId: user.chapterId || null,
+          industry: user.category || "General",
+          subCategory: user.subCategory || "",
+          categories: [user.category, user.subCategory].filter(Boolean),
+          region: (user.country && user.country !== "India") ? "international" : "national",
+          country: user.country || "India",
+          state: user.state || "",
+          city: user.city || "",
+          status: "Active",
+          verification: "verified",
+          verificationStatus: "verified",
+          isVerified: true,
+          membership: resolvedTier,
+          membershipPlan: resolvedTier,
+          isPaid: resolvedTier !== "Tier I (Free)",
+        });
+      } catch (bizErr) {
+        logger.warn("[AUTH] Failed to auto-create member business profile:", bizErr?.message || bizErr);
+      }
+    }
 
     // Scaled for 10k/50k users: Async non-blocking welcome email
     emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role })

@@ -306,7 +306,55 @@ export const catalogueService = {
    * Enforces maxCatalogueItems and maxImagesPerItem from global Settings.
    */
   createItem: async (data, user) => {
-    const business = await Business.findById(data.businessId || user.businessId);
+    let business = null;
+    if (data.businessId || user.businessId) {
+      business = await Business.findById(data.businessId || user.businessId);
+    }
+    if (!business && user?.id) {
+      business = await Business.findOne({ owner: user.id });
+    }
+    if (!business && user?.id) {
+      const { businessService } = await import("../businesses/business.service.js");
+      business = await businessService.getBusinessByOwnerId(user.id);
+    }
+    if (!business && user?.id) {
+      const { User } = await import("../users/user.model.js");
+      const userDoc = await User.findById(user.id);
+      if (userDoc) {
+        const orgName = (userDoc.businessName || userDoc.organization || `${userDoc.name || "Member"}'s Enterprise`).trim();
+        const baseSlug = generateSlug(orgName);
+        const uniqueSlug = `${baseSlug}-${userDoc._id.toString().slice(-6)}`;
+        try {
+          business = await Business.create({
+            name: orgName,
+            slug: uniqueSlug,
+            owner: userDoc._id,
+            email: userDoc.email,
+            ownerEmail: userDoc.email,
+            phone: userDoc.phone || "",
+            contactPerson: userDoc.name,
+            chapter: userDoc.chapter || "",
+            chapterId: userDoc.chapterId || null,
+            industry: userDoc.category || "General",
+            subCategory: userDoc.subCategory || "",
+            categories: [userDoc.category, userDoc.subCategory].filter(Boolean),
+            region: (userDoc.country && userDoc.country !== "India") ? "international" : "national",
+            country: userDoc.country || "India",
+            state: userDoc.state || "",
+            city: userDoc.city || "",
+            status: "Active",
+            verification: "verified",
+            verificationStatus: "verified",
+            isVerified: true,
+            membership: userDoc.subscriberTier || userDoc.membershipPlan || "Tier I (Free)",
+            membershipPlan: userDoc.subscriberTier || userDoc.membershipPlan || "Tier I (Free)",
+            isPaid: (userDoc.subscriberTier || userDoc.membershipPlan || "Tier I (Free)") !== "Tier I (Free)",
+          });
+        } catch (createErr) {
+          business = await Business.findOne({ owner: userDoc._id });
+        }
+      }
+    }
     if (!business) {
       throw new NotFoundError("Associated business not found");
     }

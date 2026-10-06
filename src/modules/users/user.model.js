@@ -129,6 +129,31 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    businessName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    category: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    subCategory: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    country: {
+      type: String,
+      trim: true,
+      default: "India",
+    },
+    countryCode: {
+      type: String,
+      trim: true,
+      default: "+91",
+    },
     city: {
       type: String,
       trim: true,
@@ -139,6 +164,16 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
       index: true,
+    },
+    subscriberTier: {
+      type: String,
+      trim: true,
+      default: "Tier I (Free)",
+    },
+    membershipPlan: {
+      type: String,
+      trim: true,
+      default: "Tier I (Free)",
     },
     sourcingInterest: {
       type: String,

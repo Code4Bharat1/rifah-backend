@@ -662,6 +662,39 @@ export const businessService = {
             await business.save().catch(() => {});
           }
         }
+
+        if (!business) {
+          const orgName = (user.businessName || user.organization || `${user.name || "Member"}'s Enterprise`).trim();
+          const baseSlug = generateSlug(orgName);
+          const uniqueSlug = `${baseSlug}-${user._id.toString().slice(-6)}`;
+          try {
+            business = await Business.create({
+              name: orgName,
+              slug: uniqueSlug,
+              owner: user._id,
+              email: user.email,
+              ownerEmail: user.email,
+              phone: user.phone || "",
+              contactPerson: user.name,
+              chapter: user.chapter || "",
+              chapterId: user.chapterId || null,
+              industry: user.category || "General",
+              subCategory: user.subCategory || "",
+              categories: [user.category, user.subCategory].filter(Boolean),
+              region: (user.country && user.country !== "India") ? "international" : "national",
+              country: user.country || "India",
+              state: user.state || "",
+              city: user.city || "",
+              status: "Active",
+              verification: "verified",
+              verificationStatus: "verified",
+              isVerified: true,
+              membership: user.subscriberTier || user.membershipPlan || "Tier I (Free)",
+              membershipPlan: user.subscriberTier || user.membershipPlan || "Tier I (Free)",
+              isPaid: (user.subscriberTier || user.membershipPlan || "Tier I (Free)") !== "Tier I (Free)",
+            });
+          } catch (createErr) {}
+        }
       }
     }
     if (business) {
