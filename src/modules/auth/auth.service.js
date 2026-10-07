@@ -45,17 +45,18 @@ const ADMIN_ROLE_LIST = ["central_admin", "super_admin", "admin", "secretariat",
 async function findOwnedBusiness(user, { claim = false } = {}) {
   const { Business } = await import("../businesses/business.model.js");
   const live = { $nin: ["Deactivated", "Suspended", "Deleted"] };
-  const mine = await Business.findOne({ owner: user._id, status: live });
+  const mine = await Business.findOne({ owner: user._id, status: live }).lean(!claim);
   if (mine) return mine;
   const cleanEmail = (user.email || "").toLowerCase().trim();
   if (!cleanEmail) return null;
-  const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+  // Business emails are stored lowercase+trimmed, so an exact match hits the {email}/{ownerEmail}
+  // indexes; the old case-insensitive regex forced a collection scan on every login and /me.
   const candidate = await Business.findOne({
-    $or: [{ ownerEmail: { $regex: emailRegex } }, { email: { $regex: emailRegex } }],
+    $or: [{ ownerEmail: cleanEmail }, { email: cleanEmail }],
     status: live,
-  });
+  }).lean(!claim);
   if (!candidate) return null;
-  const currentOwner = await User.findById(candidate.owner).select("role");
+  const currentOwner = await User.findById(candidate.owner).select("role").lean();
   if (currentOwner && !ADMIN_ROLE_LIST.includes(currentOwner.role)) return null;
   if (claim) {
     candidate.owner = user._id;
@@ -217,18 +218,17 @@ export const authService = {
       throw new BadRequestError("Please provide a valid email address");
     }
     const cleanEmail = email.toLowerCase().trim();
-    const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
 
     // 1. Check if an account already exists with this email
-    const existingUser = await User.findOne({ email: { $regex: emailRegex } });
+    const existingUser = await User.findOne({ email: cleanEmail }).select("_id").lean();
     if (existingUser) {
       const existingBiz = await Business.findOne({
         $or: [
           { owner: existingUser._id },
-          { email: { $regex: emailRegex } },
-          { ownerEmail: { $regex: emailRegex } },
+          { email: cleanEmail },
+          { ownerEmail: cleanEmail },
         ]
-      });
+      }).select("_id").lean();
       return {
         available: false,
         exists: true,
@@ -241,11 +241,8 @@ export const authService = {
 
     // 2. Check if a business is registered with this email directly
     const bizWithEmail = await Business.findOne({
-      $or: [
-        { email: { $regex: emailRegex } },
-        { ownerEmail: { $regex: emailRegex } },
-      ]
-    });
+      $or: [{ email: cleanEmail }, { ownerEmail: cleanEmail }],
+    }).lean();
     if (bizWithEmail) {
       return {
         available: false,
@@ -817,7 +814,10 @@ export const authService = {
       userOrFilters.push({ phone: { $regex: digitsOnly.slice(-10) } });
     }
 
-    let user = await User.findOne({ $or: userOrFilters }).select("+passwordHash");
+    // Fast path: exact (indexed, unique) email. The broad $or below contains an unanchored phone
+    // regex, which forces a full users-collection scan, so it only runs when the exact match misses.
+    let user = await User.findOne({ email: normalizedEmail }).select("+passwordHash");
+    if (!user) user = await User.findOne({ $or: userOrFilters }).select("+passwordHash");
 
     // 2. Dynamic fallback: check if a business exists with this email / ownerEmail / phone
     if (!user) {
@@ -851,7 +851,7 @@ export const authService = {
           const cleanLocal = localPart.replace(/[.\-_0]/g, "");
           const candidates = await User.find({
             email: { $regex: new RegExp(`@${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
-          }).select("+passwordHash");
+          }).select("+passwordHash").limit(50); // bound the alias scan so a common domain cannot load thousands of hashes
 
           for (const candidate of candidates) {
             const candLocal = (candidate.email.split("@")[0] || "").replace(/[.\-_0]/g, "");
