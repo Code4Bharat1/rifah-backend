@@ -3,6 +3,7 @@ import { enquiryController } from "./enquiry.controller.js";
 import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
+import { upload } from "../../middleware/upload.middleware.js";
 import {
   validateCreateEnquiry,
   validateUpdateEnquiryStatus,
@@ -10,6 +11,14 @@ import {
 import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
+
+// Image attachment upload for enquiries (supports both guest and authenticated users)
+router.post(
+  "/upload",
+  optionalAuthMiddleware,
+  upload.single("image"),
+  enquiryController.uploadImage
+);
 
 // Public / Buyer routes (guest posting allowed conditionally)
 router.post(

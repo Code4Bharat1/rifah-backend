@@ -157,8 +157,15 @@ export const enquiryService = {
       }
     }
 
+    const normalizedImages = Array.isArray(data.images)
+      ? data.images.filter((img) => typeof img === "string" && img.trim().length > 0)
+      : data.photo && typeof data.photo === "string"
+      ? [data.photo.trim()]
+      : [];
+
     const enquiry = await Enquiry.create({
       ...data,
+      images: normalizedImages,
       referenceId,
       targetType,
       sourceType,

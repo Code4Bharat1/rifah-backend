@@ -1,11 +1,20 @@
 import { enquiryService } from "./enquiry.service.js";
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
+import { storageService } from "../../infrastructure/storage/storage.service.js";
 
 import { UnauthorizedError } from "../../shared/errors/errors.js";
 import { auditService } from "../audit/audit.service.js";
 
 export const enquiryController = {
+  uploadImage: asyncHandler(async (req, res) => {
+    if (!req.file) {
+      return ApiResponse.error(res, "No image file provided for upload", 400);
+    }
+    const url = await storageService.uploadFile(req.file, "enquiries");
+    return ApiResponse.success(res, { url }, "Enquiry image uploaded successfully");
+  }),
+
   createEnquiry: asyncHandler(async (req, res) => {
     // Direct business enquiries from the profile page and public RFQs from the home page are allowed for guests.
     const isDirectBusinessEnquiry = req.body.targetType === "business" && req.body.targetBusiness;

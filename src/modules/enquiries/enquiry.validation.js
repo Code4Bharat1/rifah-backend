@@ -20,6 +20,18 @@ export const validateCreateEnquiry = (data = {}, req = null) => {
   if (data.description && typeof data.description !== "string") {
     errors.push({ field: "description", message: "Description must be a valid text string" });
   }
+  if (data.images !== undefined && data.images !== null) {
+    if (!Array.isArray(data.images)) {
+      errors.push({ field: "images", message: "Images must be an array of image URLs" });
+    } else if (data.images.length > 5) {
+      errors.push({ field: "images", message: "Maximum 5 images can be attached per enquiry" });
+    } else {
+      const allStrings = data.images.every((img) => typeof img === "string" && img.trim().length > 0);
+      if (!allStrings) {
+        errors.push({ field: "images", message: "All image items must be valid URL strings" });
+      }
+    }
+  }
   if (data.targetType && !["all", "state", "business"].includes(data.targetType)) {
     errors.push({ field: "targetType", message: "targetType must be one of: all, state, business" });
   }

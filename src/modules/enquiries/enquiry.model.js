@@ -114,6 +114,10 @@ const enquirySchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    images: {
+      type: [String],
+      default: [],
+    },
     priority: {
       type: String,
       enum: ["High", "Medium", "Low"],

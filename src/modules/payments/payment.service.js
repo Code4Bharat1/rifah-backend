@@ -874,6 +874,7 @@ export const paymentService = {
 
     if (queryParams.status) filter.status = queryParams.status;
     if (queryParams.itemType) filter.itemType = queryParams.itemType;
+    if (queryParams.business) filter.business = queryParams.business;
 
     const [payments, total] = await Promise.all([
       Payment.find(filter)
