@@ -43,6 +43,18 @@ const auditSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    userAgent: {
+      type: String,
+      default: "",
+    },
+    device: {
+      type: String,
+      default: "",
+    },
+    macAddress: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,

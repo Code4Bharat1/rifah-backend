@@ -15,6 +15,8 @@ import { NotFoundError, ConflictError, BadRequestError } from "../../shared/erro
 import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { resolveEligibleAdminBusiness, isBusinessVerified } from "../../shared/utils/admin-eligibility.js";
 
+const escapeRegex = (s) => (s || "").toString().trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export const stateService = {
   /**
    * Lists states dynamically discovered from assigned State Admins and existing Chapters.
@@ -25,11 +27,11 @@ export const stateService = {
     if (requester && requester.role === ROLES.STATE_ADMIN && requester.state) {
       const stateAdmin = await User.findOne({
         role: ROLES.STATE_ADMIN,
-        state: new RegExp(`^${requester.state.trim()}$`, "i"),
+        state: new RegExp(`^${escapeRegex(requester.state)}$`, "i"),
       }).select("_id name email phone state createdAt lastLoginAt");
 
       const stateChapters = await Chapter.find({
-        state: new RegExp(`^${requester.state.trim()}$`, "i"),
+        state: new RegExp(`^${escapeRegex(requester.state)}$`, "i"),
       }).select("_id name city state status businessesCount membersCount");
 
       const activeChaptersCount = stateChapters.filter((c) => c.status === "Active").length;
@@ -150,7 +152,7 @@ export const stateService = {
       }
     }
 
-    const stateRegex = new RegExp(`^${stateName.trim()}$`, "i");
+    const stateRegex = new RegExp(`^${escapeRegex(stateName)}$`, "i");
     const [admin, chapters, profile] = await Promise.all([
       User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex }).select("-passwordHash"),
       Chapter.find({ state: stateRegex }).sort({ name: 1 }),
@@ -243,7 +245,7 @@ export const stateService = {
     if (!cleanState) {
       throw new BadRequestError("This business does not have a state on file, and no explicit state was provided.");
     }
-    const stateRegex = new RegExp(`^${cleanState}$`, "i");
+    const stateRegex = new RegExp(`^${escapeRegex(cleanState)}$`, "i");
 
     if (nominee.role === ROLES.CENTRAL_ADMIN) {
       throw new ConflictError("Cannot reassign a Central Admin as a State Admin");
@@ -317,7 +319,7 @@ export const stateService = {
     
     // Create/update state profile
     const profile = await StateProfile.findOneAndUpdate(
-      { name: new RegExp(`^${cleanState}$`, "i") },
+      { name: new RegExp(`^${escapeRegex(cleanState)}$`, "i") },
       {
         name: cleanState,
         ...(image && { image }),
@@ -350,7 +352,7 @@ export const stateService = {
    * Super Admin revokes a State Admin from a state
    */
   removeStateAdmin: async (stateName) => {
-    const stateRegex = new RegExp(`^${stateName.trim()}$`, "i");
+    const stateRegex = new RegExp(`^${escapeRegex(stateName)}$`, "i");
     const admin = await User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex });
 
     if (!admin) {
@@ -369,7 +371,7 @@ export const stateService = {
    * Edit a state globally across all collections
    */
   updateState: async (oldStateName, newStateName) => {
-    const oldRegex = new RegExp(`^${oldStateName.trim()}$`, "i");
+    const oldRegex = new RegExp(`^${escapeRegex(oldStateName)}$`, "i");
     const newName = newStateName.trim();
 
     if (!newName) {
@@ -391,6 +393,12 @@ export const stateService = {
       { $set: { "targetStates.$": newName } }
     );
 
+    // Update StateProfile
+    await StateProfile.updateMany({ name: oldRegex }, { $set: { name: newName } });
+
+    // Update Role
+    await Role.updateMany({ state: oldRegex }, { $set: { state: newName } });
+
     // Update Networking Modules
     await Referral.updateMany({ referrerState: oldRegex }, { $set: { referrerState: newName } });
     await Referral.updateMany({ referredState: oldRegex }, { $set: { referredState: newName } });
@@ -403,7 +411,7 @@ export const stateService = {
   },
 
   deleteState: async (stateName) => {
-    const stateRegex = new RegExp(`^${stateName.trim()}$`, "i");
+    const stateRegex = new RegExp(`^${escapeRegex(stateName)}$`, "i");
 
     // 1. Revoke State Admin if exists
     const admin = await User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex });
@@ -507,7 +515,7 @@ export const stateService = {
     }
 
     const updatedProfile = await StateProfile.findOneAndUpdate(
-      { name: new RegExp(`^${cleanState}$`, "i") },
+      { name: new RegExp(`^${escapeRegex(cleanState)}$`, "i") },
       { 
         $set: {
           name: cleanState,

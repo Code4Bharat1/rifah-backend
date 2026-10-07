@@ -8,7 +8,7 @@ export const auditService = {
   /**
    * Record an audit log entry
    */
-  logAction: async ({ actor, action, targetModel, targetId, summary, metadata, ipAddress }) => {
+  logAction: async ({ actor, action, targetModel, targetId, summary, metadata, ipAddress, userAgent, macAddress, req }) => {
     let actorName = actor.name;
     if (!actorName && (actor._id || actor.id)) {
       try {
@@ -19,6 +19,29 @@ export const auditService = {
       }
     }
 
+    const rawIp = ipAddress || (req ? (req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.socket?.remoteAddress) : "") || "";
+    const cleanIp = (raw) => {
+      if (!raw) return "127.0.0.1";
+      let ip = String(raw).replace(/^::ffff:/, "");
+      if (ip === "::1") return "127.0.0.1";
+      return ip;
+    };
+
+    const rawUa = userAgent || (req ? req.headers?.["user-agent"] : "") || "";
+    const parseDevice = (ua) => {
+      if (!ua) return "Web Browser";
+      if (/mobile|android|iphone|ipad|phone/i.test(ua)) {
+        if (/iphone/i.test(ua)) return "iPhone (iOS)";
+        if (/ipad/i.test(ua)) return "iPad (Tablet)";
+        if (/android/i.test(ua)) return "Android (Mobile)";
+        return "Mobile Device";
+      }
+      if (/windows/i.test(ua)) return "Windows (Laptop/PC)";
+      if (/macintosh|mac os x/i.test(ua)) return "Mac (MacBook/PC)";
+      if (/linux/i.test(ua)) return "Linux Workstation";
+      return "Desktop Browser";
+    };
+
     return Audit.create({
       actor: actor._id || actor.id,
       actorName: actorName || "System",
@@ -28,7 +51,10 @@ export const auditService = {
       targetId: String(targetId),
       summary,
       metadata: metadata || {},
-      ipAddress: ipAddress || "",
+      ipAddress: cleanIp(rawIp),
+      userAgent: rawUa,
+      device: parseDevice(rawUa),
+      macAddress: macAddress || "Layer-2 Restricted (Browser Sandbox)",
     });
   },
 
@@ -126,6 +152,8 @@ export const auditService = {
         { actorName: searchRegex },
         { targetModel: searchRegex },
         { summary: searchRegex },
+        { ipAddress: searchRegex },
+        { device: searchRegex },
       ];
       if (Object.keys(filter).length > 0) {
         filter.$and = [{ $or: searchOr }];
