@@ -37,6 +37,38 @@ const WORKSPACE_BY_ROLE = {
   [ROLES.BUYER]: "customer",
 };
 
+const ADMIN_ROLE_LIST = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"];
+
+// Business this account really owns. A business only counts through its contact email when it was
+// listed by an admin (or its owner is gone); a business owned by another member is never
+// attached to, or handed over to, whoever happens to share the email.
+async function findOwnedBusiness(user, { claim = false } = {}) {
+  const { Business } = await import("../businesses/business.model.js");
+  const live = { $nin: ["Deactivated", "Suspended", "Deleted"] };
+  const mine = await Business.findOne({ owner: user._id, status: live });
+  if (mine) return mine;
+  const cleanEmail = (user.email || "").toLowerCase().trim();
+  if (!cleanEmail) return null;
+  const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+  const candidate = await Business.findOne({
+    $or: [{ ownerEmail: { $regex: emailRegex } }, { email: { $regex: emailRegex } }],
+    status: live,
+  });
+  if (!candidate) return null;
+  const currentOwner = await User.findById(candidate.owner).select("role");
+  if (currentOwner && !ADMIN_ROLE_LIST.includes(currentOwner.role)) return null;
+  if (claim) {
+    candidate.owner = user._id;
+    await candidate.save().catch(() => {});
+  }
+  return candidate;
+}
+
+// A member who registered as a subscriber "user" owns a Business record (created at sign-up) but
+// must keep landing in the /user portal. Only admins/explicit upgrades (role === business_owner)
+// move them to the business workspace; merely owning or sharing an email with a Business must not.
+const isSubscriberUser = (user) => user.accountType === "user" && user.role !== ROLES.BUSINESS_OWNER;
+
 export const authService = {
   /**
    * Register a new standard user / customer / buyer
@@ -408,16 +440,7 @@ export const authService = {
 
     let userOwnedBiz = null;
     try {
-      const { Business } = await import("../businesses/business.model.js");
-      const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-      userOwnedBiz = await Business.findOne({
-        $or: [
-          { owner: user._id },
-          { ownerEmail: { $regex: emailRegex } },
-          { email: { $regex: emailRegex } },
-        ],
-        status: { $nin: ["Deactivated", "Suspended", "Deleted"] },
-      });
+      userOwnedBiz = await findOwnedBusiness(user, { claim: true });
 
       if (userOwnedBiz) {
         if (!userOwnedBiz.owner || String(userOwnedBiz.owner) !== String(user._id)) {
@@ -425,7 +448,7 @@ export const authService = {
           await userOwnedBiz.save().catch(() => {});
         }
         const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
-        if (!isAdmin) {
+        if (!isAdmin && !isSubscriberUser(user)) {
           user.role = ROLES.BUSINESS_OWNER;
           user.accountType = "business";
           await user.save().catch(() => {});
@@ -442,7 +465,7 @@ export const authService = {
     let determinedAccountType = user.accountType;
     if (isAdmin) {
       determinedAccountType = "admin";
-    } else if (user.role === ROLES.BUSINESS_OWNER || userOwnedBiz) {
+    } else if (user.role === ROLES.BUSINESS_OWNER || (userOwnedBiz && !isSubscriberUser(user))) {
       determinedAccountType = "business";
       user.role = ROLES.BUSINESS_OWNER;
       user.accountType = "business";
@@ -882,18 +905,7 @@ export const authService = {
     // firmly link the business to this user, and ensure non-admin accounts have role: "business_owner"
     let userOwnedBiz = null;
     try {
-      const { Business } = await import("../businesses/business.model.js");
-      const cleanEmail = (user.email || "").toLowerCase().trim();
-      const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-
-      userOwnedBiz = await Business.findOne({
-        $or: [
-          { owner: user._id },
-          { ownerEmail: { $regex: emailRegex } },
-          { email: { $regex: emailRegex } },
-        ],
-        status: { $nin: ["Deactivated", "Suspended", "Deleted"] },
-      });
+      userOwnedBiz = await findOwnedBusiness(user, { claim: true });
 
       if (userOwnedBiz) {
         // Firmly attach owner reference to this user if not already set
@@ -904,7 +916,7 @@ export const authService = {
 
         // For non-administrative users, permanently ensure role is business_owner and accountType is business
         const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
-        if (!isAdmin) {
+        if (!isAdmin && !isSubscriberUser(user)) {
           user.role = ROLES.BUSINESS_OWNER;
           user.accountType = "business";
           await user.save().catch(() => {});
@@ -931,7 +943,7 @@ export const authService = {
     let determinedAccountType = user.accountType;
     if (isAdmin) {
       determinedAccountType = "admin";
-    } else if (user.role === ROLES.BUSINESS_OWNER || userOwnedBiz) {
+    } else if (user.role === ROLES.BUSINESS_OWNER || (userOwnedBiz && !isSubscriberUser(user))) {
       determinedAccountType = "business";
       user.role = ROLES.BUSINESS_OWNER;
       user.accountType = "business";
@@ -1136,17 +1148,7 @@ export const authService = {
     if (Array.isArray(userObj.savedBusinesses)) {
       userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
     }
-    const { Business } = await import("../businesses/business.model.js");
-    const cleanEmail = (user.email || "").toLowerCase().trim();
-    const emailRegex = new RegExp(`^${cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
-    const ownedBusiness = await Business.findOne({
-      $or: [
-        { owner: user._id },
-        { ownerEmail: { $regex: emailRegex } },
-        { email: { $regex: emailRegex } },
-      ],
-      status: { $nin: ["Deactivated", "Suspended", "Deleted"] },
-    }).select("_id slug name");
+    const ownedBusiness = await findOwnedBusiness(user);
 
     if (ownedBusiness) {
       userObj.businessId = ownedBusiness._id;
@@ -1156,7 +1158,7 @@ export const authService = {
     const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(userObj.role);
     if (isAdmin) {
       userObj.accountType = "admin";
-    } else if (userObj.role === ROLES.BUSINESS_OWNER || ownedBusiness) {
+    } else if (userObj.role === ROLES.BUSINESS_OWNER || (ownedBusiness && !isSubscriberUser(user))) {
       userObj.accountType = "business";
       userObj.role = ROLES.BUSINESS_OWNER;
       if (user.role !== ROLES.BUSINESS_OWNER || user.accountType !== "business") {
