@@ -171,12 +171,6 @@ const userSchema = new mongoose.Schema(
       default: "",
       index: true,
     },
-    accountType: {
-      type: String,
-      enum: ["customer", "user", "business", "admin"],
-      default: "user",
-      index: true,
-    },
     subscriberTier: {
       type: String,
       trim: true,
