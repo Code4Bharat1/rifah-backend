@@ -33,3 +33,17 @@ export const gstRateLimitMiddleware = rateLimit({
     },
   },
 });
+
+export const verificationRateLimitMiddleware = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 120, // 120 scans per 15 min per IP to prevent enumeration while allowing active event desks
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: {
+      code: "TOO_MANY_VERIFICATION_REQUESTS",
+      message: "Too many verification requests. Please try again after 15 minutes.",
+    },
+  },
+});

@@ -233,6 +233,54 @@ export const catalogueService = {
       }
     }
 
+    // 4.5. Region / International Filter
+    if (
+      queryParams.region &&
+      typeof queryParams.region === "string" &&
+      !["all", "all regions"].includes(queryParams.region.toLowerCase().trim())
+    ) {
+      const reg = queryParams.region.toLowerCase().trim();
+      let bizRegionFilter = {};
+      if (reg === "international" || reg === "global") {
+        bizRegionFilter = {
+          $or: [
+            { region: "international" },
+            { currency: "USD" },
+            { country: { $nin: ["India", "india", "INDIA", "", null] } },
+            { state: { $in: ["International", "international"] } },
+          ],
+        };
+      } else if (reg === "national" || reg === "india") {
+        bizRegionFilter = {
+          $or: [
+            { region: "national" },
+            { region: { $exists: false } },
+            { country: { $in: ["India", "india", "INDIA", "", null] } },
+          ],
+        };
+      }
+      const matchingBusinesses = await Business.find(bizRegionFilter).select("_id");
+      const bizIds = matchingBusinesses.map((b) => b._id);
+      andClauses.push({ business: { $in: bizIds } });
+    }
+
+    // 4.6. Country Filter
+    if (
+      queryParams.country &&
+      typeof queryParams.country === "string" &&
+      !["all", "all countries"].includes(queryParams.country.toLowerCase().trim())
+    ) {
+      const safeCountry = escapeRegex(queryParams.country.trim());
+      const matchingBusinesses = await Business.find({
+        $or: [
+          { country: { $regex: safeCountry, $options: "i" } },
+          { state: { $regex: safeCountry, $options: "i" } },
+        ],
+      }).select("_id");
+      const bizIds = matchingBusinesses.map((b) => b._id);
+      andClauses.push({ business: { $in: bizIds } });
+    }
+
     if (queryParams.businessId && typeof queryParams.businessId === "string") {
       andClauses.push({ business: queryParams.businessId.trim() });
     }

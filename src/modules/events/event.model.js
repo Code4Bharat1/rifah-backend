@@ -239,6 +239,43 @@ const eventSchema = new mongoose.Schema(
           default: "waiting",
         },
         gateApprovedAt: { type: Date },
+
+        // Secure Event Entry Ticket & QR Verification fields
+        ticketId: {
+          type: String,
+          index: true,
+          default: null,
+        },
+        ticketType: {
+          type: String,
+          default: "Member Pass",
+        },
+        ticketStatus: {
+          type: String,
+          enum: ["Confirmed", "Cancelled", "Refunded", "Expired"],
+          default: "Confirmed",
+        },
+        verificationToken: {
+          type: String,
+          default: null,
+        },
+        checkedIn: {
+          type: Boolean,
+          default: false,
+        },
+        checkedInAt: {
+          type: Date,
+          default: null,
+        },
+        checkedInBy: {
+          type: String,
+          default: "",
+        },
+        checkedInById: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          default: null,
+        },
       },
     ],
     coverImage: {
@@ -253,7 +290,7 @@ const eventSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
-    // ─── Creator-Scope RBAC Fields ───────────────────────────────────────────
+    // ─── Creator-Scope RBAC Fields ────────────────────────────────────────
     // These are stamped at creation time so access checks are instant.
     creatorRole: {
       type: String,

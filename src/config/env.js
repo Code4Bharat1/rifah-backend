@@ -28,6 +28,8 @@ export const env = {
     ORIGIN: process.env.CORS_ORIGIN || "http://localhost:3000",
   },
 
+  FRONTEND_URL: process.env.FRONTEND_URL || process.env.APP_URL || process.env.CORS_ORIGIN || "http://localhost:3000",
+
   RATE_LIMIT: {
     WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10),
     MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "1000", 10),

@@ -331,15 +331,66 @@ export const businessService = {
       andConditions.push({ state: stateRegex });
     }
 
-    // 6. Membership Level Filter
+    // 5.6. Region / International Filter
+    if (
+      queryParams.region &&
+      queryParams.region !== "undefined" &&
+      queryParams.region !== "null" &&
+      queryParams.region.toLowerCase() !== "all"
+    ) {
+      const reg = queryParams.region.toLowerCase().trim();
+      if (reg === "international" || reg === "global") {
+        andConditions.push({
+          $or: [
+            { region: "international" },
+            { currency: "USD" },
+            { country: { $nin: ["India", "india", "INDIA", "", null] } },
+            { state: { $in: ["International", "international"] } },
+          ],
+        });
+      } else if (reg === "national" || reg === "india" || reg === "domestic") {
+        andConditions.push({
+          $or: [
+            { region: "national" },
+            { region: { $exists: false } },
+            { country: { $in: ["India", "india", "INDIA", "", null] } },
+          ],
+        });
+      }
+    }
+
+    // 5.7. Country Filter
+    if (
+      queryParams.country &&
+      queryParams.country !== "undefined" &&
+      queryParams.country !== "null" &&
+      queryParams.country.toLowerCase() !== "all"
+    ) {
+      const countryRegex = new RegExp(`^${escapeRegex(queryParams.country.trim())}$`, "i");
+      andConditions.push({
+        $or: [
+          { country: countryRegex },
+          { state: countryRegex },
+        ],
+      });
+    }
+
+    // 6. Membership Level Filter (Supports Silver, Gold, Platinum, Diamond, Free & legacy aliases)
     if (
       queryParams.membership &&
       queryParams.membership !== "undefined" &&
       queryParams.membership !== "null" &&
       queryParams.membership.toLowerCase() !== "all"
     ) {
-      const memRegex = new RegExp(`^${escapeRegex(queryParams.membership.trim())}`, "i");
-      andConditions.push({ membership: memRegex });
+      const memTarget = queryParams.membership.trim().toLowerCase();
+      const regexList = [new RegExp(`^${escapeRegex(memTarget)}`, "i")];
+      if (memTarget === "silver") regexList.push(/^basic/i);
+      if (memTarget === "gold") regexList.push(/^premium/i);
+      if (memTarget === "diamond") regexList.push(/^enterprise/i);
+
+      andConditions.push({
+        $or: regexList.map((r) => ({ membership: r })),
+      });
     }
 
     // 7. Verification Status Filter

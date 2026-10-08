@@ -1245,12 +1245,15 @@ RIFAH Chamber of Commerce & Industry
   /**
    * Sends Event Registration / RSVP confirmation email
    */
-  sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType, isPaid, ticketPrice, paymentId, transactionId, invoiceNumber, chapter, meetingLink }) => {
+  sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType, ticketId, verificationUrl, isPaid, ticketPrice, paymentId, transactionId, invoiceNumber, chapter, meetingLink }) => {
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
     const subject = isPaid
       ? `🎟️ Payment & Registration Confirmed: ${eventTitle}`
       : `🎟️ Event Registration Confirmed: ${eventTitle}`;
+
+    const frontendBaseUrl = env.FRONTEND_URL || "https://rifah.nexcorealliance.com";
+    const passUrl = verificationUrl || (ticketId ? `${frontendBaseUrl}/verify/ticket/${ticketId}` : `${frontendBaseUrl}/events`);
 
     const paymentSection = isPaid ? `
           <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; margin: 20px 0;">
@@ -1297,6 +1300,7 @@ RIFAH Chamber of Commerce & Industry
           <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
             <h3 style="margin: 0 0 12px 0; color: #0f172a; font-size: 16px;">${eventTitle}</h3>
             <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #475569;">
+              ${ticketId ? `<tr><td style="padding: 4px 0;"><strong>Ticket ID:</strong></td><td style="text-align: right; font-weight: 800; font-family: monospace; color: #0088d1;">${ticketId}</td></tr>` : ""}
               <tr><td style="padding: 4px 0;"><strong>Date & Time:</strong></td><td style="text-align: right; font-weight: bold; color: #0f172a;">${eventDate || "Upcoming Event"}</td></tr>
               <tr><td style="padding: 4px 0;"><strong>Venue / Location:</strong></td><td style="text-align: right; color: #0f172a;">${location || "Chamber Hall"}</td></tr>
               ${chapter ? `<tr><td style="padding: 4px 0;"><strong>Chapter:</strong></td><td style="text-align: right; color: #0f172a;">${chapter}</td></tr>` : ""}
@@ -1313,8 +1317,9 @@ RIFAH Chamber of Commerce & Industry
           </div>
           ` : ""}
 
-          <div style="margin-top: 24px;">
-            <a href="http://localhost:3000/events" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Event Details →</a>
+          <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
+            <a href="${passUrl}" style="background-color: #059669; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Digital Entry Pass →</a>
+            <a href="${frontendBaseUrl}/events" style="background-color: #0284c7; color: #ffffff; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Event Details</a>
           </div>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
           <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Events Desk</p>

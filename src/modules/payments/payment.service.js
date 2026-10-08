@@ -387,6 +387,7 @@ export const paymentService = {
       status: "Paid",
       transactionId: razorpay_payment_id,
       paidAt: new Date(),
+      verificationToken: crypto.randomBytes(24).toString("hex"),
     });
 
     // Compute GST breakdown for receipt
@@ -703,6 +704,7 @@ export const paymentService = {
       transactionId: `TXN-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
       status: "Paid",
       paidAt: new Date(),
+      verificationToken: crypto.randomBytes(24).toString("hex"),
     });
 
     // Keep invoice totals tied to the same editable plan record used for checkout.
@@ -916,6 +918,11 @@ export const paymentService = {
 
     if (!payment) {
       throw new NotFoundError("Invoice not found");
+    }
+
+    if (!payment.verificationToken) {
+      payment.verificationToken = crypto.randomBytes(24).toString("hex");
+      await payment.save();
     }
 
     if (user && user.role === ROLES.CHAPTER_ADMIN && user.chapter) {

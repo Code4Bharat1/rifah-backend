@@ -11,8 +11,15 @@ import {
 import { validateObjectIdParam } from "../../shared/validators/object-id.validation.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { requireEventRoleOrAdmin } from "../../middleware/event-role.middleware.js";
+import { verificationRateLimitMiddleware } from "../../middleware/rate-limit.middleware.js";
 
 const router = Router();
+
+// Secure Event Ticket QR Verification & Staff Check-in Routes (Must precede /:identifier)
+router.get("/tickets/verify/:ticketId", verificationRateLimitMiddleware, eventController.verifyTicket);
+router.post("/tickets/check-in/:ticketId", optionalAuthMiddleware, eventController.checkInTicket);
+router.get("/tickets/:ticketId/pass", eventController.getTicketPass);
+router.patch("/tickets/:ticketId/status", authMiddleware, requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN), eventController.updateTicketStatus);
 
 // Google Meet Integration routes (Must be declared before /:identifier)
 router.post(

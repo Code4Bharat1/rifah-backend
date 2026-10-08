@@ -21,6 +21,14 @@ router.post(
 router.get("/me", authMiddleware, paymentController.getMyPayments);
 router.get("/my", authMiddleware, paymentController.getMyPayments);
 router.get("/invoice/:identifier", authMiddleware, paymentController.getInvoice);
+router.get("/verify/:invoiceNumber", (req, res, next) => {
+  // Delegate directly to invoiceService.verifyInvoice
+  import("../invoices/invoice.service.js").then(({ invoiceService }) => {
+    invoiceService.verifyInvoice(req.params.invoiceNumber, req.query.token).then((result) => {
+      res.json({ success: true, data: result });
+    }).catch(next);
+  }).catch(next);
+});
 
 // Admin all transactions ledger
 router.get(

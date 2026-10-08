@@ -425,4 +425,59 @@ export const eventController = {
       return res.status(500).send(`<h3>Failed to exchange code:</h3><pre>${err.message}</pre>`);
     }
   }),
+
+  /**
+   * Public Event Ticket QR Verification
+   * GET /api/v1/events/tickets/verify/:ticketId?token=...
+   */
+  verifyTicket: asyncHandler(async (req, res) => {
+    const { ticketId } = req.params;
+    const { token } = req.query;
+
+    const result = await eventService.verifyTicket(ticketId, token);
+    return ApiResponse.success(res, result, result.verified ? "Ticket verified successfully" : "Verification completed");
+  }),
+
+  /**
+   * Staff / Admin Event Check-in
+   * POST /api/v1/events/tickets/check-in/:ticketId
+   */
+  checkInTicket: asyncHandler(async (req, res) => {
+    const { ticketId } = req.params;
+    const { checkedInBy } = req.body;
+
+    const result = await eventService.checkInTicket(ticketId, checkedInBy, req.user);
+    if (result.alreadyCheckedIn) {
+      return res.status(409).json({
+        success: false,
+        data: result,
+        message: result.message,
+      });
+    }
+    return ApiResponse.success(res, result, result.message);
+  }),
+
+  /**
+   * Digital Pass Retrieval
+   * GET /api/v1/events/tickets/:ticketId/pass
+   */
+  getTicketPass: asyncHandler(async (req, res) => {
+    const { ticketId } = req.params;
+    const { token } = req.query;
+
+    const result = await eventService.getTicketPass(ticketId, token);
+    return ApiResponse.success(res, result, "Digital pass retrieved successfully");
+  }),
+
+  /**
+   * Admin Ticket Status Management (Cancel / Refund)
+   * PATCH /api/v1/events/tickets/:ticketId/status
+   */
+  updateTicketStatus: asyncHandler(async (req, res) => {
+    const { ticketId } = req.params;
+    const { status, reason } = req.body;
+
+    const result = await eventService.updateTicketStatus(ticketId, status, reason, req.user?._id);
+    return ApiResponse.success(res, result, result.message);
+  }),
 };

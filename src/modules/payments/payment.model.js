@@ -99,6 +99,29 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    verificationToken: {
+      type: String,
+      index: true,
+      default: null,
+    },
+    isRevoked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    revokedAt: {
+      type: Date,
+      default: null,
+    },
+    revokedReason: {
+      type: String,
+      default: "",
+    },
+    revokedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true }
 );

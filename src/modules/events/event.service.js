@@ -1,7 +1,9 @@
 import mongoose from "mongoose";
+import crypto from "crypto";
 import cron from "node-cron";
 import { Event } from "./event.model.js";
 import { User } from "../users/user.model.js";
+import { env } from "../../config/env.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
@@ -531,6 +533,12 @@ export const eventService = {
     const baseAmount = Number(paymentData?.baseAmount || (amountPaid > 0 ? Math.round(amountPaid / 1.18) : 0));
     const gstAmount = Number(paymentData?.gstAmount || (amountPaid > 0 ? (amountPaid - baseAmount) : 0));
 
+    const ticketId = `RIFAH-EVT-${new Date().getFullYear()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+    const verificationToken = crypto.randomBytes(24).toString("hex");
+    const ticketType = event.isPaid ? (attendeeRole === "member" ? "Member Pass" : "General Pass") : "Member Pass";
+    const frontendBaseUrl = env.FRONTEND_URL || "https://rifah.nexcorealliance.com";
+    const verificationUrl = `${frontendBaseUrl}/verify/ticket/${ticketId}?token=${verificationToken}`;
+
     const updatedEvent = await Event.findByIdAndUpdate(
       eventId,
       {
@@ -545,7 +553,14 @@ export const eventService = {
             baseAmount: baseAmount,
             gstAmount: gstAmount,
             paymentId: paymentData?.paymentId,
-            transactionId: paymentData?.transactionId
+            transactionId: paymentData?.transactionId,
+            ticketId,
+            ticketType,
+            ticketStatus: "Confirmed",
+            verificationToken,
+            checkedIn: false,
+            checkedInAt: null,
+            checkedInBy: "",
           } 
         },
         $inc: { registeredCount: 1 },
@@ -564,7 +579,9 @@ export const eventService = {
             eventTitle: updatedEvent.title,
             eventDate: updatedEvent.date || "Upcoming Chamber Event",
             location: updatedEvent.venue || updatedEvent.location || "Chamber Main Hall",
-            ticketType: event.isPaid ? `Paid Pass (₹${event.ticketPrice})` : "Member Pass",
+            ticketType,
+            ticketId,
+            verificationUrl,
             isPaid: event.isPaid,
             ticketPrice: event.ticketPrice,
             paymentId: paymentData?.paymentId || null,
@@ -1522,5 +1539,295 @@ export const eventService = {
 
     await event.save();
     return { attendeeId: entry._id, gateStatus: entry.gateStatus, attendanceStatus: entry.attendanceStatus };
+  },
+
+  /**
+   * Public Secure Verification for an Event Ticket / Digital Entry Pass
+   */
+  verifyTicket: async (ticketId, token = null) => {
+    if (!ticketId || typeof ticketId !== "string") {
+      return {
+        verified: false,
+        error: "INVALID_REQUEST",
+        message: "Ticket ID is required for verification.",
+      };
+    }
+
+    const cleanTicketId = ticketId.trim();
+
+    // Find the event containing this ticketId or registration _id
+    const event = await Event.findOne({
+      $or: [
+        { "registeredUsers.ticketId": { $regex: new RegExp(`^${cleanTicketId}$`, "i") } },
+        ...(cleanTicketId.match(/^[0-9a-fA-F]{24}$/) ? [{ "registeredUsers._id": cleanTicketId }] : []),
+      ],
+    }).populate("registeredUsers.user", "name email phone company businessName chapter state profilePhoto");
+
+    if (!event) {
+      return {
+        verified: false,
+        error: "TICKET_NOT_FOUND",
+        message: "This QR code does not correspond to a valid RIFAH event ticket.",
+      };
+    }
+
+    const reg = (event.registeredUsers || []).find(
+      (r) =>
+        (r.ticketId && r.ticketId.toLowerCase() === cleanTicketId.toLowerCase()) ||
+        String(r._id) === cleanTicketId
+    );
+
+    if (!reg) {
+      return {
+        verified: false,
+        error: "TICKET_NOT_FOUND",
+        message: "This QR code does not correspond to a valid RIFAH event ticket.",
+      };
+    }
+
+    // Auto-generate ticketId & verificationToken if legacy record
+    let needsSave = false;
+    if (!reg.ticketId) {
+      reg.ticketId = `RIFAH-EVT-${new Date().getFullYear()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+      needsSave = true;
+    }
+    if (!reg.verificationToken) {
+      reg.verificationToken = crypto.randomBytes(24).toString("hex");
+      needsSave = true;
+    }
+    if (needsSave) {
+      await event.save();
+    }
+
+    // Validate secure token if provided
+    if (token && token.trim()) {
+      if (reg.verificationToken !== token.trim()) {
+        return {
+          verified: false,
+          error: "INVALID_TOKEN",
+          message: "The verification token is invalid or does not match this event ticket.",
+        };
+      }
+    }
+
+    // Check cancellation
+    if (reg.ticketStatus === "Cancelled" || reg.status === "Cancelled") {
+      return {
+        verified: false,
+        status: "CANCELLED",
+        ticketId: reg.ticketId,
+        eventTitle: event.title,
+        message: "This ticket has been cancelled.",
+      };
+    }
+
+    // Check refund
+    if (reg.ticketStatus === "Refunded") {
+      return {
+        verified: false,
+        status: "REFUNDED",
+        ticketId: reg.ticketId,
+        eventTitle: event.title,
+        message: "This event registration has been refunded.",
+      };
+    }
+
+    // Check unpaid state
+    if (event.isPaid && reg.paymentStatus !== "Paid" && reg.paymentStatus !== "Free") {
+      return {
+        verified: false,
+        status: "UNPAID",
+        ticketId: reg.ticketId,
+        eventTitle: event.title,
+        message: "Payment has not been completed for this event pass.",
+      };
+    }
+
+    // Check expiration
+    let isExpired = false;
+    if (event.date) {
+      try {
+        const evtDate = new Date(event.date);
+        if (!isNaN(evtDate.getTime()) && Date.now() - evtDate.getTime() > 24 * 60 * 60 * 1000) {
+          isExpired = true;
+        }
+      } catch (_) {}
+    }
+
+    const attendeeUser = reg.user;
+    const attendeeName = attendeeUser?.name || "Registered Attendee";
+    const attendeeEmail = attendeeUser?.email || "";
+    const attendeeCompany = attendeeUser?.company || attendeeUser?.businessName || "";
+    const attendeePhone = attendeeUser?.phone || "";
+
+    const isCheckedIn = Boolean(reg.checkedIn || reg.attendanceStatus === "Present");
+
+    return {
+      verified: true,
+      ticketId: reg.ticketId,
+      attendeeName,
+      attendeeEmail,
+      attendeeCompany,
+      attendeePhone,
+      eventTitle: event.title,
+      eventId: event._id,
+      eventDate: event.date,
+      eventTime: event.time,
+      eventVenue: event.venue,
+      eventCity: event.city || "All Cities",
+      eventChapter: event.chapter,
+      ticketType: reg.ticketType || (event.isPaid ? "Paid Pass" : "Member Pass"),
+      registrationStatus: reg.status || "Confirmed",
+      paymentStatus: reg.paymentStatus || (event.isPaid ? "Paid" : "Free"),
+      amountPaid: reg.amountPaid || (event.isPaid ? event.ticketPrice : 0),
+      checkedIn: isCheckedIn,
+      checkedInAt: reg.checkedInAt || (isCheckedIn ? reg.gateApprovedAt || null : null),
+      checkedInBy: reg.checkedInBy || (isCheckedIn ? "Event Staff" : ""),
+      isExpired,
+      issuedBy: "RIFAH Chamber of Commerce & Industry",
+    };
+  },
+
+  /**
+   * Staff / Admin Event Check-in
+   * Strictly prevents duplicate check-ins!
+   */
+  checkInTicket: async (ticketId, staffName = "Event Staff", staffUser = null) => {
+    if (!ticketId || typeof ticketId !== "string") {
+      throw new BadRequestError("Ticket ID is required.");
+    }
+
+    const cleanTicketId = ticketId.trim();
+
+    const event = await Event.findOne({
+      $or: [
+        { "registeredUsers.ticketId": { $regex: new RegExp(`^${cleanTicketId}$`, "i") } },
+        ...(cleanTicketId.match(/^[0-9a-fA-F]{24}$/) ? [{ "registeredUsers._id": cleanTicketId }] : []),
+      ],
+    }).populate("registeredUsers.user", "name email phone company businessName chapter state");
+
+    if (!event) {
+      throw new NotFoundError("Ticket not found.");
+    }
+
+    const reg = (event.registeredUsers || []).find(
+      (r) =>
+        (r.ticketId && r.ticketId.toLowerCase() === cleanTicketId.toLowerCase()) ||
+        String(r._id) === cleanTicketId
+    );
+
+    if (!reg) {
+      throw new NotFoundError("Registration not found for this ticket.");
+    }
+
+    if (reg.ticketStatus === "Cancelled" || reg.status === "Cancelled") {
+      throw new BadRequestError("This ticket has been cancelled and cannot be checked in.");
+    }
+
+    if (reg.ticketStatus === "Refunded") {
+      throw new BadRequestError("This ticket was refunded and cannot be checked in.");
+    }
+
+    // DUPLICATE CHECK-IN PREVENTION
+    if (reg.checkedIn || reg.attendanceStatus === "Present") {
+      const checkinDate = reg.checkedInAt || reg.gateApprovedAt || new Date();
+      const formattedTime = new Date(checkinDate).toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      return {
+        alreadyCheckedIn: true,
+        success: false,
+        ticketId: reg.ticketId,
+        attendeeName: reg.user?.name || "Attendee",
+        eventTitle: event.title,
+        checkedInAt: formattedTime,
+        checkedInBy: reg.checkedInBy || "Event Staff",
+        message: `ALREADY CHECKED IN at ${formattedTime} by ${reg.checkedInBy || "Event Staff"}. Duplicate check-ins are not allowed.`,
+      };
+    }
+
+    // Perform Check-in
+    const now = new Date();
+    const performer = staffUser?.name || staffName || "Event Staff";
+
+    reg.checkedIn = true;
+    reg.checkedInAt = now;
+    reg.checkedInBy = performer;
+    reg.checkedInById = staffUser?._id || null;
+    reg.attendanceStatus = "Present";
+    reg.gateStatus = "approved";
+    reg.gateApprovedAt = now;
+
+    await event.save();
+
+    const formattedTime = now.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return {
+      alreadyCheckedIn: false,
+      success: true,
+      verified: true,
+      ticketId: reg.ticketId,
+      attendeeName: reg.user?.name || "Attendee",
+      eventTitle: event.title,
+      checkedInAt: formattedTime,
+      checkedInBy: performer,
+      message: "✓ Attendee successfully marked as checked in.",
+    };
+  },
+
+  /**
+   * Digital Pass Retrieval for Attendee Wallet / Mobile View
+   */
+  getTicketPass: async (ticketId, token = null) => {
+    return eventService.verifyTicket(ticketId, token);
+  },
+
+  /**
+   * Admin Update Ticket Status (Cancel / Refund / Re-activate)
+   */
+  updateTicketStatus: async (ticketId, newStatus, reason = "", adminUserId = null) => {
+    if (!ticketId) throw new BadRequestError("Ticket ID is required.");
+    const cleanTicketId = ticketId.trim();
+
+    const event = await Event.findOne({
+      $or: [
+        { "registeredUsers.ticketId": { $regex: new RegExp(`^${cleanTicketId}$`, "i") } },
+        ...(cleanTicketId.match(/^[0-9a-fA-F]{24}$/) ? [{ "registeredUsers._id": cleanTicketId }] : []),
+      ],
+    });
+
+    if (!event) throw new NotFoundError("Ticket not found.");
+
+    const reg = (event.registeredUsers || []).find(
+      (r) =>
+        (r.ticketId && r.ticketId.toLowerCase() === cleanTicketId.toLowerCase()) ||
+        String(r._id) === cleanTicketId
+    );
+
+    if (!reg) throw new NotFoundError("Registration not found for this ticket.");
+
+    reg.ticketStatus = newStatus;
+    if (newStatus === "Cancelled") {
+      reg.status = "Cancelled";
+    }
+    await event.save();
+
+    return {
+      success: true,
+      ticketId: reg.ticketId,
+      ticketStatus: reg.ticketStatus,
+      message: `Ticket status successfully updated to ${newStatus}.`,
+    };
   },
 };
