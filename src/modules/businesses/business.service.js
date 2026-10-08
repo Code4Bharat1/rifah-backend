@@ -244,6 +244,9 @@ export const businessService = {
         $or: [
           { name: searchRegex },
           { contactPerson: searchRegex },
+          { country: searchRegex },
+          { city: searchRegex },
+          { state: searchRegex },
           ...(matchedOwnerIds.length > 0 ? [{ owner: { $in: matchedOwnerIds } }] : []),
           ...(catalogueBizIds.length > 0 ? [{ _id: { $in: catalogueBizIds } }] : []),
           ...(textMatchedBizIds.length > 0 ? [{ _id: { $in: textMatchedBizIds } }] : []),
@@ -333,6 +336,7 @@ export const businessService = {
 
     // 5.6. Region / International Filter
     if (
+      !searchTerm && // Bypass region filter if user is actively searching by keyword
       queryParams.region &&
       queryParams.region !== "undefined" &&
       queryParams.region !== "null" &&
