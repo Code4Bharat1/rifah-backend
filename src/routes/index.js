@@ -38,6 +38,7 @@ import { fileRoutes } from "../modules/files/file.routes.js";
 import { galleryRoutes } from "../modules/gallery/gallery.routes.js";
 import { copilotRoutes } from "../modules/copilot/copilot.routes.js";
 import { advertisementRoutes } from "../modules/advertisements/advertisement.routes.js";
+import { ticketRoutes } from "../modules/tickets/ticket.routes.js";
 
 const apiRouter = Router();
 
@@ -83,6 +84,7 @@ apiRouter.use("/posts", postRoutes);
 apiRouter.use("/gallery", galleryRoutes);
 apiRouter.use("/copilot", copilotRoutes);
 apiRouter.use("/advertisements", advertisementRoutes);
+apiRouter.use("/tickets", ticketRoutes);
 
 export { apiRouter };
 export default apiRouter;

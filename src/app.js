@@ -16,6 +16,7 @@ import { notFoundMiddleware } from "./middleware/not-found.middleware.js";
 import fs from "fs";
 import { apiRouter } from "./routes/index.js";
 import { healthRoutes } from "./routes/health.routes.js";
+import { fileRoutes } from "./modules/files/file.routes.js";
 import { quotationHelper } from "./modules/leads/quotation.helper.js";
 import { pdfService } from "./infrastructure/pdf/pdf.service.js";
 
@@ -233,6 +234,9 @@ app.use(
 
 // Health check endpoint (root level)
 app.use("/health", healthRoutes);
+
+// Direct file access endpoints (/files, /api/files)
+app.use(["/files", "/api/files"], fileRoutes);
 
 // Mount API v1 Routes
 app.use(env.API_PREFIX, apiRouter);
