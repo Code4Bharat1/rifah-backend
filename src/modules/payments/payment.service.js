@@ -391,12 +391,21 @@ export const paymentService = {
 
     // Compute GST breakdown for receipt
     const baseAmount = payment.amount;
-    const gstRate = planCharge?.gstRate ?? 0;
-    const computedGst = planCharge?.gstAmount ?? 0;
-    const totalWithGst = planCharge?.totalAmount ?? baseAmount;
+    const isEventItem = Boolean(payload.eventId || itemType === "Event Pass");
+    const gstRate = planCharge?.gstRate ?? (isEventItem ? 18 : 0);
+    const computedGst = planCharge?.gstAmount ?? (
+      isEventItem
+        ? (payload.gstAmount ? Number(payload.gstAmount) : Math.round(Number(amount) - (payload.baseAmount ? Number(payload.baseAmount) : Math.round(Number(amount) / 1.18))))
+        : 0
+    );
+    const totalWithGst = planCharge?.totalAmount ?? (
+      isEventItem
+        ? Number(amount)
+        : baseAmount
+    );
     const planDurationYears = Number(membershipPlan?.durationYears) || 1;
-    if (computedGst > 0 || planDurationYears > 1) {
-      payment.subtotal = baseAmount;
+    if (computedGst > 0 || planDurationYears > 1 || isEventItem) {
+      payment.subtotal = payload.baseAmount ? Number(payload.baseAmount) : (totalWithGst - computedGst);
       payment.gstRate = gstRate;
       payment.gstAmount = computedGst;
       payment.amount = totalWithGst;

@@ -372,6 +372,70 @@ export const verificationService = {
   },
 
   /**
+   * Update remarks / audit notes against uploaded documents
+   */
+  updateRemarks: async (verificationId, remarks, reviewer) => {
+    const verification = await Verification.findById(verificationId);
+    if (!verification) {
+      throw new NotFoundError("Verification request not found");
+    }
+
+    const business = await Business.findById(verification.business);
+
+    if (!reviewer || ![ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(reviewer.role)) {
+      throw new ForbiddenError("You are not authorized to review verifications.");
+    }
+
+    if (reviewer.role === ROLES.STATE_ADMIN && reviewer.state) {
+      const stateRegex = new RegExp(`^${reviewer.state.trim()}$`, "i");
+      if (business && (!stateRegex.test(business.state || "") && !stateRegex.test(business.chapter || ""))) {
+        throw new ForbiddenError("You are not authorized to update verifications outside your state.");
+      }
+    }
+
+    if (reviewer.role === ROLES.CHAPTER_ADMIN) {
+      const cleanAdminChapter = (reviewer.chapter || "").replace(/\b(chapter|chamber)\b/gi, "").trim().toLowerCase();
+      const cleanBizChapter = (business?.chapter || "").replace(/\b(chapter|chamber)\b/gi, "").trim().toLowerCase();
+      const adminChapterId = reviewer.chapterId ? String(reviewer.chapterId) : "";
+      const bizChapterId = business?.chapterId ? String(business.chapterId) : "";
+
+      const idsMatch = Boolean(adminChapterId && bizChapterId && adminChapterId === bizChapterId);
+      const namesMatch = Boolean(
+        cleanAdminChapter &&
+        cleanBizChapter &&
+        (cleanAdminChapter === cleanBizChapter ||
+          cleanAdminChapter.includes(cleanBizChapter) ||
+          cleanBizChapter.includes(cleanAdminChapter))
+      );
+
+      if (!idsMatch && !namesMatch) {
+        throw new ForbiddenError("You are not authorized to update remarks for this chapter.");
+      }
+    }
+
+    const finalRemarks = String(remarks || "").trim();
+    verification.remarks = finalRemarks;
+    await verification.save();
+
+    if (business) {
+      business.verificationRemarks = finalRemarks;
+      business.verificationReviewReason = finalRemarks;
+      if (!Array.isArray(business.verificationHistory)) {
+        business.verificationHistory = [];
+      }
+      business.verificationHistory.push({
+        action: "remark_updated",
+        reason: finalRemarks,
+        reviewer: reviewer.id || reviewer,
+        createdAt: new Date(),
+      });
+      await business.save();
+    }
+
+    return verification;
+  },
+
+  /**
    * Securely resolve document path for authorized users
    */
   getSecureDocumentPath: async (filename, requester) => {

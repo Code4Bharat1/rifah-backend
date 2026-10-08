@@ -73,7 +73,7 @@ const eventSchema = new mongoose.Schema(
     chapter: {
       type: String,
       required: true,
-      default: "Mumbai Chapter",
+      trim: true,
       index: true,
     },
     mode: {
@@ -95,9 +95,48 @@ const eventSchema = new mongoose.Schema(
     },
     eventCategory: {
       type: String,
-      enum: ["Meet", "Sports"],
+      enum: [
+        "Meet",
+        "Workshop",
+        "Seminar",
+        "Delegation Tour",
+        "Sports",
+        "Other Activity",
+      ],
       default: "Meet",
       index: true,
+    },
+    industrySector: {
+      type: String,
+      enum: [
+        "Networking",
+        "Business Growth",
+        "IT & Digital Services",
+        "Finance & Taxation",
+        "Import & Export",
+        "Women Empowerment",
+        "Entrepreneurship Development Program",
+        "Start-Up",
+        "Skill Development",
+        "Delegation Tour/Visit",
+        "Government Scheme & Supports",
+        "Other",
+      ],
+      default: "Networking",
+      index: true,
+    },
+    isRegistrationClosed: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    seatsFull: {
+      type: Boolean,
+      default: false,
+    },
+    registrationClosingDate: {
+      type: Date,
+      default: null,
     },
     sportDetails: {
       sportName: { type: String, default: "" },
@@ -119,6 +158,10 @@ const eventSchema = new mongoose.Schema(
     memberPrice: {
       type: Number,
       default: 0,
+    },
+    gstRate: {
+      type: Number,
+      default: 18,
     },
 
     fee: {
@@ -168,6 +211,14 @@ const eventSchema = new mongoose.Schema(
           default: "Free",
         },
         amountPaid: {
+          type: Number,
+          default: 0,
+        },
+        baseAmount: {
+          type: Number,
+          default: 0,
+        },
+        gstAmount: {
           type: Number,
           default: 0,
         },

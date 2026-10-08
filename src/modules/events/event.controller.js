@@ -51,11 +51,17 @@ export const eventController = {
 
   registerPaidForEvent: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { paymentId, transactionId, amount } = req.body;
+    const { paymentId, transactionId, amount, baseAmount, gstAmount } = req.body;
     if (!paymentId) {
       return ApiResponse.error(res, "Payment details are required for paid events", 400);
     }
-    const event = await eventService.registerUserForEvent(id, req.user.id, { paymentId, transactionId, amount });
+    const event = await eventService.registerUserForEvent(id, req.user.id, { 
+      paymentId, 
+      transactionId, 
+      amount, 
+      baseAmount, 
+      gstAmount 
+    });
     return ApiResponse.success(res, event, "Paid registration for event successful");
   }),
 

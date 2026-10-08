@@ -411,9 +411,17 @@ export const eventService = {
       if (user.role === ROLES.CHAPTER_ADMIN) {
         // Chapter admin events: visible only within their chapter
         data.visibilityScope = "chapter";
-        data.chapter         = user.chapter;
-        data.targetChapters  = [user.chapter];
+        data.chapter         = (user.chapter || data.chapter || "").trim();
+        data.targetChapters  = [data.chapter];
         if (user.state) data.targetStates = [user.state];
+
+        // Ensure city is correctly set to chapter admin's city instead of default
+        if (!data.city || data.city === "All Cities" || data.city === "Mumbai") {
+          const derivedCity = user.city || (user.chapter ? user.chapter.replace(/\s*[Cc]hapter\s*/gi, "").trim() : "");
+          if (derivedCity) {
+            data.city = derivedCity;
+          }
+        }
 
         // We are removing the PENDING_APPROVAL requirement as per user request 
         // to show Chapter Admin events immediately in the public 'All' list.
@@ -443,6 +451,7 @@ export const eventService = {
     data.isPaid      = isPaid;
     data.ticketPrice = ticketPrice;
     data.fee         = fee;
+    data.gstRate     = 18;
 
     const event = await Event.create({ ...data, slug });
 
@@ -481,6 +490,14 @@ export const eventService = {
       throw new BadRequestError("You are already registered for this event");
     }
 
+    if (event.isRegistrationClosed || event.seatsFull) {
+      throw new BadRequestError("Registrations are closed / seats are full for this event");
+    }
+
+    if (event.registrationClosingDate && new Date() > new Date(event.registrationClosingDate)) {
+      throw new BadRequestError("Registrations for this event have closed");
+    }
+
     if (event.totalSeats > 0 && event.registeredCount >= event.totalSeats) {
       throw new BadRequestError("Event capacity has been reached");
     }
@@ -510,6 +527,10 @@ export const eventService = {
       }
     }
 
+    const amountPaid = Number(paymentData?.amount || 0);
+    const baseAmount = Number(paymentData?.baseAmount || (amountPaid > 0 ? Math.round(amountPaid / 1.18) : 0));
+    const gstAmount = Number(paymentData?.gstAmount || (amountPaid > 0 ? (amountPaid - baseAmount) : 0));
+
     const updatedEvent = await Event.findByIdAndUpdate(
       eventId,
       {
@@ -520,7 +541,9 @@ export const eventService = {
             role: attendeeRole,
             status: "Confirmed",
             paymentStatus: paymentStatus,
-            amountPaid: paymentData?.amount || 0,
+            amountPaid: amountPaid,
+            baseAmount: baseAmount,
+            gstAmount: gstAmount,
             paymentId: paymentData?.paymentId,
             transactionId: paymentData?.transactionId
           } 

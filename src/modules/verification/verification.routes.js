@@ -59,6 +59,14 @@ router.patch(
   verificationController.reviewVerification
 );
 
+router.patch(
+  "/:id/remarks",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  verificationController.updateRemarks
+);
+
 router.delete(
   "/:id",
   authMiddleware,

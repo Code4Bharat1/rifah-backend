@@ -89,6 +89,23 @@ export const verificationController = {
     return ApiResponse.success(res, reviewed, "Verification status updated successfully");
   }),
 
+  updateRemarks: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const remarks = req.body.remarks || req.body.notes || "";
+    const updated = await verificationService.updateRemarks(id, remarks, req.user);
+
+    await auditService.logAction({
+      actor: req.user,
+      action: "UPDATE",
+      targetModel: "Verification",
+      targetId: id,
+      summary: `Updated remarks on verification documents for ${updated.business?.name || "business"}`,
+      ipAddress: req.ip,
+    });
+
+    return ApiResponse.success(res, updated, "Verification remarks updated successfully");
+  }),
+
   downloadDocument: asyncHandler(async (req, res) => {
     const { filename } = req.params;
     const documentPath = await verificationService.getSecureDocumentPath(filename, req.user);
