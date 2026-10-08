@@ -9,7 +9,7 @@ export const ENUMS = Object.freeze({
     "Trust / NGO",
   ],
   CATALOGUE_TYPES: ["Product", "Service"],
-  EVENT_MODES: ["In-person", "Online", "Hybrid"],
+  EVENT_MODES: ["Offline", "Online", "Hybrid"],
   NOTIFICATION_TYPES: [
     "Lead",
     "Enquiry",

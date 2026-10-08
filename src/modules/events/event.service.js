@@ -508,6 +508,31 @@ export const eventService = {
       throw new BadRequestError("Payment is required for this event");
     }
 
+    if (event.registrationAccess && event.registrationAccess !== "All") {
+      const access = event.registrationAccess;
+      const BusinessModel = mongoose.model("Business");
+      const business = await BusinessModel.findOne({ owner: userId });
+
+      if (access === "Registered Businesses Only" && !business) {
+        throw new BadRequestError("Only registered businesses can register for this event");
+      }
+      
+      const isVerified = business && (business.verification === "verified" || business.verification === "Verified");
+      if (access === "Paid Members Only" && !isVerified) {
+        throw new BadRequestError("Only verified/paid members can register for this event");
+      }
+      
+      const isAdminRole = user && ["chapter_admin", "state_admin", "central_admin"].includes(user.role);
+      if (access === "Chapter Admins Only" && !isAdminRole) {
+        throw new BadRequestError("Only Chapter Admins can register for this event");
+      }
+      
+      const isStateAdminRole = user && ["state_admin", "central_admin"].includes(user.role);
+      if (access === "State Secretaries Only" && !isStateAdminRole) {
+        throw new BadRequestError("Only State Secretaries can register for this event");
+      }
+    }
+
     let paymentStatus = "Free";
     let paymentId = null;
 

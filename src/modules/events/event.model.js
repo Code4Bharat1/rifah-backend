@@ -41,8 +41,13 @@ const eventSchema = new mongoose.Schema(
     },
     targetAudience: {
       type: [String],
-      enum: ["Consumers", "Businesses", "Chapter Admins", "All"],
+      enum: ["All", "Registered Businesses Only", "Paid Members Only", "Chapter Admins Only", "State Secretaries Only"],
       default: ["All"],
+    },
+    registrationAccess: {
+      type: String,
+      enum: ["All", "Registered Businesses Only", "Paid Members Only", "Chapter Admins Only", "State Secretaries Only"],
+      default: "All",
     },
     targetStates: {
       type: [String],
@@ -79,7 +84,7 @@ const eventSchema = new mongoose.Schema(
     mode: {
       type: String,
       enum: ENUMS.EVENT_MODES,
-      default: "In-person",
+      default: "Offline",
     },
     totalSeats: {
       type: Number,
