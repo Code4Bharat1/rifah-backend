@@ -8,7 +8,7 @@ export const reviewController = {
     return ApiResponse.created(
       res,
       review,
-      "Review submitted successfully and sent for moderation"
+      "Review published successfully"
     );
   }),
 
@@ -20,7 +20,7 @@ export const reviewController = {
 
   listReviewsForAdmin: asyncHandler(async (req, res) => {
     const { reviews, meta } = await reviewService.listReviewsForAdmin(req.query);
-    return ApiResponse.success(res, reviews, "Reviews retrieved for moderation", 200, meta);
+    return ApiResponse.success(res, reviews, "Reviews retrieved", 200, meta);
   }),
 
   moderateReview: asyncHandler(async (req, res) => {
@@ -31,7 +31,7 @@ export const reviewController = {
 
   deleteReview: asyncHandler(async (req, res) => {
     const { id } = req.params;
-    await reviewService.deleteReview(id);
+    await reviewService.deleteReview(id, req.user);
     return ApiResponse.success(res, null, "Review deleted successfully");
   }),
 

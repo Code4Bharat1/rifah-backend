@@ -1,14 +1,9 @@
 import { Router } from "express";
 import { reviewController } from "./review.controller.js";
-import { authMiddleware, optionalAuthMiddleware } from "../../middleware/auth.middleware.js";
-import { requireRole } from "../../middleware/role.middleware.js";
+import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
-import {
-  validateSubmitReview,
-  validateModerateReview,
-} from "./review.validation.js";
+import { validateSubmitReview } from "./review.validation.js";
 import { validateObjectIdParam } from "../../shared/validators/object-id.validation.js";
-import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
@@ -19,7 +14,7 @@ router.get(
   reviewController.listBusinessReviews
 );
 
-// Authenticated: Submit review (Only logged in users can submit review)
+// Authenticated: Submit review (Direct display, auto-published)
 router.post(
   "/",
   authMiddleware,
@@ -27,34 +22,10 @@ router.post(
   reviewController.submitReview
 );
 
-// Admin: Moderate reviews
-router.get(
-  "/admin/all",
-  authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
-  reviewController.listReviewsForAdmin
-);
-
-router.patch(
-  "/:id/moderate",
-  authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
-  validateObjectIdParam("id"),
-  validateRequest(validateModerateReview),
-  reviewController.moderateReview
-);
-
-router.delete(
-  "/admin/all",
-  authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
-  reviewController.deleteAllReviews
-);
-
+// Authenticated: Delete review (Business Owner only - Admin has no permission)
 router.delete(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
   validateObjectIdParam("id"),
   reviewController.deleteReview
 );

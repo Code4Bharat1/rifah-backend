@@ -11,7 +11,7 @@ export const reviewService = {
   recalculateRating: async (businessId) => {
     const reviews = await Review.find({
       business: businessId,
-      status: { $in: ["approved", "published", "pending"] },
+      status: { $in: ["approved", "published"] },
     });
     const count = reviews.length;
     let avg = 0;
@@ -76,7 +76,7 @@ export const reviewService = {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {
       business: businessId,
-      status: { $in: ["approved", "published", "pending"] },
+      status: { $in: ["approved", "published"] },
     };
 
     const [reviews, total] = await Promise.all([
@@ -139,15 +139,29 @@ export const reviewService = {
   },
 
   /**
-   * Delete review (Admin)
+   * Delete review (Business Owner or Review Author - Admin has no permission)
    */
-  deleteReview: async (reviewId) => {
-    const review = await Review.findById(reviewId);
+  deleteReview: async (reviewId, user) => {
+    const review = await Review.findById(reviewId).populate("business");
     if (!review) {
       throw new NotFoundError("Review not found");
     }
 
-    const businessId = review.business;
+    const biz = review.business;
+    const actualBiz = biz?._id ? biz : await Business.findById(biz);
+    const actualOwner = actualBiz?.owner?.toString() || actualBiz?.userId?.toString();
+    const isOwner = Boolean(
+      (actualOwner && user?.id && actualOwner === user.id.toString()) ||
+      (actualBiz?.email && user?.email && actualBiz.email.toLowerCase() === user.email.toLowerCase()) ||
+      (actualBiz?.ownerEmail && user?.email && actualBiz.ownerEmail.toLowerCase() === user.email.toLowerCase())
+    );
+    const isAuthor = Boolean(review.author && user?.id && review.author.toString() === user.id.toString());
+
+    if (!isOwner && !isAuthor) {
+      throw new ForbiddenError("Only the business owner is authorized to delete reviews for their business.");
+    }
+
+    const businessId = actualBiz?._id || review.business;
     await Review.findByIdAndDelete(reviewId);
     await reviewService.recalculateRating(businessId);
 

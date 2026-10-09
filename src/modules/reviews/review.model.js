@@ -43,7 +43,7 @@ const reviewSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: Object.values(STATUSES.REVIEW),
-      default: STATUSES.REVIEW.PENDING,
+      default: STATUSES.REVIEW.APPROVED,
       index: true,
     },
     moderatedBy: {
