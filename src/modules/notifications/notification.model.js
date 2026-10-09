@@ -41,7 +41,6 @@ const notificationSchema = new mongoose.Schema(
     },
     broadcastId: {
       type: String,
-      index: true,
     },
     eventDate: {
       type: String,

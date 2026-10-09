@@ -100,7 +100,6 @@ const eventSchema = new mongoose.Schema(
     },
     eventCategory: {
       type: String,
-<<<<<<< Updated upstream
       enum: [
         "Meet",
         "Workshop",
@@ -108,8 +107,14 @@ const eventSchema = new mongoose.Schema(
         "Delegation Tour",
         "Sports",
         "Other Activity",
+        "Delegation",
       ],
       default: "Meet",
+      index: true,
+    },
+    isDelegation: {
+      type: Boolean,
+      default: false,
       index: true,
     },
     industrySector: {
@@ -132,18 +137,9 @@ const eventSchema = new mongoose.Schema(
       index: true,
     },
     isRegistrationClosed: {
-=======
-      enum: ["Meet", "Sports", "Delegation"],
-      default: "Meet",
-      index: true,
-    },
-    isDelegation: {
->>>>>>> Stashed changes
       type: Boolean,
       default: false,
-      index: true,
     },
-<<<<<<< Updated upstream
     seatsFull: {
       type: Boolean,
       default: false,
@@ -152,11 +148,12 @@ const eventSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-=======
     delegationDetails: {
       destination: { type: String, default: "" },
       country: { type: String, default: "" },
       travelDates: { type: String, default: "" },
+      travelDatesFrom: { type: String, default: "" },
+      travelDatesTo: { type: String, default: "" },
       inclusions: { type: String, default: "" },
       visaGuidelines: { type: String, default: "" },
     },
@@ -170,7 +167,6 @@ const eventSchema = new mongoose.Schema(
         notes: { type: String, default: "" },
       },
     ],
->>>>>>> Stashed changes
     sportDetails: {
       sportName: { type: String, default: "" },
       venue: { type: String, default: "" },

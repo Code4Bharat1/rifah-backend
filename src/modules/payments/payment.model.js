@@ -120,14 +120,11 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-<<<<<<< Updated upstream
     verificationToken: {
       type: String,
       index: true,
       default: null,
     },
-    isRevoked: {
-=======
     payerName: {
       type: String,
       default: "",
@@ -161,12 +158,14 @@ const paymentSchema = new mongoose.Schema(
       default: "",
     },
     isCustomInvoice: {
->>>>>>> Stashed changes
       type: Boolean,
       default: false,
       index: true,
     },
-<<<<<<< Updated upstream
+    isRevoked: {
+      type: Boolean,
+      default: false,
+    },
     revokedAt: {
       type: Date,
       default: null,
@@ -179,11 +178,10 @@ const paymentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
-=======
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
->>>>>>> Stashed changes
     },
   },
   { timestamps: true }

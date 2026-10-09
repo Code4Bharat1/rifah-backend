@@ -538,7 +538,6 @@ export const eventService = {
       throw new BadRequestError("Payment is required for this event");
     }
 
-<<<<<<< Updated upstream
     if (event.registrationAccess && event.registrationAccess !== "All") {
       const access = event.registrationAccess;
       const BusinessModel = mongoose.model("Business");
@@ -564,16 +563,6 @@ export const eventService = {
       }
     }
 
-    let paymentStatus = "Free";
-    let paymentId = null;
-
-    if (event.isPaid && paymentData) {
-      paymentStatus = "Paid";
-      paymentId = paymentData.paymentId;
-    }
-
-=======
->>>>>>> Stashed changes
     let attendeeRole = "guest";
     if (user && user.role !== "customer") {
       const BusinessModel = mongoose.model("Business");
@@ -587,7 +576,6 @@ export const eventService = {
       }
     }
 
-<<<<<<< Updated upstream
     const amountPaid = Number(paymentData?.amount || 0);
     const baseAmount = Number(paymentData?.baseAmount || (amountPaid > 0 ? Math.round(amountPaid / 1.18) : 0));
     const gstAmount = Number(paymentData?.gstAmount || (amountPaid > 0 ? (amountPaid - baseAmount) : 0));
@@ -597,7 +585,6 @@ export const eventService = {
     const ticketType = event.isPaid ? (attendeeRole === "member" ? "Member Pass" : "General Pass") : "Member Pass";
     const frontendBaseUrl = env.FRONTEND_URL || "https://rifah.nexcorealliance.com";
     const verificationUrl = `${frontendBaseUrl}/verify/ticket/${ticketId}?token=${verificationToken}`;
-=======
     let paymentStatus = "Free";
     let paymentId = null;
     let initialAmountPaid = paymentData?.amount || 0;
@@ -690,7 +677,6 @@ export const eventService = {
       paymentStatus = "Paid";
       paymentId = paymentData.paymentId;
     }
->>>>>>> Stashed changes
 
     const updatedEvent = await Event.findByIdAndUpdate(
       eventId,
@@ -702,11 +688,10 @@ export const eventService = {
             role: attendeeRole,
             status: "Confirmed",
             paymentStatus: paymentStatus,
-<<<<<<< Updated upstream
-            amountPaid: amountPaid,
+            amountPaid: amountPaid || initialAmountPaid,
             baseAmount: baseAmount,
             gstAmount: gstAmount,
-            paymentId: paymentData?.paymentId,
+            paymentId: paymentId,
             transactionId: paymentData?.transactionId,
             ticketId,
             ticketType,
@@ -715,12 +700,7 @@ export const eventService = {
             checkedIn: false,
             checkedInAt: null,
             checkedInBy: "",
-=======
-            amountPaid: initialAmountPaid,
-            paymentId: paymentId,
-            transactionId: paymentData?.transactionId,
             installments: userInstallments,
->>>>>>> Stashed changes
           } 
         },
         $inc: { registeredCount: 1 },
@@ -1737,7 +1717,6 @@ export const eventService = {
   },
 
   /**
-<<<<<<< Updated upstream
    * Public Secure Verification for an Event Ticket / Digital Entry Pass
    */
   verifyTicket: async (ticketId, token = null) => {
@@ -2025,7 +2004,9 @@ export const eventService = {
       ticketStatus: reg.ticketStatus,
       message: `Ticket status successfully updated to ${newStatus}.`,
     };
-=======
+  },
+
+  /**
    * Pay a Delegation Event Installment with 5% GST and 2% TCS, generating an invoice
    */
   async payDelegationInstallment(eventId, userId, installmentNumber, paymentData = {}) {
@@ -2289,6 +2270,5 @@ export const eventService = {
     } catch (err) {
       console.error("[EventScheduler] Error checking delegation installment reminders:", err);
     }
->>>>>>> Stashed changes
   },
 };
