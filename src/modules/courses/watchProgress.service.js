@@ -22,10 +22,24 @@ const getAllCourseContents = (course) => {
 /**
  * Marks a course content as watched and triggers certificate generation if complete
  */
-export const markContentWatched = async (businessId, courseId, contentId) => {
+export const markContentWatched = async (businessId, courseId, contentId, user = null) => {
   // Check if course exists and has this content
   const course = await Course.findById(courseId);
   if (!course) throw new NotFoundError("Course not found");
+
+  // Check enrollment if course is paid
+  if (course.isPaid) {
+    const userId = user?.id || user?._id;
+    const isEnrolled = Array.isArray(course.enrollments) && course.enrollments.some(e => 
+      (userId && String(e.userId) === String(userId)) || 
+      (businessId && String(e.businessId) === String(businessId))
+    );
+    const isCreator = userId && String(course.createdBy?._id || course.createdBy) === String(userId);
+    const isCentralAdmin = user?.role === "central_admin";
+    if (!isEnrolled && !isCreator && !isCentralAdmin) {
+      throw new BadRequestError("You must enroll in this paid course before marking lessons or tracking progress");
+    }
+  }
   
   const allContents = getAllCourseContents(course);
   const content = allContents.find(c => String(c._id) === String(contentId));

@@ -93,8 +93,64 @@ const courseSchema = new mongoose.Schema(
     contents: [courseContentSchema],
     isActive: {
       type: Boolean,
-      default: true,
-    }
+      default: false, // Starts as inactive; published only after approval (for non-central) or directly by central admin
+    },
+    // ── Approval Workflow ──────────────────────────────────────────────────────
+    // Non-central-admin courses require Central Admin approval before going live.
+    // Central Admin courses are set to "not_required" and can be published directly.
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected", "not_required"],
+      default: "pending",
+      index: true,
+    },
+    approvalRemark: {
+      type: String,
+      default: "",
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    // ── Paid Course (Central Admin Only) ─────────────────────────────────────
+    // Only Central Admin can create paid courses.
+    isPaid: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    price: {
+      type: Number,
+      default: 0,
+    },
+    // Tracks businesses/users who have paid and enrolled in this course
+    enrollments: [
+      {
+        businessId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Business",
+          default: null,
+        },
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        paymentId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Payment",
+          default: null,
+        },
+        enrolledAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

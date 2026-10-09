@@ -5,6 +5,7 @@ import { Business } from "../businesses/business.model.js";
 import { User } from "../users/user.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
+import { notificationService } from "../notifications/notification.service.js";
 
 /**
  * Creates a new course
@@ -49,6 +50,42 @@ export const createCourse = async (courseData, user) => {
     }
   }
 
+  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+
+  // Paid Course & Approval Rules:
+  // Paid courses can ONLY be uploaded by Central Admin.
+  // All other courses (uploaded by Businesses, Chapter Admins, State Admins) are free and require Central Admin approval before going live.
+  let isPaid = false;
+  let price = 0;
+  let approvalStatus = "pending";
+  let isActive = false;
+  let approvedBy = null;
+  let approvedAt = null;
+
+  if (isCentralAdmin) {
+    isPaid = Boolean(courseData.isPaid);
+    if (isPaid) {
+      const parsedPrice = Number(courseData.price);
+      if (isNaN(parsedPrice) || parsedPrice <= 0) {
+        throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
+      }
+      price = Math.round(parsedPrice);
+    }
+    approvalStatus = "not_required";
+    approvedBy = user.id || user._id;
+    approvedAt = new Date();
+    isActive = Boolean(courseData.isActive === true || courseData.status === "published");
+  } else {
+    // Chapter, State, and Business admins can ONLY upload free courses
+    if (courseData.isPaid === true || Number(courseData.price) > 0) {
+      throw new ForbiddenError("Chapter and State Admins can only upload free courses. Paid courses are exclusive to Central Admin.");
+    }
+    isPaid = false;
+    price = 0;
+    approvalStatus = "pending";
+    isActive = false;
+  }
+
   const course = new Course({
     ...courseData,
     title: String(courseData.title).trim(),
@@ -60,9 +97,36 @@ export const createCourse = async (courseData, user) => {
     scope,
     state: scope === 'state' ? (user.state || user.stateId) : null,
     chapterId: scope === 'chapter' ? (user.chapterId || user.chapter) : null,
+    isPaid,
+    price,
+    approvalStatus,
+    isActive,
+    approvedBy,
+    approvedAt,
+    enrollments: [],
   });
 
-  return await course.save();
+  const saved = await course.save();
+
+  // If submitted by non-central admin, notify Central Admin for review
+  if (!isCentralAdmin) {
+    setImmediate(async () => {
+      try {
+        const centralAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id");
+        for (const admin of centralAdmins) {
+          await notificationService.createNotification({
+            recipientId: admin._id,
+            type: "System",
+            title: "New Course Submitted for Approval",
+            body: `"${saved.title}" was submitted by ${user.name || "a member"} (${scope}) and is awaiting your review.`,
+            link: "/admin/lms",
+          });
+        }
+      } catch (err) {}
+    });
+  }
+
+  return saved;
 };
 
 /**
@@ -96,7 +160,9 @@ export const updateCourse = async (courseId, courseData, user) => {
     throw new BadRequestError("Course description cannot be empty");
   }
 
+  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
   const safeData = { ...courseData };
+
   if (safeData.title !== undefined) safeData.title = String(safeData.title).trim();
   if (safeData.description !== undefined) safeData.description = String(safeData.description).trim();
   if (safeData.category !== undefined) {
@@ -113,8 +179,131 @@ export const updateCourse = async (courseId, courseData, user) => {
   delete safeData.createdBy;
   delete safeData.businessId;
 
+  if (isCentralAdmin) {
+    if (safeData.isPaid !== undefined) {
+      safeData.isPaid = Boolean(safeData.isPaid);
+      if (safeData.isPaid) {
+        const parsedPrice = Number(safeData.price ?? course.price);
+        if (isNaN(parsedPrice) || parsedPrice <= 0) {
+          throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
+        }
+        safeData.price = Math.round(parsedPrice);
+      } else {
+        safeData.price = 0;
+      }
+    } else if (course.isPaid && safeData.price !== undefined) {
+      const parsedPrice = Number(safeData.price);
+      if (isNaN(parsedPrice) || parsedPrice <= 0) {
+        throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
+      }
+      safeData.price = Math.round(parsedPrice);
+    }
+  } else {
+    // Non-central admins cannot set paid courses or price
+    if (safeData.isPaid === true || Number(safeData.price) > 0) {
+      throw new ForbiddenError("Chapter and State Admins can only upload free courses. Paid courses cannot be set.");
+    }
+    delete safeData.isPaid;
+    delete safeData.price;
+    delete safeData.approvedBy;
+    delete safeData.approvedAt;
+
+    // Non-central admins cannot make a course live unless it's already approved
+    if (safeData.isActive === true && course.approvalStatus !== "approved") {
+      safeData.isActive = false;
+      throw new BadRequestError("Course cannot go live until approved by Central Admin");
+    }
+
+    // If previously rejected and the user updates the course, resubmit as pending
+    if (course.approvalStatus === "rejected") {
+      safeData.approvalStatus = "pending";
+      safeData.approvalRemark = "";
+      safeData.isActive = false;
+    }
+  }
+
   Object.assign(course, safeData);
   return await course.save();
+};
+
+/**
+ * Approves a course (Central Admin only)
+ */
+export const approveCourse = async (courseId, user) => {
+  if (user.role !== ROLES.CENTRAL_ADMIN) {
+    throw new ForbiddenError("Only Central Admin can approve courses");
+  }
+
+  const course = await Course.findById(courseId);
+  if (!course) throw new NotFoundError("Course not found");
+
+  course.approvalStatus = "approved";
+  course.approvedBy = user.id || user._id;
+  course.approvedAt = new Date();
+  course.approvalRemark = "";
+  course.isActive = true;
+
+  const saved = await course.save();
+
+  if (course.createdBy) {
+    setImmediate(async () => {
+      try {
+        const creatorUser = await User.findById(course.createdBy).select("role");
+        let link = "/biz/lms";
+        if (creatorUser?.role === ROLES.CHAPTER_ADMIN) link = "/chapter-admin/lms";
+        else if (creatorUser?.role === ROLES.STATE_ADMIN) link = "/state-admin/lms";
+
+        await notificationService.createNotification({
+          recipientId: course.createdBy,
+          type: "System",
+          title: "Course Approved & Published",
+          body: `Your course "${course.title}" has been approved by Central Admin and is now live!`,
+          link,
+        });
+      } catch (e) {}
+    });
+  }
+
+  return saved;
+};
+
+/**
+ * Rejects a course (Central Admin only)
+ */
+export const rejectCourse = async (courseId, remark, user) => {
+  if (user.role !== ROLES.CENTRAL_ADMIN) {
+    throw new ForbiddenError("Only Central Admin can reject courses");
+  }
+
+  const course = await Course.findById(courseId);
+  if (!course) throw new NotFoundError("Course not found");
+
+  course.approvalStatus = "rejected";
+  course.approvalRemark = String(remark || "").trim() || "Course did not meet quality guidelines.";
+  course.isActive = false;
+
+  const saved = await course.save();
+
+  if (course.createdBy) {
+    setImmediate(async () => {
+      try {
+        const creatorUser = await User.findById(course.createdBy).select("role");
+        let link = "/biz/lms";
+        if (creatorUser?.role === ROLES.CHAPTER_ADMIN) link = "/chapter-admin/lms";
+        else if (creatorUser?.role === ROLES.STATE_ADMIN) link = "/state-admin/lms";
+
+        await notificationService.createNotification({
+          recipientId: course.createdBy,
+          type: "System",
+          title: "Course Submission Rejected",
+          body: `Your course "${course.title}" was not approved: ${course.approvalRemark}`,
+          link,
+        });
+      } catch (e) {}
+    });
+  }
+
+  return saved;
 };
 
 /**
@@ -150,7 +339,7 @@ export const getCourses = async (user, query = {}) => {
     }
     return await Course.find(myFilter)
       .sort({ createdAt: -1 })
-      .populate('createdBy', 'name email')
+      .populate('createdBy', 'name email role')
       .populate('businessId', 'name logo slug')
       .lean();
   }
@@ -169,21 +358,36 @@ export const getCourses = async (user, query = {}) => {
     delete filter.subcategory;
   }
 
-  // Admins only see and manage their OWN scope's courses in their respective panel
-  if (user.role === ROLES.CENTRAL_ADMIN) {
-    // Central Admin only manages Centre courses in their panel
-    filter.scope = 'centre';
+  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+
+  // Central Admin can review all courses or filter by scope and approval status
+  if (isCentralAdmin) {
+    if (query.scope && query.scope !== 'all' && query.scope !== 'all_scopes') {
+      filter.scope = query.scope;
+    } else {
+      delete filter.scope;
+    }
+    if (query.approvalStatus && query.approvalStatus !== 'all') {
+      filter.approvalStatus = query.approvalStatus;
+    }
   } else if (user.role === ROLES.STATE_ADMIN) {
     // State Admin only manages courses for their own state
     filter.scope = 'state';
     filter.state = user.state || user.stateId;
+    if (query.approvalStatus && query.approvalStatus !== 'all') {
+      filter.approvalStatus = query.approvalStatus;
+    }
   } else if (user.role === ROLES.CHAPTER_ADMIN) {
     // Chapter Admin only manages courses for their own chapter
     filter.scope = 'chapter';
     filter.chapterId = user.chapterId || user.chapter;
-  } else if (user.role === ROLES.BUSINESS_OWNER) {
-    // Business owners see all courses targeted at them: Centre + their State + their Chapter + peer Business courses
+    if (query.approvalStatus && query.approvalStatus !== 'all') {
+      filter.approvalStatus = query.approvalStatus;
+    }
+  } else if (user.role === ROLES.BUSINESS_OWNER || user.role === ROLES.CUSTOMER || user.role === ROLES.BUYER) {
+    // Business owners and members see active approved courses targeted at them
     filter.isActive = true;
+    filter.approvalStatus = { $in: ["approved", "not_required"] };
     
     let business = user.business;
     if (!business && (user.businessId || user.id)) {
@@ -206,33 +410,48 @@ export const getCourses = async (user, query = {}) => {
 
   const courses = await Course.find(filter)
     .sort({ createdAt: -1 })
-    .populate('createdBy', 'name email')
+    .populate('createdBy', 'name email role')
     .populate('businessId', 'name logo slug')
+    .populate('approvedBy', 'name email')
     .lean();
 
-  if (user.role === ROLES.BUSINESS_OWNER) {
+  if (user.role === ROLES.BUSINESS_OWNER || user.role === ROLES.CUSTOMER || user.role === ROLES.BUYER) {
     let businessId = user.business?._id || user.businessId;
     if (!businessId && user.id) {
       const biz = await Business.findOne({ owner: user.id }).select('_id');
       businessId = biz?._id;
     }
 
-    if (businessId && courses.length > 0) {
+    const userIdStr = String(user.id || user._id);
+    const bizIdStr = businessId ? String(businessId) : null;
+
+    let progressDocs = [];
+    let certDocs = [];
+
+    if (courses.length > 0 && businessId) {
       const courseIds = courses.map(c => c._id);
-      const [progressDocs, certDocs] = await Promise.all([
+      [progressDocs, certDocs] = await Promise.all([
         CourseProgress.find({ businessId, courseId: { $in: courseIds } }).lean(),
         Certificate.find({ businessId, courseId: { $in: courseIds } }).lean(),
       ]);
+    }
 
-      const progressMap = new Map(progressDocs.map(p => [String(p.courseId), p]));
-      const certMap = new Map(certDocs.map(c => [String(c.courseId), c]));
+    const progressMap = new Map(progressDocs.map(p => [String(p.courseId), p]));
+    const certMap = new Map(certDocs.map(c => [String(c.courseId), c]));
 
-      return courses.map(c => ({
+    return courses.map(c => {
+      const isEnrolled = !c.isPaid || (Array.isArray(c.enrollments) && c.enrollments.some(e => 
+        String(e.userId) === userIdStr || (bizIdStr && String(e.businessId) === bizIdStr)
+      ));
+
+      return {
         ...c,
+        isEnrolled,
+        enrollmentCount: c.enrollments?.length || 0,
         progress: progressMap.get(String(c._id)) || null,
         certificate: certMap.get(String(c._id)) || null,
-      }));
-    }
+      };
+    });
   }
 
   return courses;
@@ -243,18 +462,24 @@ export const getCourses = async (user, query = {}) => {
  */
 export const getCourseById = async (courseId, user) => {
   const course = await Course.findById(courseId)
-    .populate('createdBy', 'name email')
-    .populate('businessId', 'name logo slug');
+    .populate('createdBy', 'name email role')
+    .populate('businessId', 'name logo slug')
+    .populate('approvedBy', 'name email');
   if (!course) throw new NotFoundError("Course not found");
   
   if (user.role !== ROLES.CENTRAL_ADMIN && !course.isActive) {
       if (!canManageCourse(user, course)) {
-          throw new ForbiddenError("Course is not available");
+          throw new ForbiddenError("Course is not available or pending approval");
       }
   }
 
-  // Check business owner access
-  if (user.role === ROLES.BUSINESS_OWNER) {
+  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+  const isCreator = String(course.createdBy?._id || course.createdBy) === String(user.id || user._id);
+
+  let isEnrolled = !course.isPaid || isCentralAdmin || isCreator;
+
+  // Check business owner or customer access
+  if (user.role === ROLES.BUSINESS_OWNER || user.role === ROLES.CUSTOMER || user.role === ROLES.BUYER) {
     let business = user.business;
     if (!business && (user.businessId || user.id)) {
       business = await Business.findOne(user.businessId ? { _id: user.businessId } : { owner: user.id });
@@ -269,13 +494,46 @@ export const getCourseById = async (courseId, user) => {
                       (course.scope === 'chapter' && String(course.chapterId) === String(chapterId));
     
     if (!canAccess) throw new ForbiddenError("You do not have access to this course");
-  } else if (!canManageCourse(user, course) && user.role !== ROLES.CENTRAL_ADMIN) {
+
+    const userIdStr = String(user.id || user._id);
+    const bizIdStr = business?._id ? String(business._id) : null;
+    isEnrolled = !course.isPaid || isCreator || (Array.isArray(course.enrollments) && course.enrollments.some(e => 
+      String(e.userId) === userIdStr || (bizIdStr && String(e.businessId) === bizIdStr)
+    ));
+  } else if (!canManageCourse(user, course) && !isCentralAdmin) {
      throw new ForbiddenError("You do not have access to this course");
   }
 
-  return course;
-};
+  const courseObj = course.toObject ? course.toObject() : { ...course };
+  courseObj.isEnrolled = isEnrolled;
+  courseObj.enrollmentCount = course.enrollments?.length || 0;
 
+  // If paid and user has NOT enrolled, mask lesson media URLs so they cannot be accessed without paying
+  if (course.isPaid && !isEnrolled) {
+    if (Array.isArray(courseObj.chapters)) {
+      courseObj.chapters = courseObj.chapters.map(ch => ({
+        ...ch,
+        contents: (ch.contents || []).map(cnt => ({
+          _id: cnt._id,
+          title: cnt.title,
+          type: cnt.type,
+          order: cnt.order,
+          isLocked: true,
+          url: "", // Mask URL
+        }))
+      }));
+    }
+    if (Array.isArray(courseObj.contents)) {
+      courseObj.contents = courseObj.contents.map(cnt => ({
+        ...cnt,
+        isLocked: true,
+        url: "", // Mask URL
+      }));
+    }
+  }
+
+  return courseObj;
+};
 
 // Helpers
 const getScopeFromRole = (role) => {
@@ -302,5 +560,114 @@ const canManageCourse = (user, course) => {
     return String(creatorId) === String(userId);
   }
   return false;
+};
+
+/**
+ * Gets all enrollments for a course (Central Admin or Course Creator)
+ */
+export const getCourseEnrollments = async (courseId, user) => {
+  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+  const course = await Course.findById(courseId)
+    .populate("enrollments.userId", "name email phone role organization")
+    .populate("enrollments.businessId", "name slug logo")
+    .populate("enrollments.paymentId", "invoiceNumber amount currency status paidAt method transactionId")
+    .lean();
+  if (!course) throw new NotFoundError("Course not found");
+
+  const isCreator = String(course.createdBy?._id || course.createdBy) === String(user.id || user._id);
+  if (!isCentralAdmin && !isCreator) {
+    throw new ForbiddenError("You don't have permission to view enrollments for this course");
+  }
+
+  const enrollments = (course.enrollments || []).map(e => ({
+    _id: e._id,
+    user: e.userId || null,
+    business: e.businessId || null,
+    payment: e.paymentId || null,
+    enrolledAt: e.enrolledAt,
+  }));
+
+  const totalLearners = enrollments.length;
+  const totalRevenue = enrollments.reduce((acc, e) => acc + (Number(e.payment?.amount) || Number(course.price) || 0), 0);
+
+  return {
+    courseId: course._id,
+    courseTitle: course.title,
+    isPaid: course.isPaid,
+    price: course.price,
+    totalLearners,
+    totalRevenue,
+    enrollments,
+  };
+};
+
+/**
+ * Manually enrolls a user/business in a course (Central Admin only)
+ */
+export const manualEnrollUser = async (courseId, { userId, businessId, remark }, user) => {
+  if (user.role !== ROLES.CENTRAL_ADMIN) {
+    throw new ForbiddenError("Only Central Admin can manually enroll users in paid courses");
+  }
+
+  const course = await Course.findById(courseId);
+  if (!course) throw new NotFoundError("Course not found");
+
+  if (!userId && !businessId) {
+    throw new BadRequestError("User ID or Business ID is required to enroll");
+  }
+
+  let userDoc = null;
+  if (userId) {
+    userDoc = await User.findById(userId);
+    if (!userDoc) throw new NotFoundError("User not found");
+  }
+
+  let finalBusinessId = businessId || null;
+  if (!finalBusinessId && userDoc) {
+    const biz = await Business.findOne({ owner: userDoc._id }).select("_id");
+    finalBusinessId = biz?._id || null;
+  }
+
+  const targetUserId = userId || userDoc?._id;
+
+  const alreadyEnrolled = (course.enrollments || []).some(e => 
+    (targetUserId && String(e.userId) === String(targetUserId)) || 
+    (finalBusinessId && String(e.businessId) === String(finalBusinessId))
+  );
+
+  if (alreadyEnrolled) {
+    throw new BadRequestError("This learner is already enrolled in this course");
+  }
+
+  course.enrollments = course.enrollments || [];
+  course.enrollments.push({
+    businessId: finalBusinessId,
+    userId: targetUserId,
+    paymentId: null, // manual admin enrollment
+    enrolledAt: new Date(),
+  });
+
+  await course.save();
+
+  if (targetUserId) {
+    setImmediate(async () => {
+      try {
+        await notificationService.createNotification({
+          recipientId: targetUserId,
+          type: "System",
+          title: "Enrolled in Course by Central Admin",
+          body: `You have been granted access to "${course.title}". ${remark ? `Note: ${remark}` : ""}`,
+          link: `/biz/lms/${course._id}`,
+        });
+      } catch (e) {}
+    });
+  }
+
+  return { 
+    success: true, 
+    message: "Learner enrolled successfully", 
+    courseId: course._id,
+    enrollmentCount: course.enrollments.length 
+  };
 };
 

@@ -26,6 +26,11 @@ const paymentSchema = new mongoose.Schema(
       ref: "Event",
       index: true,
     },
+    courseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
+      index: true,
+    },
     itemType: {
       type: String,
       default: "Membership",
