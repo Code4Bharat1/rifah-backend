@@ -56,6 +56,21 @@ router.post(
   eventController.registerPaidForEvent
 );
 
+// Delegation Event routes
+router.post(
+  "/delegation/trigger-reminders",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN),
+  eventController.triggerDelegationReminders
+);
+
+router.post(
+  "/:id/delegation/pay-installment",
+  authMiddleware,
+  validateObjectIdParam("id"),
+  eventController.payDelegationInstallment
+);
+
 router.post(
   "/:id/attend",
   authMiddleware,

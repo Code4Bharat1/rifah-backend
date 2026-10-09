@@ -5,6 +5,7 @@ import { Chapter } from "../chapters/chapter.model.js";
 import { Plan } from "../memberships/plan.model.js";
 import { categoryService } from "../categories/category.service.js";
 import { OtpVerification } from "./otp.model.js";
+import { Role } from "../roles/role.model.js";
 import crypto from "crypto";
 import { hashPassword, comparePassword } from "../../infrastructure/auth/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../infrastructure/auth/jwt.js";
@@ -69,6 +70,59 @@ async function findOwnedBusiness(user, { claim = false } = {}) {
 // must keep landing in the /user portal. Only admins/explicit upgrades (role === business_owner)
 // move them to the business workspace; merely owning or sharing an email with a Business must not.
 const isSubscriberUser = (user) => user.accountType === "user" && user.role !== ROLES.BUSINESS_OWNER;
+
+/**
+ * Find all active org-role assignments for a user that have a permissionTemplateId
+ * (i.e. roles created by admins with RBAC permissions attached).
+ * Returns populated role documents.
+ */
+async function findOrgRoles(userId) {
+  try {
+    const roles = await Role.find({
+      userId,
+      status: "Active",
+      permissionTemplateId: { $ne: null },
+    })
+      .populate({
+        path: "permissionTemplateId",
+        select: "name level permissions allowedNavRoutes description",
+      })
+      .populate("chapterId", "name slug city state")
+      .lean();
+    return roles;
+  } catch (err) {
+    logger.warn("[AUTH] findOrgRoles error:", err?.message || err);
+    return [];
+  }
+}
+
+/**
+ * Build a workspace descriptor object from an org role assignment.
+ * Used in availableWorkspaces[] returned at login.
+ */
+function buildOrgWorkspace(roleDoc) {
+  const tpl = roleDoc.permissionTemplateId;
+  if (!tpl) return null;
+
+  const panelType = roleDoc.panelType ||
+    (tpl.level === "Chapter" ? "chapter-admin" :
+      tpl.level === "State" ? "state-admin" : "central-admin");
+
+  return {
+    type: "org_role",                    // workspace discriminator
+    workspaceId: String(roleDoc._id),    // the Role._id
+    roleName: tpl.name,                  // e.g. "Chapter Secretary"
+    level: tpl.level,
+    panelType,                           // "chapter-admin" | "state-admin" | "central-admin"
+    permissions: tpl.permissions || [],
+    allowedNavRoutes: tpl.allowedNavRoutes || [],
+    chapterId: roleDoc.chapterId ? String(roleDoc.chapterId._id || roleDoc.chapterId) : null,
+    chapterName: roleDoc.chapterId?.name || null,
+    state: roleDoc.state || null,
+    templateId: String(tpl._id),
+  };
+}
+
 
 export const authService = {
   /**
@@ -1003,14 +1057,42 @@ export const authService = {
     // A role outside the map (e.g. secretariat) still has to be able to sign in.
     if (availableRoles.length === 0) availableRoles.push(userObj.role);
 
+    // --- RBAC: discover org-role workspaces (Secretary, Treasurer, VP, President, etc.) ---
+    // These are custom roles assigned by admins with a permissionTemplateId.
+    // They appear as additional workspace choices at login for business owners / members.
+    let availableWorkspaces = null;
+    try {
+      const orgRoles = await findOrgRoles(user._id);
+      if (orgRoles.length > 0) {
+        // Build the base workspace(s) from system roles
+        const baseWorkspaces = [];
+        for (const sysRole of availableRoles) {
+          let wsType = "business";
+          let wsLabel = "Business Panel";
+          let wsPath = "/biz";
+          if (sysRole === "central_admin" || sysRole === "secretariat") { wsType = "central-admin"; wsLabel = "Central Admin Panel"; wsPath = "/admin"; }
+          else if (sysRole === "state_admin") { wsType = "state-admin"; wsLabel = "State Admin Panel"; wsPath = "/state-admin"; }
+          else if (sysRole === "chapter_admin") { wsType = "chapter-admin"; wsLabel = "Chapter Admin Panel"; wsPath = "/chapter-admin"; }
+          baseWorkspaces.push({ type: "system_role", workspaceId: sysRole, roleName: wsLabel, level: null, panelType: wsType, path: wsPath, permissions: [], allowedNavRoutes: [] });
+        }
+        // Add org-role workspaces
+        const orgWorkspaces = orgRoles.map(buildOrgWorkspace).filter(Boolean);
+        availableWorkspaces = [...baseWorkspaces, ...orgWorkspaces];
+      }
+    } catch (orgRoleErr) {
+      logger.warn("[AUTH] Failed to fetch org roles on login:", orgRoleErr?.message);
+    }
+
     return {
       user: userObj,
       accessToken,
       refreshToken,
-      requiresRoleSelection: availableRoles.length > 1,
+      requiresRoleSelection: availableRoles.length > 1 || (availableWorkspaces && availableWorkspaces.length > 1),
       availableRoles,
+      availableWorkspaces, // null if no org roles; populated otherwise
     };
   },
+
 
   /**
    * End every session of the user: tokens issued before now are rejected.
@@ -1044,6 +1126,18 @@ export const authService = {
         chapterId: user.chapterId,
         state: user.state || "",
       };
+
+      if (decoded.orgWorkspaceId) {
+        tokenPayload.orgWorkspaceId = decoded.orgWorkspaceId;
+        tokenPayload.orgRoleName = decoded.orgRoleName;
+        tokenPayload.orgPermissions = decoded.orgPermissions;
+        tokenPayload.orgAllowedNavRoutes = decoded.orgAllowedNavRoutes;
+        tokenPayload.orgPanelType = decoded.orgPanelType;
+        tokenPayload.orgChapterId = decoded.orgChapterId;
+        tokenPayload.orgState = decoded.orgState;
+        if (decoded.orgChapterId) tokenPayload.chapterId = decoded.orgChapterId;
+        if (decoded.orgState) tokenPayload.state = decoded.orgState;
+      }
 
       const newAccessToken = signAccessToken(tokenPayload);
       const newRefreshToken = signRefreshToken(tokenPayload);
@@ -1079,10 +1173,92 @@ export const authService = {
   /**
    * Switch active role for users with dual roles
    */
-  switchRole: async (userId, targetRole) => {
+  switchRole: async (userId, targetRole, targetWorkspaceId = null) => {
     const user = await User.findById(userId);
     if (!user) throw new NotFoundError("User not found");
 
+    // --- RBAC: check if switching to an org-role workspace (e.g. Secretary) ---
+    if (targetWorkspaceId) {
+      const orgRole = await Role.findOne({
+        _id: targetWorkspaceId,
+        userId,
+        status: "Active",
+        permissionTemplateId: { $ne: null },
+      }).populate({
+        path: "permissionTemplateId",
+        select: "name level permissions allowedNavRoutes",
+      }).populate("chapterId", "name slug city state").lean();
+
+      if (!orgRole) throw new BadRequestError("Invalid org-role workspace");
+
+      const workspace = buildOrgWorkspace(orgRole);
+      if (!workspace) throw new BadRequestError("Org role has no permission template");
+
+      const tokenPayload = {
+        id: user._id,
+        email: user.email,
+        role: user.role,               // keeps real DB role intact in token
+        orgWorkspaceId: targetWorkspaceId,
+        orgRoleName: workspace.roleName,
+        orgPermissions: workspace.permissions,
+        orgAllowedNavRoutes: workspace.allowedNavRoutes,
+        orgPanelType: workspace.panelType,
+        orgChapterId: workspace.chapterId,
+        orgState: workspace.state,
+        chapter: user.chapter,
+        chapterId: user.chapterId,
+        state: user.state || "",
+        forcePasswordChange: user.forcePasswordChange,
+      };
+
+      const accessToken = signAccessToken(tokenPayload);
+      const refreshToken = signRefreshToken(tokenPayload);
+
+      const userObj = user.toJSON ? user.toJSON() : { ...user._doc };
+      userObj.previousRole = user.role;
+      userObj.activeWorkspace = workspace;
+      if (workspace.panelType === "chapter-admin") {
+        userObj.role = "chapter_admin";
+      } else if (workspace.panelType === "state-admin") {
+        userObj.role = "state_admin";
+      } else if (workspace.panelType === "central-admin") {
+        userObj.role = "central_admin";
+      }
+
+      // Discover org-role workspaces and preserve availableWorkspaces in switched userObj
+      try {
+        const orgRoles = await findOrgRoles(user._id);
+        if (orgRoles.length > 0) {
+          const orgWorkspaces = orgRoles.map(buildOrgWorkspace).filter(Boolean);
+          const baseWorkspaces = [];
+          let wsType = "business";
+          let wsLabel = "Business Panel";
+          let wsPath = "/biz";
+          if (["central_admin", "super_admin", "admin", "secretariat"].includes(user.role)) {
+            wsType = "central-admin"; wsLabel = "Central Admin Panel"; wsPath = "/admin";
+          } else if (user.role === "state_admin") {
+            wsType = "state-admin"; wsLabel = "State Admin Panel"; wsPath = "/state-admin";
+          } else if (user.role === "chapter_admin") {
+            wsType = "chapter-admin"; wsLabel = "Chapter Admin Panel"; wsPath = "/chapter-admin";
+          }
+          baseWorkspaces.push({
+            type: "system_role",
+            workspaceId: user.role,
+            roleName: wsLabel,
+            level: null,
+            panelType: wsType,
+            path: wsPath,
+            permissions: [],
+            allowedNavRoutes: [],
+          });
+          userObj.availableWorkspaces = [...baseWorkspaces, ...orgWorkspaces];
+        }
+      } catch (_) {}
+
+      return { user: userObj, accessToken, refreshToken, activeWorkspace: workspace };
+    }
+
+    // --- Original system-role switching (admin ↔ business_owner) ---
     // Workspace switching is a per-session choice, not a change of identity - it must never
     // persist to user.role/previousRole. previousRole is load-bearing elsewhere (chapter/state/
     // central-admin services use it to remember what a person was before being appointed an
@@ -1100,7 +1276,14 @@ export const authService = {
       }
     }
 
-    if (validRoles.size <= 1) {
+    // Non-admin business owners with org roles assigned may switch back to base role
+    const orgRoles = await findOrgRoles(user._id);
+    if (orgRoles.length > 0) {
+      // Allow switching to base system role (no-op if already that role)
+      validRoles.add(user.role);
+    }
+
+    if (validRoles.size <= 1 && !orgRoles.length) {
       throw new BadRequestError("You do not have any other roles to switch to");
     }
 
@@ -1125,11 +1308,15 @@ export const authService = {
     // user.role in the database is left exactly as it was.
     const userObj = user.toJSON ? user.toJSON() : { ...user._doc };
     userObj.role = targetRole;
+<<<<<<< Updated upstream
     if (["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(targetRole)) {
       userObj.accountType = "admin";
     } else if (targetRole === "business_owner" || targetRole === "business") {
       userObj.accountType = "business";
     }
+=======
+    userObj.activeWorkspace = null;
+>>>>>>> Stashed changes
     // Session-only, mirrors tokenPayload — NOT saved to the DB (see comment above). Lets the
     // frontend show a "switch back" control without permanently touching the account's real role.
     userObj.previousRole = user.role;
@@ -1138,13 +1325,41 @@ export const authService = {
       userObj.businessSlug = ownedBusiness.slug;
     }
 
-    return { user: userObj, accessToken, refreshToken };
+    try {
+      if (orgRoles.length > 0) {
+        const orgWorkspaces = orgRoles.map(buildOrgWorkspace).filter(Boolean);
+        const baseWorkspaces = [];
+        let wsType = "business";
+        let wsLabel = "Business Panel";
+        let wsPath = "/biz";
+        if (["central_admin", "super_admin", "admin", "secretariat"].includes(user.role)) {
+          wsType = "central-admin"; wsLabel = "Central Admin Panel"; wsPath = "/admin";
+        } else if (user.role === "state_admin") {
+          wsType = "state-admin"; wsLabel = "State Admin Panel"; wsPath = "/state-admin";
+        } else if (user.role === "chapter_admin") {
+          wsType = "chapter-admin"; wsLabel = "Chapter Admin Panel"; wsPath = "/chapter-admin";
+        }
+        baseWorkspaces.push({
+          type: "system_role",
+          workspaceId: user.role,
+          roleName: wsLabel,
+          level: null,
+          panelType: wsType,
+          path: wsPath,
+          permissions: [],
+          allowedNavRoutes: [],
+        });
+        userObj.availableWorkspaces = [...baseWorkspaces, ...orgWorkspaces];
+      }
+    } catch (_) {}
+
+    return { user: userObj, accessToken, refreshToken, activeWorkspace: null };
   },
 
   /**
    * Get current authenticated user details
    */
-  getMe: async (userId, sessionRole) => {
+  getMe: async (userId, sessionRole, tokenUser = null) => {
     const user = await User.findById(userId).populate("savedBusinesses");
     if (!user) {
       throw new NotFoundError("User not found");
@@ -1191,6 +1406,58 @@ export const authService = {
       if (switchedBusiness) {
         userObj.businessId = switchedBusiness._id;
         userObj.businessSlug = switchedBusiness.slug;
+      }
+    }
+
+    // Discover org-role workspaces (Secretary, Treasurer, VP, President, etc.)
+    try {
+      const orgRoles = await findOrgRoles(user._id);
+      if (orgRoles.length > 0) {
+        const orgWorkspaces = orgRoles.map(buildOrgWorkspace).filter(Boolean);
+        const baseWorkspaces = [];
+        let wsType = "business";
+        let wsLabel = "Business Panel";
+        let wsPath = "/biz";
+        if (["central_admin", "super_admin", "admin", "secretariat"].includes(user.role)) {
+          wsType = "central-admin"; wsLabel = "Central Admin Panel"; wsPath = "/admin";
+        } else if (user.role === "state_admin") {
+          wsType = "state-admin"; wsLabel = "State Admin Panel"; wsPath = "/state-admin";
+        } else if (user.role === "chapter_admin") {
+          wsType = "chapter-admin"; wsLabel = "Chapter Admin Panel"; wsPath = "/chapter-admin";
+        }
+        baseWorkspaces.push({
+          type: "system_role",
+          workspaceId: user.role,
+          roleName: wsLabel,
+          level: null,
+          panelType: wsType,
+          path: wsPath,
+          permissions: [],
+          allowedNavRoutes: [],
+        });
+        userObj.availableWorkspaces = [...baseWorkspaces, ...orgWorkspaces];
+      }
+    } catch (_) {}
+
+    // If session is active in an org-role workspace, reflect activeWorkspace
+    if (tokenUser?.orgWorkspaceId) {
+      userObj.previousRole = user.role;
+      userObj.activeWorkspace = {
+        type: "org_role",
+        workspaceId: tokenUser.orgWorkspaceId,
+        roleName: tokenUser.orgRoleName,
+        permissions: tokenUser.orgPermissions || [],
+        allowedNavRoutes: tokenUser.orgAllowedNavRoutes || [],
+        panelType: tokenUser.orgPanelType,
+        chapterId: tokenUser.orgChapterId,
+        state: tokenUser.orgState,
+      };
+      if (tokenUser.orgPanelType === "chapter-admin") {
+        userObj.role = "chapter_admin";
+      } else if (tokenUser.orgPanelType === "state-admin") {
+        userObj.role = "state_admin";
+      } else if (tokenUser.orgPanelType === "central-admin") {
+        userObj.role = "central_admin";
       }
     }
 

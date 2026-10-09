@@ -28,8 +28,8 @@ const paymentSchema = new mongoose.Schema(
     },
     itemType: {
       type: String,
-      enum: ["Membership", "Event Pass", "Sponsorship", "Directory Addon"],
       default: "Membership",
+      index: true,
     },
     planTier: {
       type: String,
@@ -73,6 +73,27 @@ const paymentSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    tcsRate: {
+      type: Number,
+      default: 0,
+    },
+    tcsAmount: {
+      type: Number,
+      default: 0,
+    },
+    isDelegationPayment: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    installmentNumber: {
+      type: Number,
+      default: null,
+    },
+    installmentTitle: {
+      type: String,
+      default: "",
+    },
     amount: {
       type: Number,
       required: true, // Total amount including GST
@@ -99,16 +120,53 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+<<<<<<< Updated upstream
     verificationToken: {
       type: String,
       index: true,
       default: null,
     },
     isRevoked: {
+=======
+    payerName: {
+      type: String,
+      default: "",
+    },
+    payerEmail: {
+      type: String,
+      default: "",
+    },
+    payerPhone: {
+      type: String,
+      default: "",
+    },
+    businessName: {
+      type: String,
+      default: "",
+    },
+    gstin: {
+      type: String,
+      default: "",
+    },
+    sacCode: {
+      type: String,
+      default: "9983",
+    },
+    quantity: {
+      type: Number,
+      default: 1,
+    },
+    notes: {
+      type: String,
+      default: "",
+    },
+    isCustomInvoice: {
+>>>>>>> Stashed changes
       type: Boolean,
       default: false,
       index: true,
     },
+<<<<<<< Updated upstream
     revokedAt: {
       type: Date,
       default: null,
@@ -121,6 +179,11 @@ const paymentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
+=======
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+>>>>>>> Stashed changes
     },
   },
   { timestamps: true }

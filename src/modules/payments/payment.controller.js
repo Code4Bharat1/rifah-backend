@@ -45,4 +45,9 @@ export const paymentController = {
     const payment = await paymentService.verifyPaymentByAdmin(id, req.user.id);
     return ApiResponse.success(res, payment, "Payment verified and approved successfully");
   }),
+
+  createAdminInvoice: asyncHandler(async (req, res) => {
+    const payment = await paymentService.createAdminInvoice(req.body, req.user);
+    return ApiResponse.created(res, payment, "Official invoice created successfully");
+  }),
 };

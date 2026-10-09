@@ -445,6 +445,34 @@ export const eventService = {
       data.visibilityScope = "global";
     }
 
+    // ── Delegation Event Central Admin Check & Installments ──
+    const isDelegation = data.eventCategory === "Delegation" || Boolean(data.isDelegation);
+    if (isDelegation) {
+      const isCentralAdmin = user && ["central_admin", "super_admin", "admin", "secretariat"].includes(user.role);
+      if (!isCentralAdmin) {
+        throw new ForbiddenError("Only Central Admin has the option to create or manage a Delegation Event");
+      }
+      data.eventCategory = "Delegation";
+      data.isDelegation = true;
+      data.isPaid = true;
+
+      if (Array.isArray(data.delegationInstallments) && data.delegationInstallments.length > 0) {
+        data.delegationInstallments = data.delegationInstallments.map((inst, idx) => ({
+          installmentNumber: Number(inst.installmentNumber) || idx + 1,
+          title: (inst.title || `Installment ${idx + 1}`).trim(),
+          dueDate: String(inst.dueDate || "").trim(),
+          memberAmount: Number(inst.memberAmount) || 0,
+          nonMemberAmount: Number(inst.nonMemberAmount) || 0,
+          notes: inst.notes || "",
+        }));
+
+        const totalMember = data.delegationInstallments.reduce((acc, i) => acc + (Number(i.memberAmount) || 0), 0);
+        const totalNonMember = data.delegationInstallments.reduce((acc, i) => acc + (Number(i.nonMemberAmount) || 0), 0);
+        data.memberPrice = totalMember;
+        data.ticketPrice = totalNonMember;
+      }
+    }
+
     // ── Sync paid event fields ────────────────────────────────────────────────
     const isPaid       = Boolean(data.isPaid === true || data.isPaid === "true" || data.isPaid === "Paid");
     const ticketPrice  = isPaid ? (Number(data.ticketPrice) || 0) : 0;
@@ -504,10 +532,13 @@ export const eventService = {
       throw new BadRequestError("Event capacity has been reached");
     }
 
-    if (event.isPaid && !paymentData) {
+    const isDelegation = event.eventCategory === "Delegation" || Boolean(event.isDelegation);
+
+    if (event.isPaid && !paymentData && !isDelegation) {
       throw new BadRequestError("Payment is required for this event");
     }
 
+<<<<<<< Updated upstream
     if (event.registrationAccess && event.registrationAccess !== "All") {
       const access = event.registrationAccess;
       const BusinessModel = mongoose.model("Business");
@@ -541,6 +572,8 @@ export const eventService = {
       paymentId = paymentData.paymentId;
     }
 
+=======
+>>>>>>> Stashed changes
     let attendeeRole = "guest";
     if (user && user.role !== "customer") {
       const BusinessModel = mongoose.model("Business");
@@ -554,6 +587,7 @@ export const eventService = {
       }
     }
 
+<<<<<<< Updated upstream
     const amountPaid = Number(paymentData?.amount || 0);
     const baseAmount = Number(paymentData?.baseAmount || (amountPaid > 0 ? Math.round(amountPaid / 1.18) : 0));
     const gstAmount = Number(paymentData?.gstAmount || (amountPaid > 0 ? (amountPaid - baseAmount) : 0));
@@ -563,6 +597,100 @@ export const eventService = {
     const ticketType = event.isPaid ? (attendeeRole === "member" ? "Member Pass" : "General Pass") : "Member Pass";
     const frontendBaseUrl = env.FRONTEND_URL || "https://rifah.nexcorealliance.com";
     const verificationUrl = `${frontendBaseUrl}/verify/ticket/${ticketId}?token=${verificationToken}`;
+=======
+    let paymentStatus = "Free";
+    let paymentId = null;
+    let initialAmountPaid = paymentData?.amount || 0;
+    let userInstallments = [];
+
+    if (isDelegation && Array.isArray(event.delegationInstallments) && event.delegationInstallments.length > 0) {
+      userInstallments = event.delegationInstallments.map((inst) => {
+        const baseAmount = attendeeRole === "member" ? Number(inst.memberAmount || 0) : Number(inst.nonMemberAmount || 0);
+        const gstRate = 5;
+        const gstAmount = Math.round((baseAmount * 0.05) * 100) / 100;
+        const tcsRate = 2;
+        const tcsAmount = Math.round((baseAmount * 0.02) * 100) / 100;
+        const totalAmount = Math.round((baseAmount + gstAmount + tcsAmount) * 100) / 100;
+
+        return {
+          installmentNumber: inst.installmentNumber,
+          title: inst.title,
+          dueDate: inst.dueDate,
+          baseAmount,
+          gstRate,
+          gstAmount,
+          tcsRate,
+          tcsAmount,
+          totalAmount,
+          status: "Pending",
+          paymentId: null,
+          invoiceNumber: null,
+          paidAt: null,
+          method: "",
+          remindersSent: {
+            prior1Day: { sent: false, sentAt: null },
+            dueImmediate: { sent: false, sentAt: null },
+            dailyOverdueCount: 0,
+            lastOverdueSentAt: null,
+          },
+        };
+      });
+
+      if (paymentData && userInstallments.length > 0) {
+        const inst1 = userInstallments[0];
+        const { Payment } = await import("../payments/payment.model.js");
+        const { generateReferenceId } = await import("../../shared/utils/generate-id.js");
+
+        let invoiceNumber = generateReferenceId("INV", 4);
+        while (await Payment.findOne({ invoiceNumber })) {
+          invoiceNumber = generateReferenceId("INV", 4);
+        }
+
+        const paymentDoc = await Payment.create({
+          invoiceNumber,
+          payer: userId,
+          eventId: event._id,
+          itemType: "Delegation Installment",
+          description: `${event.title} - ${inst1.title} (Installment #${inst1.installmentNumber})`,
+          subtotal: inst1.baseAmount,
+          gstRate: 5,
+          gstAmount: inst1.gstAmount,
+          tcsRate: 2,
+          tcsAmount: inst1.tcsAmount,
+          amount: inst1.totalAmount,
+          currency: "INR",
+          method: paymentData.method || "Online Transfer",
+          status: "Paid",
+          transactionId: paymentData.transactionId || `TXN-DEL-${invoiceNumber}`,
+          paidAt: new Date(),
+          chapter: event.chapter || "Central",
+          state: event.creatorState || "Central",
+          isDelegationPayment: true,
+          installmentNumber: inst1.installmentNumber,
+          installmentTitle: inst1.title,
+          payerName: user?.name || "Delegate",
+          payerEmail: user?.email || "",
+          payerPhone: user?.phone || "",
+          notes: `Delegation Installment #${inst1.installmentNumber} (Base: ₹${inst1.baseAmount} + 5% GST: ₹${inst1.gstAmount} + 2% TCS: ₹${inst1.tcsAmount})`,
+        });
+
+        inst1.status = "Paid";
+        inst1.paymentId = String(paymentDoc._id);
+        inst1.invoiceNumber = paymentDoc.invoiceNumber;
+        inst1.paidAt = new Date();
+        inst1.method = paymentDoc.method;
+
+        paymentStatus = userInstallments.length === 1 ? "Paid" : "Partially Paid";
+        paymentId = paymentDoc._id;
+        initialAmountPaid = inst1.totalAmount;
+      } else {
+        paymentStatus = "Pending";
+      }
+    } else if (event.isPaid && paymentData) {
+      paymentStatus = "Paid";
+      paymentId = paymentData.paymentId;
+    }
+>>>>>>> Stashed changes
 
     const updatedEvent = await Event.findByIdAndUpdate(
       eventId,
@@ -574,6 +702,7 @@ export const eventService = {
             role: attendeeRole,
             status: "Confirmed",
             paymentStatus: paymentStatus,
+<<<<<<< Updated upstream
             amountPaid: amountPaid,
             baseAmount: baseAmount,
             gstAmount: gstAmount,
@@ -586,6 +715,12 @@ export const eventService = {
             checkedIn: false,
             checkedInAt: null,
             checkedInBy: "",
+=======
+            amountPaid: initialAmountPaid,
+            paymentId: paymentId,
+            transactionId: paymentData?.transactionId,
+            installments: userInstallments,
+>>>>>>> Stashed changes
           } 
         },
         $inc: { registeredCount: 1 },
@@ -781,6 +916,34 @@ export const eventService = {
         }
       } else if (user.role === ROLES.STATE_ADMIN) {
         delete updateData.targetStates;   // Cannot change state scope
+      }
+    }
+
+    // ── Delegation Event Central Admin Check & Installments ──
+    const isDelegation = updateData.eventCategory === "Delegation" || Boolean(updateData.isDelegation) || existing.eventCategory === "Delegation" || Boolean(existing.isDelegation);
+    if (updateData.eventCategory === "Delegation" || Boolean(updateData.isDelegation)) {
+      const isCentralAdmin = user && ["central_admin", "super_admin", "admin", "secretariat"].includes(user.role);
+      if (!isCentralAdmin) {
+        throw new ForbiddenError("Only Central Admin has the option to create or manage a Delegation Event");
+      }
+      updateData.eventCategory = "Delegation";
+      updateData.isDelegation = true;
+      updateData.isPaid = true;
+
+      if (Array.isArray(updateData.delegationInstallments) && updateData.delegationInstallments.length > 0) {
+        updateData.delegationInstallments = updateData.delegationInstallments.map((inst, idx) => ({
+          installmentNumber: Number(inst.installmentNumber) || idx + 1,
+          title: (inst.title || `Installment ${idx + 1}`).trim(),
+          dueDate: String(inst.dueDate || "").trim(),
+          memberAmount: Number(inst.memberAmount) || 0,
+          nonMemberAmount: Number(inst.nonMemberAmount) || 0,
+          notes: inst.notes || "",
+        }));
+
+        const totalMember = updateData.delegationInstallments.reduce((acc, i) => acc + (Number(i.memberAmount) || 0), 0);
+        const totalNonMember = updateData.delegationInstallments.reduce((acc, i) => acc + (Number(i.nonMemberAmount) || 0), 0);
+        updateData.memberPrice = totalMember;
+        updateData.ticketPrice = totalNonMember;
       }
     }
 
@@ -1272,6 +1435,13 @@ export const eventService = {
             console.log(`[EventScheduler] Auto-started live event: ${ev.title}`);
           }
         }
+
+        // 3. Automated check and notification dispatch for Delegation Event installments
+        try {
+          await eventService.checkDelegationInstallmentReminders();
+        } catch (remindErr) {
+          console.error("[EventScheduler] Error checking delegation installment reminders:", remindErr);
+        }
       } catch (error) {
         if (error.name !== "MongoServerSelectionError" && error.name !== "MongoNetworkError") {
           console.error("[EventScheduler] Error syncing event statuses:", error.message || error);
@@ -1567,6 +1737,7 @@ export const eventService = {
   },
 
   /**
+<<<<<<< Updated upstream
    * Public Secure Verification for an Event Ticket / Digital Entry Pass
    */
   verifyTicket: async (ticketId, token = null) => {
@@ -1854,5 +2025,270 @@ export const eventService = {
       ticketStatus: reg.ticketStatus,
       message: `Ticket status successfully updated to ${newStatus}.`,
     };
+=======
+   * Pay a Delegation Event Installment with 5% GST and 2% TCS, generating an invoice
+   */
+  async payDelegationInstallment(eventId, userId, installmentNumber, paymentData = {}) {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const registration = (event.registeredUsers || []).find(
+      (r) => String(r.user?._id || r.user || r._id) === String(userId)
+    );
+    if (!registration) throw new NotFoundError("Registration not found for this user");
+
+    if (!Array.isArray(registration.installments) || registration.installments.length === 0) {
+      throw new BadRequestError("No delegation installments configured for this attendee");
+    }
+
+    const inst = registration.installments.find(
+      (i) => i.installmentNumber === Number(installmentNumber)
+    );
+    if (!inst) throw new NotFoundError(`Installment #${installmentNumber} not found`);
+
+    if (inst.status === "Paid") {
+      throw new BadRequestError(`Installment #${installmentNumber} has already been paid`);
+    }
+
+    // Delegation Tax Rules: 5% GST and 2% TCS
+    const baseAmount = Number(inst.baseAmount) || 0;
+    const gstRate = 5;
+    const gstAmount = Math.round((baseAmount * 0.05) * 100) / 100;
+    const tcsRate = 2;
+    const tcsAmount = Math.round((baseAmount * 0.02) * 100) / 100;
+    const totalAmount = Math.round((baseAmount + gstAmount + tcsAmount) * 100) / 100;
+
+    const { Payment } = await import("../payments/payment.model.js");
+    const { generateReferenceId } = await import("../../shared/utils/generate-id.js");
+
+    let invoiceNumber = generateReferenceId("INV", 4);
+    while (await Payment.findOne({ invoiceNumber })) {
+      invoiceNumber = generateReferenceId("INV", 4);
+    }
+
+    const attendeeUser = await User.findById(userId);
+
+    const paymentDoc = await Payment.create({
+      invoiceNumber,
+      payer: userId,
+      eventId: event._id,
+      itemType: "Delegation Installment",
+      description: `${event.title} - ${inst.title} (Installment #${inst.installmentNumber})`,
+      subtotal: baseAmount,
+      gstRate: 5,
+      gstAmount,
+      tcsRate: 2,
+      tcsAmount,
+      amount: totalAmount,
+      currency: "INR",
+      method: paymentData.method || "Online Transfer",
+      status: "Paid",
+      transactionId: paymentData.transactionId || `TXN-DEL-${invoiceNumber}`,
+      paidAt: new Date(),
+      chapter: event.chapter || "Central",
+      state: event.creatorState || "Central",
+      isDelegationPayment: true,
+      installmentNumber: inst.installmentNumber,
+      installmentTitle: inst.title,
+      payerName: attendeeUser?.name || "Delegate",
+      payerEmail: attendeeUser?.email || "",
+      payerPhone: attendeeUser?.phone || "",
+      notes: `Delegation Installment #${inst.installmentNumber} (Base: ₹${baseAmount} + 5% GST: ₹${gstAmount} + 2% TCS: ₹${tcsAmount})`,
+    });
+
+    inst.status = "Paid";
+    inst.paymentId = String(paymentDoc._id);
+    inst.invoiceNumber = paymentDoc.invoiceNumber;
+    inst.paidAt = new Date();
+    inst.method = paymentDoc.method;
+    inst.totalAmount = totalAmount;
+    inst.gstAmount = gstAmount;
+    inst.tcsAmount = tcsAmount;
+
+    registration.amountPaid = (Number(registration.amountPaid) || 0) + totalAmount;
+    const allPaid = registration.installments.every((i) => i.status === "Paid");
+    registration.paymentStatus = allPaid ? "Paid" : "Partially Paid";
+
+    await event.save();
+
+    // Fire confirmation notification and email
+    setImmediate(async () => {
+      try {
+        await notificationService.createNotification({
+          recipientId: userId,
+          type: "Payment",
+          title: `Installment #${inst.installmentNumber} Paid & Invoice Generated`,
+          body: `Payment of ₹${totalAmount} (incl. 5% GST & 2% TCS) for "${event.title}" confirmed. Invoice #${paymentDoc.invoiceNumber} is available.`,
+          link: "/admin/payments",
+          metadata: {
+            invoiceNumber: paymentDoc.invoiceNumber,
+            eventId: event._id,
+            installmentNumber: inst.installmentNumber,
+          },
+        });
+
+        if (attendeeUser?.email) {
+          await emailService.sendEventRegistrationEmail({
+            email: attendeeUser.email,
+            userName: attendeeUser.name,
+            eventTitle: `${event.title} - ${inst.title}`,
+            eventDate: inst.dueDate,
+            location: event.venue || event.city || "Delegation Itinerary",
+            ticketType: `Delegation Installment #${inst.installmentNumber}`,
+            isPaid: true,
+            ticketPrice: totalAmount,
+            paymentId: paymentDoc._id,
+            transactionId: paymentDoc.transactionId,
+            chapter: event.chapter || "",
+            invoiceNumber: paymentDoc.invoiceNumber,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to send installment payment confirmation:", err);
+      }
+    });
+
+    return { event, installment: inst, payment: paymentDoc };
+  },
+
+  /**
+   * Check and send automated reminders for Delegation Event installments:
+   * 1. 1 day prior to Installment Due
+   * 2. Immediately when Installment is due (on due date)
+   * 3. Each day until not paid (overdue)
+   */
+  async checkDelegationInstallmentReminders() {
+    try {
+      const now = new Date();
+      const todayStr = now.toISOString().split("T")[0];
+      const todayTime = new Date(todayStr).getTime();
+
+      const delegationEvents = await Event.find({
+        $or: [{ eventCategory: "Delegation" }, { isDelegation: true }],
+        "registeredUsers.installments.status": "Pending",
+      }).populate("registeredUsers.user", "name email phone");
+
+      for (const event of delegationEvents) {
+        let eventModified = false;
+
+        for (const reg of event.registeredUsers || []) {
+          const user = reg.user;
+          if (!user || !user.email) continue;
+
+          for (const inst of reg.installments || []) {
+            if (inst.status !== "Pending" || !inst.dueDate) continue;
+
+            const dueTime = new Date(inst.dueDate).getTime();
+            if (isNaN(dueTime)) continue;
+
+            // Difference in calendar days
+            const diffDays = Math.round((dueTime - todayTime) / (1000 * 60 * 60 * 24));
+
+            if (!inst.remindersSent) {
+              inst.remindersSent = {
+                prior1Day: { sent: false, sentAt: null },
+                dueImmediate: { sent: false, sentAt: null },
+                dailyOverdueCount: 0,
+                lastOverdueSentAt: null,
+              };
+            }
+
+            let shouldSend = false;
+            let reminderType = "";
+
+            if (diffDays === 1 && !inst.remindersSent.prior1Day?.sent) {
+              // 1 day prior to Installment Due
+              shouldSend = true;
+              reminderType = "prior_1_day";
+              inst.remindersSent.prior1Day = { sent: true, sentAt: new Date() };
+              eventModified = true;
+            } else if (diffDays === 0 && !inst.remindersSent.dueImmediate?.sent) {
+              // Immediately when Installment is due (today)
+              shouldSend = true;
+              reminderType = "due_today";
+              inst.remindersSent.dueImmediate = { sent: true, sentAt: new Date() };
+              eventModified = true;
+            } else if (diffDays < 0) {
+              // Each day until not paid (Overdue)
+              const lastSent = inst.remindersSent.lastOverdueSentAt;
+              const alreadySentToday = lastSent && new Date(lastSent).toISOString().split("T")[0] === todayStr;
+
+              if (!alreadySentToday) {
+                shouldSend = true;
+                reminderType = "overdue";
+                inst.remindersSent.lastOverdueSentAt = new Date();
+                inst.remindersSent.dailyOverdueCount = (inst.remindersSent.dailyOverdueCount || 0) + 1;
+                eventModified = true;
+              }
+            }
+
+            if (shouldSend) {
+              const totalAmount = inst.totalAmount || Math.round((inst.baseAmount * 1.07) * 100) / 100;
+              const notificationTitle =
+                reminderType === "prior_1_day"
+                  ? `Reminder: Delegation Installment #${inst.installmentNumber} Due Tomorrow`
+                  : reminderType === "due_today"
+                    ? `Action Required: Delegation Installment #${inst.installmentNumber} Due Today`
+                    : `Overdue Notice: Delegation Installment #${inst.installmentNumber} Pending`;
+
+              const notificationBody =
+                reminderType === "prior_1_day"
+                  ? `Installment #${inst.installmentNumber} (₹${totalAmount}) for "${event.title}" is due tomorrow (${inst.dueDate}).`
+                  : reminderType === "due_today"
+                    ? `Installment #${inst.installmentNumber} (₹${totalAmount}) for "${event.title}" is due today! Please complete your payment.`
+                    : `Installment #${inst.installmentNumber} (₹${totalAmount}) for "${event.title}" was due on ${inst.dueDate}. Please clear your payment immediately.`;
+
+              // Send in-app notification
+              try {
+                await notificationService.createNotification({
+                  recipientId: user._id || user.id,
+                  type: "Event",
+                  title: notificationTitle,
+                  body: notificationBody,
+                  entityId: event._id,
+                  link: `/events/${event.slug || event._id}`,
+                  metadata: {
+                    eventId: event._id,
+                    installmentNumber: inst.installmentNumber,
+                    dueDate: inst.dueDate,
+                    totalAmount,
+                    reminderType,
+                  },
+                });
+              } catch (notifErr) {
+                console.error("Failed to send in-app reminder notification:", notifErr);
+              }
+
+              // Send reminder email
+              try {
+                await emailService.sendDelegationInstallmentReminderEmail({
+                  email: user.email,
+                  userName: user.name,
+                  eventTitle: event.title,
+                  installmentNumber: inst.installmentNumber,
+                  installmentTitle: inst.title,
+                  dueDate: inst.dueDate,
+                  baseAmount: inst.baseAmount,
+                  gstAmount: inst.gstAmount,
+                  tcsAmount: inst.tcsAmount,
+                  totalAmount,
+                  reminderType,
+                  eventId: event.slug || event._id,
+                });
+              } catch (mailErr) {
+                console.error("Failed to send reminder email:", mailErr);
+              }
+            }
+          }
+        }
+
+        if (eventModified) {
+          await event.save();
+        }
+      }
+    } catch (err) {
+      console.error("[EventScheduler] Error checking delegation installment reminders:", err);
+    }
+>>>>>>> Stashed changes
   },
 };

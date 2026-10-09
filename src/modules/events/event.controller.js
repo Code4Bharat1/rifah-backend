@@ -426,6 +426,7 @@ export const eventController = {
     }
   }),
 
+<<<<<<< Updated upstream
   /**
    * Public Event Ticket QR Verification
    * GET /api/v1/events/tickets/verify/:ticketId?token=...
@@ -479,5 +480,20 @@ export const eventController = {
 
     const result = await eventService.updateTicketStatus(ticketId, status, reason, req.user?._id);
     return ApiResponse.success(res, result, result.message);
+=======
+  payDelegationInstallment: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { installmentNumber, paymentMethod, transactionId } = req.body;
+    const result = await eventService.payDelegationInstallment(id, req.user.id || req.user._id, installmentNumber, {
+      method: paymentMethod,
+      transactionId,
+    });
+    return ApiResponse.success(res, result, `Installment #${installmentNumber} payment confirmed & invoice generated`);
+  }),
+
+  triggerDelegationReminders: asyncHandler(async (req, res) => {
+    await eventService.checkDelegationInstallmentReminders();
+    return ApiResponse.success(res, { triggered: true }, "Delegation installment reminders processed");
+>>>>>>> Stashed changes
   }),
 };

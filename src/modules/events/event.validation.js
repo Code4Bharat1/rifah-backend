@@ -15,8 +15,11 @@ export const validateCreateEvent = (data = {}) => {
   if (data.targetAudience !== undefined && !Array.isArray(data.targetAudience)) {
     errors.push({ field: "targetAudience", message: "Target audience must be an array" });
   }
+  if (data.eventCategory && !["Meet", "Sports", "Delegation"].includes(data.eventCategory)) {
+    errors.push({ field: "eventCategory", message: "Event category must be Meet, Sports, or Delegation" });
+  }
   const isPaid = data.isPaid === true || data.isPaid === "true" || data.isPaid === "Paid";
-  if (isPaid) {
+  if (isPaid && data.eventCategory !== "Delegation" && !data.isDelegation) {
     const price = Number(data.ticketPrice);
     if (isNaN(price) || price < 0 || data.ticketPrice === "" || data.ticketPrice === undefined || data.ticketPrice === null) {
       errors.push({ field: "ticketPrice", message: "Ticket price must be a valid number for paid events" });
@@ -24,6 +27,11 @@ export const validateCreateEvent = (data = {}) => {
     const memPrice = Number(data.memberPrice);
     if (!isNaN(memPrice) && memPrice < 0) {
       errors.push({ field: "memberPrice", message: "Member price cannot be negative" });
+    }
+  }
+  if ((data.eventCategory === "Delegation" || data.isDelegation) && data.delegationInstallments !== undefined) {
+    if (!Array.isArray(data.delegationInstallments)) {
+      errors.push({ field: "delegationInstallments", message: "Delegation installments must be an array" });
     }
   }
   // BUG-007: the publication/scheduling date (scheduledAt) must not be after the

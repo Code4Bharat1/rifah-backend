@@ -16,7 +16,10 @@ export const requirePermission = (permission) => {
       return next();
     }
 
-    const userPermissions = req.user.permissions || [];
+    const userPermissions = [
+      ...(req.user.permissions || []),
+      ...(req.user.orgPermissions || []),
+    ];
     if (!userPermissions.includes(permission)) {
       return next(new ForbiddenError(`Missing required permission: ${permission}`));
     }

@@ -35,12 +35,13 @@ export const authController = {
 
   switchRole: asyncHandler(async (req, res) => {
     const targetRole = req.body.targetRole || req.body.role;
-    const result = await authService.switchRole(req.user.id, targetRole);
+    const targetWorkspaceId = req.body.targetWorkspaceId || null;
+    const result = await authService.switchRole(req.user.id, targetRole, targetWorkspaceId);
     return ApiResponse.success(res, result, "Role switched successfully");
   }),
 
   getMe: asyncHandler(async (req, res) => {
-    const user = await authService.getMe(req.user.id, req.user.role);
+    const user = await authService.getMe(req.user.id, req.user.role, req.user);
     return ApiResponse.success(res, user, "Session profile retrieved");
   }),
 

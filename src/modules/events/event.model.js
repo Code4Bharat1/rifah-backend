@@ -100,6 +100,7 @@ const eventSchema = new mongoose.Schema(
     },
     eventCategory: {
       type: String,
+<<<<<<< Updated upstream
       enum: [
         "Meet",
         "Workshop",
@@ -131,10 +132,18 @@ const eventSchema = new mongoose.Schema(
       index: true,
     },
     isRegistrationClosed: {
+=======
+      enum: ["Meet", "Sports", "Delegation"],
+      default: "Meet",
+      index: true,
+    },
+    isDelegation: {
+>>>>>>> Stashed changes
       type: Boolean,
       default: false,
       index: true,
     },
+<<<<<<< Updated upstream
     seatsFull: {
       type: Boolean,
       default: false,
@@ -143,6 +152,25 @@ const eventSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+=======
+    delegationDetails: {
+      destination: { type: String, default: "" },
+      country: { type: String, default: "" },
+      travelDates: { type: String, default: "" },
+      inclusions: { type: String, default: "" },
+      visaGuidelines: { type: String, default: "" },
+    },
+    delegationInstallments: [
+      {
+        installmentNumber: { type: Number, required: true },
+        title: { type: String, required: true },
+        dueDate: { type: String, required: true },
+        memberAmount: { type: Number, required: true, default: 0 },
+        nonMemberAmount: { type: Number, required: true, default: 0 },
+        notes: { type: String, default: "" },
+      },
+    ],
+>>>>>>> Stashed changes
     sportDetails: {
       sportName: { type: String, default: "" },
       venue: { type: String, default: "" },
@@ -212,7 +240,7 @@ const eventSchema = new mongoose.Schema(
         },
         paymentStatus: {
           type: String,
-          enum: ["Free", "Pending", "Paid"],
+          enum: ["Free", "Pending", "Partially Paid", "Paid"],
           default: "Free",
         },
         amountPaid: {
@@ -234,6 +262,41 @@ const eventSchema = new mongoose.Schema(
         transactionId: {
           type: String,
         },
+        // Delegation Installment tracking for this registered user
+        installments: [
+          {
+            installmentNumber: { type: Number, required: true },
+            title: { type: String, required: true },
+            dueDate: { type: String, required: true },
+            baseAmount: { type: Number, required: true, default: 0 },
+            gstRate: { type: Number, default: 5 },
+            gstAmount: { type: Number, default: 0 },
+            tcsRate: { type: Number, default: 2 },
+            tcsAmount: { type: Number, default: 0 },
+            totalAmount: { type: Number, required: true, default: 0 },
+            status: {
+              type: String,
+              enum: ["Pending", "Paid"],
+              default: "Pending",
+            },
+            paymentId: { type: String, default: null },
+            invoiceNumber: { type: String, default: null },
+            paidAt: { type: Date, default: null },
+            method: { type: String, default: "" },
+            remindersSent: {
+              prior1Day: {
+                sent: { type: Boolean, default: false },
+                sentAt: { type: Date, default: null },
+              },
+              dueImmediate: {
+                sent: { type: Boolean, default: false },
+                sentAt: { type: Date, default: null },
+              },
+              dailyOverdueCount: { type: Number, default: 0 },
+              lastOverdueSentAt: { type: Date, default: null },
+            },
+          },
+        ],
         // Ask & Give networking fields
         asks: [{ type: String }],
         gives: [{ type: String }],

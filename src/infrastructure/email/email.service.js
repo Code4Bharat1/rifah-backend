@@ -1332,6 +1332,114 @@ RIFAH Chamber of Commerce & Industry
   },
 
   /**
+   * Sends Delegation Event Installment Reminder Email
+   */
+  sendDelegationInstallmentReminderEmail: async ({
+    email,
+    userName,
+    eventTitle,
+    installmentNumber,
+    installmentTitle,
+    dueDate,
+    baseAmount,
+    gstAmount,
+    tcsAmount,
+    totalAmount,
+    reminderType, // "prior_1_day" | "due_today" | "overdue"
+    eventId,
+  }) => {
+    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+    const hasLogo = fs.existsSync(logoPath);
+
+    let subject = "";
+    let badgeText = "";
+    let badgeBg = "#eff6ff";
+    let badgeColor = "#1d4ed8";
+    let heading = "";
+    let urgencyMessage = "";
+
+    if (reminderType === "prior_1_day") {
+      subject = `⏰ Reminder: Delegation Installment #${installmentNumber} Due Tomorrow - ${eventTitle}`;
+      badgeText = "DUE TOMORROW";
+      heading = "Installment Due Tomorrow";
+      urgencyMessage = `This is a reminder that Installment #${installmentNumber} for the official RIFAH business delegation is due tomorrow on <strong>${dueDate}</strong>.`;
+    } else if (reminderType === "due_today") {
+      subject = `🚨 Action Required: Delegation Installment #${installmentNumber} Due Today - ${eventTitle}`;
+      badgeText = "DUE TODAY";
+      badgeBg = "#fffbeb";
+      badgeColor = "#b45309";
+      heading = "Installment Due Today";
+      urgencyMessage = `Please note that Installment #${installmentNumber} for <strong>${eventTitle}</strong> is due today, <strong>${dueDate}</strong>. Kindly complete the payment to ensure flight & itinerary reservation.`;
+    } else {
+      subject = `⚠️ OVERDUE NOTICE: Delegation Installment #${installmentNumber} Pending - ${eventTitle}`;
+      badgeText = "OVERDUE";
+      badgeBg = "#fef2f2";
+      badgeColor = "#b91c1c";
+      heading = "Overdue Installment Notice";
+      urgencyMessage = `Your Installment #${installmentNumber} was due on <strong>${dueDate}</strong> and remains pending. Please settle your payment immediately to avoid travel confirmation cancellation.`;
+    }
+
+    const html = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+        <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #0284c7 50%, #0f172a 100%);"></div>
+        <div style="padding: 32px;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CHAMBER</h1>`}
+          <div style="margin-bottom: 12px;">
+            <span style="background-color: ${badgeBg}; color: ${badgeColor}; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">${badgeText}</span>
+            <span style="background-color: #eff6ff; color: #1e40af; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; margin-left: 6px;">BUSINESS DELEGATION</span>
+          </div>
+          <h2 style="color: #0f172a; font-size: 20px; margin: 8px 0 16px 0;">${heading}</h2>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${userName || "Delegate"}</strong>,</p>
+          <p style="color: #475569; font-size: 14px; line-height: 1.6;">${urgencyMessage}</p>
+
+          <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <h3 style="margin: 0 0 14px 0; color: #0f172a; font-size: 16px;">${eventTitle}</h3>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #475569;">
+              <tr>
+                <td style="padding: 6px 0; border-bottom: 1px solid #f1f5f9;"><strong>Installment:</strong></td>
+                <td style="text-align: right; font-weight: bold; color: #0f172a; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">Installment #${installmentNumber} (${installmentTitle || "Milestone"})</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; border-bottom: 1px solid #f1f5f9;"><strong>Due Date:</strong></td>
+                <td style="text-align: right; font-weight: bold; color: #dc2626; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">${dueDate}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; border-bottom: 1px solid #f1f5f9;"><strong>Base Amount:</strong></td>
+                <td style="text-align: right; color: #0f172a; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">₹ ${Number(baseAmount || 0).toLocaleString("en-IN")}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; border-bottom: 1px solid #f1f5f9;"><strong>GST (5%):</strong></td>
+                <td style="text-align: right; color: #0f172a; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">₹ ${Number(gstAmount || 0).toLocaleString("en-IN")}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; border-bottom: 1px solid #f1f5f9;"><strong>TCS (2% - Sec 206C):</strong></td>
+                <td style="text-align: right; color: #0f172a; padding: 6px 0; border-bottom: 1px solid #f1f5f9;">₹ ${Number(tcsAmount || 0).toLocaleString("en-IN")}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px 0 0 0; font-size: 15px;"><strong>Total Payable:</strong></td>
+                <td style="text-align: right; font-weight: 800; font-size: 16px; color: #0284c7; padding: 10px 0 0 0;">₹ ${Number(totalAmount || 0).toLocaleString("en-IN")}</td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="color: #64748b; font-size: 12px; line-height: 1.5; margin: 16px 0;">
+            Note: On each installment payment, an official RIFAH GST Tax Invoice including 5% GST and 2% TCS will be generated and added to your payment history ledger.
+          </p>
+
+          <div style="margin-top: 24px; text-align: center;">
+            <a href="http://localhost:3000/events/${eventId}" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Pay Installment Online →</a>
+          </div>
+          <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · International Delegations Desk</p>
+        </div>
+      </div>
+    `;
+
+    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
+    return emailService.sendEmail({ to: email, subject, html, attachments });
+  },
+
+  /**
    * Sends Password Reset OTP Verification Email
    */
   sendPasswordResetEmail: async ({ email, name, resetCode }) => {

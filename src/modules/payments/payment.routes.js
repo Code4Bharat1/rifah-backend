@@ -45,6 +45,13 @@ router.get(
 );
 
 router.post(
+  "/admin/create-invoice",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN),
+  paymentController.createAdminInvoice
+);
+
+router.post(
   "/:id/refund",
   authMiddleware,
   requireRole(ROLES.CENTRAL_ADMIN),

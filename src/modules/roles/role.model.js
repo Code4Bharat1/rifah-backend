@@ -52,6 +52,25 @@ const roleSchema = new mongoose.Schema(
       default: 0,
       index: true,
     },
+
+    // --- RBAC extension ---
+    // Links to a RolePermissionTemplate that defines what this assignment can do / see.
+    // null = legacy "display-only" leadership role (no panel access granted).
+    permissionTemplateId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "RolePermissionTemplate",
+      default: null,
+      index: true,
+    },
+
+    // Which panel the user should land in when they select this role at login.
+    // Defaults to the level-appropriate admin panel.
+    // "chapter-admin" | "state-admin" | "central-admin" | null
+    panelType: {
+      type: String,
+      enum: ["chapter-admin", "state-admin", "central-admin", null],
+      default: null,
+    },
   },
   {
     timestamps: true,

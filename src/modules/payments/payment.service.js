@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { Payment } from "./payment.model.js";
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
+import { Event } from "../events/event.model.js";
 import { env } from "../../config/env.js";
 import { membershipService } from "../memberships/membership.service.js";
 import { Plan } from "../memberships/plan.model.js";
@@ -980,5 +981,139 @@ export const paymentService = {
     }
 
     return payment;
+  },
+
+  /**
+   * Create a custom invoice issued by Central Admin
+   */
+  createAdminInvoice: async (data, adminUser) => {
+    // 1. Generate or validate invoiceNumber
+    let invoiceNumber = (data.invoiceNumber || "").trim().toUpperCase();
+    if (!invoiceNumber) {
+      invoiceNumber = generateReferenceId("INV", 4);
+      while (await Payment.findOne({ invoiceNumber })) {
+        invoiceNumber = generateReferenceId("INV", 4);
+      }
+    } else {
+      const existing = await Payment.findOne({ invoiceNumber });
+      if (existing) {
+        throw new BadRequestError(`Invoice number #${invoiceNumber} is already taken`);
+      }
+    }
+
+    // 2. Identify / resolve payer & business
+    let payerId = null;
+    let businessId = null;
+    let payerDoc = null;
+    let businessDoc = null;
+
+    if (data.businessId && mongoose.Types.ObjectId.isValid(data.businessId)) {
+      businessDoc = await Business.findById(data.businessId).populate("owner");
+      if (businessDoc) {
+        businessId = businessDoc._id;
+        payerId = businessDoc.owner?._id || businessDoc.owner;
+        if (payerId) {
+          payerDoc = await User.findById(payerId);
+        }
+      }
+    }
+
+    if (!payerId && data.payerId && mongoose.Types.ObjectId.isValid(data.payerId)) {
+      payerDoc = await User.findById(data.payerId);
+      if (payerDoc) {
+        payerId = payerDoc._id;
+        if (!businessId) {
+          businessDoc = await Business.findOne({ owner: payerDoc._id });
+          if (businessDoc) businessId = businessDoc._id;
+        }
+      }
+    }
+
+    // Search by email if provided
+    if (!payerId && data.payerEmail) {
+      payerDoc = await User.findOne({ email: data.payerEmail.toLowerCase().trim() });
+      if (payerDoc) {
+        payerId = payerDoc._id;
+        if (!businessId) {
+          businessDoc = await Business.findOne({ owner: payerDoc._id });
+          if (businessDoc) businessId = businessDoc._id;
+        }
+      }
+    }
+
+    if (!payerId) {
+      // Default to creating admin user to fulfill schema required check
+      payerId = adminUser.id || adminUser._id;
+    }
+
+    // 3. Amounts & Tax Calculations
+    const gstRate = data.gstRate !== undefined ? Number(data.gstRate) : 18;
+    let subtotal = data.subtotal !== undefined ? Number(data.subtotal) : 0;
+    let gstAmount = data.gstAmount !== undefined ? Number(data.gstAmount) : 0;
+    let amount = Number(data.amount) || 0;
+
+    if (!amount && subtotal) {
+      if (gstRate > 0) {
+        gstAmount = Math.round((subtotal * (gstRate / 100)) * 100) / 100;
+        amount = Math.round((subtotal + gstAmount) * 100) / 100;
+      } else {
+        amount = subtotal;
+        gstAmount = 0;
+      }
+    } else if (amount && !subtotal) {
+      if (gstRate > 0) {
+        subtotal = Math.round((amount / (1 + gstRate / 100)) * 100) / 100;
+        gstAmount = Math.round((amount - subtotal) * 100) / 100;
+      } else {
+        subtotal = amount;
+        gstAmount = 0;
+      }
+    } else if (amount && subtotal && !gstAmount && gstRate > 0) {
+      gstAmount = Math.round((amount - subtotal) * 100) / 100;
+    }
+
+    const payerName = (data.payerName || payerDoc?.name || businessDoc?.contactPerson || businessDoc?.name || "Direct Client").trim();
+    const payerEmail = (data.payerEmail || payerDoc?.email || businessDoc?.email || "").trim();
+    const payerPhone = (data.payerPhone || payerDoc?.phone || businessDoc?.phone || "").trim();
+    const businessName = (data.businessName || businessDoc?.name || "").trim();
+    const chapter = data.chapter || businessDoc?.chapter || payerDoc?.chapter || "Central";
+    const state = data.state || businessDoc?.state || payerDoc?.state || "";
+
+    const payment = await Payment.create({
+      invoiceNumber,
+      payer: payerId,
+      business: businessId || undefined,
+      itemType: data.itemType || "Custom Invoice",
+      description: data.description || data.purpose || "Chamber Service Invoice",
+      subtotal,
+      gstRate,
+      gstAmount,
+      amount,
+      currency: data.currency || "INR",
+      method: data.method || "Bank Transfer",
+      status: data.status || "Paid",
+      transactionId: data.transactionId || `TXN-${invoiceNumber}`,
+      paidAt: data.paidAt ? new Date(data.paidAt) : new Date(),
+      chapter,
+      state,
+      collectingChapter: chapter,
+      collectingState: state,
+      payerName,
+      payerEmail,
+      payerPhone,
+      businessName,
+      gstin: data.gstin || businessDoc?.gstin || "",
+      sacCode: data.sacCode || "9983",
+      quantity: Number(data.quantity) || 1,
+      notes: data.notes || "",
+      isCustomInvoice: true,
+      createdBy: adminUser.id || adminUser._id,
+    });
+
+    const populatedPayment = await Payment.findById(payment._id)
+      .populate("payer", "name email phone chapter state")
+      .populate("business", "name slug chapter state city membership");
+
+    return populatedPayment;
   },
 };

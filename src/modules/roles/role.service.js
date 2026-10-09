@@ -1,4 +1,5 @@
 import { Role } from "./role.model.js";
+import { RolePermissionTemplate } from "./role-permission-template.model.js";
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
@@ -7,7 +8,7 @@ import { auditService } from "../audit/audit.service.js";
 
 export const roleService = {
   // Admin: Get all roles with filters
-  getAllRoles: async (queryParams = {}) => {
+  getAllRoles: async (queryParams = {}, adminUser = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
 
@@ -25,6 +26,17 @@ export const roleService = {
     }
     if (queryParams.chapterId && queryParams.chapterId !== "all") {
       filter.chapterId = queryParams.chapterId;
+    }
+
+    // Role-based admin scoping:
+    if (adminUser) {
+      if (adminUser.role === "chapter_admin") {
+        filter.level = "Chapter";
+        if (adminUser.chapterId) filter.chapterId = adminUser.chapterId;
+      } else if (adminUser.role === "state_admin") {
+        filter.level = "State";
+        if (adminUser.state) filter.state = adminUser.state;
+      }
     }
 
     // Since we want to search by name/business, we might need to populate first or do a lookup.
@@ -45,6 +57,7 @@ export const roleService = {
         .populate("userId", "name email avatar phone organization city state")
         .populate("businessId", "name slug logo industry city state")
         .populate("chapterId", "name slug city state")
+        .populate("permissionTemplateId", "name level permissions allowedNavRoutes")
         .sort(sort)
         .skip(skip)
         .limit(limit),
@@ -108,7 +121,7 @@ export const roleService = {
 
   // Admin: Create/Assign role
   createRole: async (data, adminUser) => {
-    const { userId, businessId, role, status, displayOrder, level, state, chapterId } = data;
+    const { userId, businessId, role, status, displayOrder, level, state, chapterId, permissionTemplateId, panelType } = data;
 
     // Check if user exists
     const user = await User.findById(userId);
@@ -116,16 +129,58 @@ export const roleService = {
       throw new AppError("User not found", 404);
     }
 
+    let finalLevel = level || "Central";
+    let finalState = state || null;
+    let finalChapterId = chapterId || null;
+
+    if (adminUser) {
+      if (adminUser.role === "chapter_admin") {
+        finalLevel = "Chapter";
+        finalChapterId = adminUser.chapterId || finalChapterId;
+      } else if (adminUser.role === "state_admin") {
+        finalLevel = "State";
+        finalState = adminUser.state || finalState;
+      }
+    }
+
     // Check for duplicate assignment
     const existing = await Role.findOne({ 
       userId, 
       role, 
-      level: level || "Central",
-      state: state || null,
-      chapterId: chapterId || null
+      level: finalLevel,
+      state: finalState,
+      chapterId: finalChapterId
     });
     if (existing) {
       throw new AppError(`User is already assigned this specific role`, 400);
+    }
+
+    let finalTemplateId = permissionTemplateId || null;
+    let finalPanelType = panelType;
+
+    if (data.panelAccess === false) {
+      finalTemplateId = null;
+      finalPanelType = null;
+    } else {
+      if (!finalPanelType) {
+        finalPanelType = finalLevel === "Chapter" ? "chapter-admin" : finalLevel === "State" ? "state-admin" : "central-admin";
+      }
+      if (!finalTemplateId) {
+        const matchingTpl = await RolePermissionTemplate.findOne({
+          name: role,
+          level: finalLevel,
+          isActive: true,
+          $or: [
+            { chapterId: finalChapterId },
+            { state: finalState },
+            { chapterId: null, state: null },
+          ],
+        }).sort({ chapterId: -1, state: -1 });
+
+        if (matchingTpl) {
+          finalTemplateId = matchingTpl._id;
+        }
+      }
     }
 
     const assignedRole = await Role.create({
@@ -134,12 +189,17 @@ export const roleService = {
       role,
       status: status || "Active",
       displayOrder: displayOrder || 0,
-      level: level || "Central",
-      state: state || null,
-      chapterId: chapterId || null,
+      level: finalLevel,
+      state: finalState,
+      chapterId: finalChapterId,
+      permissionTemplateId: finalTemplateId,
+      panelType: finalPanelType,
     });
 
     await assignedRole.populate("userId", "name email avatar");
+    if (assignedRole.permissionTemplateId) {
+      await assignedRole.populate("permissionTemplateId", "name level permissions allowedNavRoutes");
+    }
 
     // Log action
     if (adminUser) {
@@ -183,8 +243,36 @@ export const roleService = {
       }
     }
 
+    // Handle panelAccess toggle
+    if (data.panelAccess === false) {
+      data.permissionTemplateId = null;
+      data.panelType = null;
+    } else if (data.panelAccess === true) {
+      const targetRole = data.role || roleDoc.role;
+      const targetLevel = data.level || roleDoc.level;
+      const targetState = data.state !== undefined ? data.state : roleDoc.state;
+      const targetChapterId = data.chapterId !== undefined ? data.chapterId : roleDoc.chapterId;
+      data.panelType = targetLevel === "Chapter" ? "chapter-admin" : targetLevel === "State" ? "state-admin" : "central-admin";
+      if (!data.permissionTemplateId) {
+        const matchingTpl = await RolePermissionTemplate.findOne({
+          name: targetRole,
+          level: targetLevel,
+          isActive: true,
+          $or: [
+            { chapterId: targetChapterId },
+            { state: targetState },
+            { chapterId: null, state: null },
+          ],
+        }).sort({ chapterId: -1, state: -1 });
+        if (matchingTpl) {
+          data.permissionTemplateId = matchingTpl._id;
+        }
+      }
+    }
+
     const updatedRole = await Role.findByIdAndUpdate(id, data, { new: true, runValidators: true })
-      .populate("userId", "name email avatar");
+      .populate("userId", "name email avatar")
+      .populate("permissionTemplateId", "name level permissions allowedNavRoutes");
 
     // Log action
     if (adminUser) {

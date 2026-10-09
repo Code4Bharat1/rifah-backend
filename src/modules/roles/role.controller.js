@@ -5,7 +5,7 @@ import { asyncHandler } from "../../shared/utils/async-handler.js";
 export const roleController = {
   // GET /api/v1/roles
   getAllRoles: asyncHandler(async (req, res) => {
-    const result = await roleService.getAllRoles(req.query);
+    const result = await roleService.getAllRoles(req.query, req.user);
     return ApiResponse.success(res, result.roles, "Roles fetched successfully", 200, result.meta);
   }),
 
