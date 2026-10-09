@@ -9,6 +9,9 @@ const router = Router();
 // Public — no auth required, for the landing page
 router.get("/public/states", analyticsController.publicStateTotals);
 
+// Top Performer Spotlight — accessible by members and admins
+router.get("/spotlight", authMiddleware, analyticsController.spotlight);
+
 // Admin-only, role-scoped
 router.get(
   "/overview",

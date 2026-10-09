@@ -1,10 +1,12 @@
 
+import mongoose from "mongoose";
 import { ThankYouNote } from "./thank-you-note.model.js";
+import { Referral } from "./referral.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
 import { Business } from "../businesses/business.model.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
-import { formatStateName, resolveStateFromCity } from "./networking.utils.js";
+import { formatStateName, resolveStateFromCity, resolveOwnBusiness } from "./networking.utils.js";
 
 const stateRegex = (state) => new RegExp(`^${state.trim()}$`, "i");
 
@@ -48,7 +50,7 @@ const sumAmount = async (match) => {
 };
 
 const scopeLabel = (user) => {
-  if (!user || user.role === ROLES.CENTRAL_ADMIN) return { level: "central", name: "All India" };
+  if (!user || user.role === ROLES.CENTRAL_ADMIN) return { level: "central", name: "Central" };
   if (user.role === ROLES.STATE_ADMIN) return { level: "state", name: user.state || "" };
   if (user.role === ROLES.CHAPTER_ADMIN) return { level: "chapter", name: "" };
   return { level: "none", name: "" };
@@ -351,4 +353,343 @@ export const analyticsService = {
 
     return rows;
   },
+
+  /**
+   * Spotlight Leaderboard: Top #1 Referral Champion & Top #1 Business Generator
+   * Scoped hierarchically (Chapter -> State -> National) with customizable period
+   * (this_month, last_month, all_time), tie-breaker rules, and calling user's rank status.
+   */
+  getSpotlightLeaderboard: async (user, query = {}) => {
+    const userRole = user?.role;
+    const isCentral = [ROLES.CENTRAL_ADMIN, ROLES.SECRETARIAT, "super_admin", "admin"].includes(userRole);
+    const isState = userRole === ROLES.STATE_ADMIN;
+
+    let scope = (query.scope || "").toLowerCase();
+    if (!["chapter", "state", "national"].includes(scope)) {
+      if (isCentral) scope = "national";
+      else if (isState) scope = "state";
+      else scope = "chapter";
+    }
+
+    let period = (query.period || "this_month").toLowerCase();
+    if (!["this_month", "last_month", "all_time"].includes(period)) {
+      period = "this_month";
+    }
+
+    let dateMatch = {};
+    const now = new Date();
+    if (period === "this_month") {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      dateMatch = { createdAt: { $gte: startOfMonth } };
+    } else if (period === "last_month") {
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      dateMatch = { createdAt: { $gte: startOfLastMonth, $lte: endOfLastMonth } };
+    }
+
+    const userId = user?._id || user?.id;
+    let myBusiness = null;
+    if (userId) {
+      myBusiness = await resolveOwnBusiness(userId).catch(() => null);
+    }
+    const myBusinessId = myBusiness?._id || user?.businessId || query?.businessId || null;
+    const myBizIdStr = myBusinessId ? myBusinessId.toString() : "";
+
+    let referralScopeMatch = {};
+    let tynScopeMatch = {};
+    let scopeInfo = { level: scope, name: "Central", state: "", chapterId: null };
+
+    if (scope === "chapter") {
+      let targetChapterId = query.chapterId || user?.chapterId || myBusiness?.chapterId;
+      if (targetChapterId && mongoose.isValidObjectId(targetChapterId)) {
+        targetChapterId = new mongoose.Types.ObjectId(targetChapterId);
+        referralScopeMatch = { referrerChapterId: targetChapterId };
+        tynScopeMatch = {
+          $or: [
+            { giverChapterId: targetChapterId },
+            { receiverChapterId: targetChapterId },
+          ],
+        };
+        const ch = await Chapter.findById(targetChapterId).select("name state").lean();
+        if (ch) {
+          scopeInfo.name = ch.name;
+          scopeInfo.state = ch.state || "";
+          scopeInfo.chapterId = ch._id.toString();
+        }
+      } else {
+        referralScopeMatch = { _id: null };
+        tynScopeMatch = { _id: null };
+        scopeInfo.name = "My Chapter";
+      }
+    } else if (scope === "state") {
+      let targetState = query.state || user?.state || myBusiness?.state || "";
+      targetState = formatStateName(targetState);
+      if (targetState) {
+        const re = stateRegex(targetState);
+        referralScopeMatch = { referrerState: re };
+        tynScopeMatch = {
+          $or: [
+            { giverState: re },
+            { receiverState: re },
+          ],
+        };
+        scopeInfo.name = targetState;
+        scopeInfo.state = targetState;
+      } else {
+        referralScopeMatch = { _id: null };
+        tynScopeMatch = { _id: null };
+        scopeInfo.name = "My State";
+      }
+    } else {
+      referralScopeMatch = {};
+      tynScopeMatch = {};
+      scopeInfo.name = "Central";
+      scopeInfo.level = "national";
+    }
+
+    const referralMatch = { ...referralScopeMatch, ...dateMatch };
+    const referralPipeline = [
+      { $match: referralMatch },
+      {
+        $group: {
+          _id: "$referrerBusiness",
+          count: { $sum: 1 },
+          firstActivityAt: { $min: "$createdAt" },
+          lastActivityAt: { $max: "$createdAt" },
+        },
+      },
+      { $sort: { count: -1, firstActivityAt: 1 } },
+      {
+        $facet: {
+          topList: [
+            { $limit: 1 },
+            {
+              $lookup: {
+                from: "businesses",
+                localField: "_id",
+                foreignField: "_id",
+                as: "biz",
+              },
+            },
+            { $unwind: "$biz" },
+            {
+              $lookup: {
+                from: "chapters",
+                localField: "biz.chapterId",
+                foreignField: "_id",
+                as: "ch",
+              },
+            },
+            { $unwind: { path: "$ch", preserveNullAndEmptyArrays: true } },
+            {
+              $project: {
+                _id: 0,
+                businessId: "$_id",
+                businessName: "$biz.name",
+                slug: "$biz.slug",
+                logo: "$biz.logo",
+                contactPerson: "$biz.contactPerson",
+                phone: "$biz.phone",
+                whatsapp: { $ifNull: ["$biz.whatsapp", "$biz.whatsappNumber"] },
+                state: "$biz.state",
+                chapterName: { $ifNull: ["$ch.name", "$biz.chapter"] },
+                score: "$count",
+                firstActivityAt: 1,
+                lastActivityAt: 1,
+              },
+            },
+          ],
+          allRankings: [
+            {
+              $project: {
+                _id: 0,
+                businessId: "$_id",
+                count: "$count",
+              },
+            },
+          ],
+          totalStats: [
+            {
+              $group: {
+                _id: null,
+                totalReferrals: { $sum: "$count" },
+              },
+            },
+          ],
+        },
+      },
+    ];
+
+    const tynMatch = { ...tynScopeMatch, ...dateMatch };
+    const tynPipeline = [
+      { $match: tynMatch },
+      {
+        $facet: {
+          totalStats: [
+            {
+              $group: {
+                _id: null,
+                totalBusiness: { $sum: "$amount" },
+                totalNotes: { $sum: 1 },
+              },
+            },
+          ],
+          allRankingsRaw: [
+            {
+              $project: {
+                amount: "$amount",
+                createdAt: "$createdAt",
+                businesses: ["$giverBusiness", "$receiverBusiness"],
+              },
+            },
+            { $unwind: "$businesses" },
+            { $match: { businesses: { $ne: null } } },
+            {
+              $group: {
+                _id: "$businesses",
+                totalAmount: { $sum: "$amount" },
+                count: { $sum: 1 },
+                firstActivityAt: { $min: "$createdAt" },
+                lastActivityAt: { $max: "$createdAt" },
+              },
+            },
+            { $sort: { totalAmount: -1, firstActivityAt: 1 } },
+            {
+              $lookup: {
+                from: "businesses",
+                localField: "_id",
+                foreignField: "_id",
+                as: "biz",
+              },
+            },
+            { $unwind: "$biz" },
+            {
+              $lookup: {
+                from: "chapters",
+                localField: "biz.chapterId",
+                foreignField: "_id",
+                as: "ch",
+              },
+            },
+            { $unwind: { path: "$ch", preserveNullAndEmptyArrays: true } },
+            {
+              $project: {
+                _id: 0,
+                businessId: "$_id",
+                businessName: "$biz.name",
+                slug: "$biz.slug",
+                logo: "$biz.logo",
+                contactPerson: "$biz.contactPerson",
+                phone: "$biz.phone",
+                whatsapp: { $ifNull: ["$biz.whatsapp", "$biz.whatsappNumber"] },
+                state: "$biz.state",
+                chapterName: { $ifNull: ["$ch.name", "$biz.chapter"] },
+                totalAmount: "$totalAmount",
+                noteCount: "$count",
+                firstActivityAt: 1,
+                lastActivityAt: 1,
+              },
+            },
+          ],
+        },
+      },
+    ];
+
+    const [refResults, tynResults] = await Promise.all([
+      Referral.aggregate(referralPipeline),
+      ThankYouNote.aggregate(tynPipeline),
+    ]);
+
+    const refTop1 = refResults[0]?.topList?.[0] || null;
+    const refAll = refResults[0]?.allRankings || [];
+    const refTotal = refResults[0]?.totalStats?.[0]?.totalReferrals || 0;
+
+    let myRefStatus = {
+      isChampion: false,
+      rank: null,
+      score: 0,
+      gapToTop: refTop1 ? refTop1.score : 0,
+    };
+
+    if (myBizIdStr) {
+      if (refTop1 && refTop1.businessId?.toString() === myBizIdStr) {
+        myRefStatus = {
+          isChampion: true,
+          rank: 1,
+          score: refTop1.score || 0,
+          gapToTop: 0,
+        };
+      } else if (refAll.length > 0) {
+        const myIndex = refAll.findIndex(
+          (item) => item.businessId?.toString() === myBizIdStr
+        );
+        if (myIndex !== -1) {
+          const rank = myIndex + 1;
+          const score = refAll[myIndex].count || 0;
+          const rawGap = Math.max(0, (refTop1?.score || 0) - score);
+          myRefStatus = {
+            isChampion: rank === 1,
+            rank,
+            score,
+            gapToTop: rawGap === 0 && rank > 1 ? 1 : rawGap,
+          };
+        }
+      }
+    }
+
+    const tynAll = tynResults[0]?.allRankingsRaw || [];
+    const tynTop1 = tynAll[0] || null;
+    const tynTotalAmount = tynResults[0]?.totalStats?.[0]?.totalBusiness || 0;
+    const tynTotalNotes = tynResults[0]?.totalStats?.[0]?.totalNotes || 0;
+
+    let myTynStatus = {
+      isChampion: false,
+      rank: null,
+      totalAmount: 0,
+      gapToTop: tynTop1 ? tynTop1.totalAmount : 0,
+    };
+
+    if (myBizIdStr) {
+      if (tynTop1 && tynTop1.businessId?.toString() === myBizIdStr) {
+        myTynStatus = {
+          isChampion: true,
+          rank: 1,
+          totalAmount: tynTop1.totalAmount || 0,
+          gapToTop: 0,
+        };
+      } else if (tynAll.length > 0) {
+        const myIndex = tynAll.findIndex(
+          (item) => item.businessId?.toString() === myBizIdStr
+        );
+        if (myIndex !== -1) {
+          const rank = myIndex + 1;
+          const totalAmount = tynAll[myIndex].totalAmount || 0;
+          const rawGap = Math.max(0, (tynTop1?.totalAmount || 0) - totalAmount);
+          myTynStatus = {
+            isChampion: rank === 1,
+            rank,
+            totalAmount,
+            gapToTop: rawGap === 0 && rank > 1 ? 1 : rawGap,
+          };
+        }
+      }
+    }
+
+    return {
+      scope: scopeInfo,
+      period,
+      referralChampion: {
+        top1: refTop1,
+        myStatus: myRefStatus,
+        totalScopeActivity: refTotal,
+      },
+      thankYouNoteChampion: {
+        top1: tynTop1,
+        myStatus: myTynStatus,
+        totalScopeAmount: tynTotalAmount,
+        totalScopeNotes: tynTotalNotes,
+      },
+    };
+  },
 };
+

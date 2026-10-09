@@ -22,4 +22,9 @@ export const analyticsController = {
     const data = await analyticsService.publicStateTotals();
     return ApiResponse.success(res, data, "State-wise business generated retrieved");
   }),
+
+  spotlight: asyncHandler(async (req, res) => {
+    const data = await analyticsService.getSpotlightLeaderboard(req.user, req.query);
+    return ApiResponse.success(res, data, "Top performer spotlight retrieved");
+  }),
 };
