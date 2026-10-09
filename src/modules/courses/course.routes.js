@@ -35,10 +35,35 @@ router.post(
   courseController.uploadContent
 );
 
-// Business Routes (Watch, Certificates)
+// Central Admin Course Moderation / Approval & Enrollment Routes
+router.post(
+  "/:id/approve",
+  requireRole(ROLES.CENTRAL_ADMIN),
+  courseController.approveCourse
+);
+
+router.post(
+  "/:id/reject",
+  requireRole(ROLES.CENTRAL_ADMIN),
+  courseController.rejectCourse
+);
+
+router.get(
+  "/:id/enrollments",
+  requireRole(ROLES.CENTRAL_ADMIN),
+  courseController.getCourseEnrollments
+);
+
+router.post(
+  "/:id/manual-enroll",
+  requireRole(ROLES.CENTRAL_ADMIN),
+  courseController.manualEnrollUser
+);
+
+// Learner Routes (Watch, Certificates)
 router.post(
   "/:id/contents/:contentId/watch",
-  requireRole(ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.BUSINESS_OWNER, ROLES.CUSTOMER),
   courseController.markWatched
 );
 

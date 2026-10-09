@@ -1,4 +1,14 @@
-import { createCourse, updateCourse, getCourses, getCourseById, deleteCourse } from "./course.service.js";
+import { 
+  createCourse, 
+  updateCourse, 
+  getCourses, 
+  getCourseById, 
+  deleteCourse, 
+  approveCourse, 
+  rejectCourse,
+  getCourseEnrollments,
+  manualEnrollUser 
+} from "./course.service.js";
 import { markContentWatched, getCourseProgress } from "./watchProgress.service.js";
 import { getBusinessCertificates, generateCertificate } from "./certificate.service.js";
 import { Certificate } from "./certificate.model.js";
@@ -78,7 +88,7 @@ export const courseController = {
     if (!businessId) {
        return ApiResponse.error(res, "Business ID required", 400);
     }
-    const result = await markContentWatched(businessId, id, contentId);
+    const result = await markContentWatched(businessId, id, contentId, req.user);
     return ApiResponse.success(res, result, result.message);
   }),
 
@@ -109,6 +119,31 @@ export const courseController = {
       { isStarred: progress.isStarred },
       progress.isStarred ? "Course saved for later" : "Course removed from saved"
     );
+  }),
+
+  approveCourse: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const course = await approveCourse(id, req.user);
+    return ApiResponse.success(res, course, "Course approved and published successfully");
+  }),
+
+  rejectCourse: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { remark } = req.body || {};
+    const course = await rejectCourse(id, remark, req.user);
+    return ApiResponse.success(res, course, "Course rejected successfully");
+  }),
+
+  getCourseEnrollments: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const data = await getCourseEnrollments(id, req.user);
+    return ApiResponse.success(res, data, "Course enrollments retrieved successfully");
+  }),
+
+  manualEnrollUser: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const result = await manualEnrollUser(id, req.body, req.user);
+    return ApiResponse.success(res, result, result.message);
   })
 };
 

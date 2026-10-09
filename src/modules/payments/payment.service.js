@@ -67,7 +67,7 @@ export const paymentService = {
   /**
    * Create Razorpay Order
    */
-  createRazorpayOrder: async ({ planId, amount, currency = "INR", eventId, itemType }, user) => {
+  createRazorpayOrder: async ({ planId, amount, currency = "INR", eventId, courseId, itemType }, user) => {
     let invoiceNumber = generateReferenceId("INV", 4);
     while (await Payment.findOne({ invoiceNumber })) {
       invoiceNumber = generateReferenceId("INV", 4);
@@ -84,7 +84,15 @@ export const paymentService = {
     let numericAmount = 0;
     let actualPlanId = null;
 
-    if (planId) {
+    if (courseId) {
+      const { Course } = await import("../courses/course.model.js");
+      const courseDoc = await Course.findById(courseId);
+      if (!courseDoc) throw new NotFoundError("Course not found");
+      if (!courseDoc.isPaid || !courseDoc.price) {
+        throw new BadRequestError("This course is free and does not require payment");
+      }
+      numericAmount = Number(courseDoc.price);
+    } else if (planId) {
       const plan = await getActivePlan(planId);
       const charge = getPlanCharge(plan, selectedCurrency);
       numericAmount = charge.totalAmount;
@@ -104,6 +112,7 @@ export const paymentService = {
     };
     if (actualPlanId) notes.planId = actualPlanId;
     if (eventId) notes.eventId = String(eventId);
+    if (courseId) notes.courseId = String(courseId);
     if (itemType) notes.itemType = String(itemType);
 
     const response = await fetch("https://api.razorpay.com/v1/orders", {
@@ -138,7 +147,7 @@ export const paymentService = {
    * Verify Razorpay Payment Signature and Upgrade Plan
    */
   verifyRazorpayPayment: async (payload, user) => {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planId, businessId, amount, itemType, description, currency } = payload;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planId, businessId, amount, itemType, description, currency, courseId } = payload;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       throw new BadRequestError("Missing required Razorpay payment fields");
@@ -379,9 +388,10 @@ export const paymentService = {
       payer: user.id,
       business: finalBusinessId || null,
       eventId: payload.eventId || null,
-      itemType: itemType || "Membership",
+      courseId: courseId || payload.courseId || null,
+      itemType: itemType || (courseId || payload.courseId ? "Course" : "Membership"),
       planTier: planId || "",
-      description: description || `Payment for ${planId || "Membership"} tier`,
+      description: description || (courseId || payload.courseId ? "Course Enrollment" : `Payment for ${planId || "Membership"} tier`),
       amount: planCharge ? planCharge.baseAmount : Number(amount),
       currency: payload.currency || "INR",
       method: payload.currency === "USD" ? "International Card" : "UPI",
@@ -394,6 +404,7 @@ export const paymentService = {
     // Compute GST breakdown for receipt
     const baseAmount = payment.amount;
     const isEventItem = Boolean(payload.eventId || itemType === "Event Pass");
+    const isCourseItem = Boolean(courseId || payload.courseId || itemType === "Course");
     const gstRate = planCharge?.gstRate ?? (isEventItem ? 18 : 0);
     const computedGst = planCharge?.gstAmount ?? (
       isEventItem
@@ -418,6 +429,32 @@ export const paymentService = {
     let updatedMembership = null;
     if (planId && finalBusinessId) {
       updatedMembership = await membershipService.upgradePlan(finalBusinessId, planId);
+    }
+
+    // Auto-enroll user and business in Course if paid course
+    const resolvedCourseId = courseId || payload.courseId || (itemType === "Course" ? payload.notes?.courseId : null);
+    if (resolvedCourseId) {
+      try {
+        const { Course } = await import("../courses/course.model.js");
+        const courseDoc = await Course.findById(resolvedCourseId);
+        if (courseDoc) {
+          const alreadyEnrolled = courseDoc.enrollments?.some(
+            (e) => String(e.userId) === String(user.id) || (finalBusinessId && String(e.businessId) === String(finalBusinessId))
+          );
+          if (!alreadyEnrolled) {
+            courseDoc.enrollments = courseDoc.enrollments || [];
+            courseDoc.enrollments.push({
+              businessId: finalBusinessId || null,
+              userId: user.id,
+              paymentId: payment._id,
+              enrolledAt: new Date(),
+            });
+            await courseDoc.save();
+          }
+        }
+      } catch (cErr) {
+        console.error("[PAYMENT] Failed to enroll user in course:", cErr);
+      }
     }
 
     // Fire-and-forget: send notifications & emails without blocking the response
