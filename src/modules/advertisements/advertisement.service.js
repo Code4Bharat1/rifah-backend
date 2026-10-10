@@ -216,64 +216,52 @@ export const advertisementService = {
   },
 
   /**
-   * Unified Admin Query:
-   * Supports Chapter Admin, State Admin, and Central Admin
+   * Central Admin Query:
+   * Supports filtering across 3 tabs (global, state, chapter) with status, state, and chapter filters.
    */
   getAdminAdvertisements: async (user, query = {}) => {
-    const filter = {};
-
-    // 1. Role-specific filtering
-    if (user.role === ROLES.CHAPTER_ADMIN) {
-      let chapterId = user.chapterId;
-      if (!chapterId && user.chapter) {
-        chapterId = await resolveChapterIdByName(user.chapter);
-      }
-      if (!chapterId) {
-        throw new ForbiddenError("Chapter Admin account is not linked to a chapter.");
-      }
-      filter.targetScope = "chapter";
-      filter.chapterId = chapterId;
-    } else if (user.role === ROLES.STATE_ADMIN) {
-      const state = user.state;
-      if (!state) {
-        throw new ForbiddenError("State Admin account is not linked to a state.");
-      }
-      filter.targetScope = "state";
-      filter.state = new RegExp(`^${escapeRegex(state)}$`, "i");
-    } else if (user.role === ROLES.CENTRAL_ADMIN) {
-      // Central Admin can filter by scope or view global by default
-      if (query.targetScope && query.targetScope !== "all") {
-        filter.targetScope = query.targetScope;
-      }
-      if (query.chapterId) {
-        filter.chapterId = query.chapterId;
-      }
-      if (query.state) {
-        filter.state = new RegExp(`^${escapeRegex(query.state)}$`, "i");
-      }
+    if (user.role !== ROLES.CENTRAL_ADMIN) {
+      throw new ForbiddenError("Only Central Admin can access admin advertisements queue.");
     }
 
-    // 2. Status filter
-    if (query.status) {
+    const filter = {};
+
+    // 1. Target Scope filter (global | state | chapter | all)
+    if (query.targetScope && query.targetScope !== "all") {
+      filter.targetScope = query.targetScope;
+    }
+
+    // 2. State filter (for state tab or state-specific search)
+    if (query.state && query.state !== "all") {
+      filter.state = new RegExp(`^${escapeRegex(query.state)}$`, "i");
+    }
+
+    // 3. Chapter filter (for chapter tab or chapter-specific search)
+    if (query.chapterId && query.chapterId !== "all") {
+      filter.chapterId = query.chapterId;
+    }
+
+    // 4. Status filter
+    if (query.status && query.status !== "all") {
       filter.status = query.status;
     }
 
     return Advertisement.find(filter)
       .sort({ createdAt: -1 })
-      .populate("businessId", "businessName logo slug ownerName phone state")
+      .populate("businessId", "businessName logo slug ownerName phone state chapter")
       .populate("reviewedBy", "name email");
   },
 
   /**
-   * Backward-compatible alias for Chapter Admin list
+   * Backward-compatible alias for admin list
    */
   getChapterAdvertisements: async (user, query = {}) => {
     return advertisementService.getAdminAdvertisements(user, query);
   },
 
   /**
-   * Review an advertisement: Approve (setting duration) or Reject with remarks.
-   * Validates authority according to targetScope.
+   * Review an advertisement: Approve (setting duration & dates) or Reject with remarks.
+   * Exclusively authorized for Central Admin across all 3 scopes.
    */
   reviewAdvertisement: async (id, reviewData, user) => {
     const ad = await Advertisement.findById(id);
@@ -281,27 +269,9 @@ export const advertisementService = {
       throw new NotFoundError("Advertisement not found.");
     }
 
-    const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
-
-    // Check authority based on ad scope
-    if (ad.targetScope === "chapter") {
-      let userChapterId = user.chapterId;
-      if (!userChapterId && user.chapter) {
-        userChapterId = await resolveChapterIdByName(user.chapter);
-      }
-      const isAdminsChapter = user.role === ROLES.CHAPTER_ADMIN && userChapterId && String(userChapterId) === String(ad.chapterId);
-      if (!isAdminsChapter && !isCentralAdmin) {
-        throw new ForbiddenError("You can only verify advertisements submitted to your chapter.");
-      }
-    } else if (ad.targetScope === "state") {
-      const isAdminsState = user.role === ROLES.STATE_ADMIN && user.state && String(user.state).toLowerCase() === String(ad.state).toLowerCase();
-      if (!isAdminsState && !isCentralAdmin) {
-        throw new ForbiddenError("You can only verify advertisements submitted to your state.");
-      }
-    } else if (ad.targetScope === "global") {
-      if (!isCentralAdmin) {
-        throw new ForbiddenError("Only Central Admin can verify global platform advertisements.");
-      }
+    // Sole verification authority belongs to Central Admin
+    if (user.role !== ROLES.CENTRAL_ADMIN) {
+      throw new ForbiddenError("Only Central Admin can verify and schedule advertisements.");
     }
 
     const action = String(reviewData.action || "").toUpperCase();
@@ -309,7 +279,7 @@ export const advertisementService = {
 
     if (action === "REJECT") {
       ad.status = "Rejected";
-      ad.adminRemarks = reviewData.adminRemarks || "Rejected by Administrator";
+      ad.adminRemarks = reviewData.adminRemarks || "Rejected by Central Administrator";
       ad.reviewedBy = reviewerId;
       ad.reviewedAt = new Date();
       await ad.save();
@@ -400,7 +370,7 @@ export const advertisementService = {
    * Calendar slots for a given scope with privacy masking:
    * Other businesses only see "Booked already" without private ad details.
    */
-  getCalendarSlots: async (month, year, targetScope = "chapter", user = null) => {
+  getCalendarSlots: async (month, year, targetScope = "chapter", user = null, options = {}) => {
     const targetYear = parseInt(year, 10) || new Date().getFullYear();
     const targetMonth = parseInt(month, 10) || new Date().getMonth() + 1; // 1-indexed
 
@@ -416,44 +386,50 @@ export const advertisementService = {
       approvedEndDate: { $gte: startOfMonth },
     };
 
-    let userChapterId = user?.chapterId ? String(user.chapterId) : null;
-    let userState = user?.state ? String(user.state).trim() : null;
+    const isCentralAdmin = user?.role === ROLES.CENTRAL_ADMIN;
 
-    if (!userChapterId && user?.chapter) {
-      const resolved = await resolveChapterIdByName(user.chapter);
-      if (resolved) userChapterId = String(resolved);
-    }
+    if (isCentralAdmin) {
+      // Central Admin can inspect calendar filtered by specific state or chapter if requested
+      if (scope === "chapter" && options?.chapterId && options.chapterId !== "all") {
+        query.chapterId = options.chapterId;
+      }
+      if (scope === "state" && options?.state && options.state !== "all") {
+        query.state = new RegExp(`^${escapeRegex(options.state)}$`, "i");
+      }
+    } else {
+      // Regular user/business: scope to user's assigned chapter or state
+      let userChapterId = user?.chapterId ? String(user.chapterId) : null;
+      let userState = user?.state ? String(user.state).trim() : null;
 
-    if ((!userChapterId || !userState) && user?.businessId) {
-      const biz = await Business.findById(user.businessId).select("chapterId chapter state");
-      if (!userChapterId && biz?.chapterId) userChapterId = String(biz.chapterId);
-      if (!userState && biz?.state) userState = String(biz.state).trim();
-    }
+      if (!userChapterId && user?.chapter) {
+        const resolved = await resolveChapterIdByName(user.chapter);
+        if (resolved) userChapterId = String(resolved);
+      }
 
-    if (!userState && userChapterId) {
-      const ch = await Chapter.findById(userChapterId);
-      if (ch?.state) userState = String(ch.state).trim();
-    }
+      if ((!userChapterId || !userState) && user?.businessId) {
+        const biz = await Business.findById(user.businessId).select("chapterId chapter state");
+        if (!userChapterId && biz?.chapterId) userChapterId = String(biz.chapterId);
+        if (!userState && biz?.state) userState = String(biz.state).trim();
+      }
 
-    if (scope === "chapter" && userChapterId) {
-      query.chapterId = userChapterId;
-    } else if (scope === "state" && userState) {
-      query.state = new RegExp(`^${escapeRegex(userState)}$`, "i");
+      if (!userState && userChapterId) {
+        const ch = await Chapter.findById(userChapterId);
+        if (ch?.state) userState = String(ch.state).trim();
+      }
+
+      if (scope === "chapter" && userChapterId) {
+        query.chapterId = userChapterId;
+      } else if (scope === "state" && userState) {
+        query.state = new RegExp(`^${escapeRegex(userState)}$`, "i");
+      }
     }
 
     const ads = await Advertisement.find(query);
-
-    const isCentralAdmin = user?.role === ROLES.CENTRAL_ADMIN;
-    const isChapterAdmin = user?.role === ROLES.CHAPTER_ADMIN;
-    const isStateAdmin = user?.role === ROLES.STATE_ADMIN;
     const currentUserId = user?.id || user?._id ? String(user.id || user._id) : null;
 
     return ads.map((ad) => {
       const isOwner = currentUserId && String(ad.userId) === currentUserId;
-      const isScopeAdmin =
-        isCentralAdmin ||
-        (isChapterAdmin && userChapterId && String(ad.chapterId) === userChapterId) ||
-        (isStateAdmin && userState && String(ad.state).toLowerCase() === String(userState).toLowerCase());
+      const isScopeAdmin = isCentralAdmin;
 
       if (isOwner || isScopeAdmin) {
         return {
@@ -472,7 +448,7 @@ export const advertisementService = {
         };
       }
 
-      // Privacy Masking for others
+      // Privacy Masking for other businesses
       return {
         id: `masked-${ad._id}`,
         title: "Booked already",
@@ -491,7 +467,7 @@ export const advertisementService = {
   },
 
   /**
-   * Delete an advertisement
+   * Delete an advertisement (Owner or Central Admin only)
    */
   deleteAdvertisement: async (id, user) => {
     const ad = await Advertisement.findById(id);
@@ -503,21 +479,7 @@ export const advertisementService = {
     const isOwner = String(ad.userId) === String(userId);
     const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
 
-    let isChapterAdmin = false;
-    if (user.role === ROLES.CHAPTER_ADMIN) {
-      let chapterId = user.chapterId;
-      if (!chapterId && user.chapter) {
-        chapterId = await resolveChapterIdByName(user.chapter);
-      }
-      isChapterAdmin = Boolean(chapterId && String(chapterId) === String(ad.chapterId));
-    }
-
-    let isStateAdmin = false;
-    if (user.role === ROLES.STATE_ADMIN && user.state) {
-      isStateAdmin = String(user.state).toLowerCase() === String(ad.state).toLowerCase();
-    }
-
-    if (!isOwner && !isChapterAdmin && !isStateAdmin && !isCentralAdmin) {
+    if (!isOwner && !isCentralAdmin) {
       throw new ForbiddenError("Not authorized to remove this advertisement.");
     }
 
