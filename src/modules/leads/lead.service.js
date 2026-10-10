@@ -8,6 +8,7 @@ import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/err
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 import { messageService } from "../messages/message.service.js";
 import { pdfService } from "../../infrastructure/pdf/pdf.service.js";
+import { resolveMemberPlanContext, assertMembershipValid } from "../../shared/utils/feature-access.js";
 
 export const leadService = {
   /**
@@ -306,21 +307,15 @@ export const leadService = {
 
     // 1.1 ENFORCE PLAN-BASED QUOTATION LIMITS
     if (!isAdmin) {
-      let plan = user.membershipPlan || user.membership;
-      if (!plan && lead.business) {
-        plan = lead.business.membership;
-      }
-      if (!plan) {
-        const uDoc = await User.findById(user.id).select("membershipPlan membership");
-        plan = uDoc?.membershipPlan || uDoc?.membership;
-      }
-      plan = plan || "Tier I (Free)";
-      const norm = String(plan).toLowerCase().trim();
-      const isFree = norm === "free" || norm.includes("tier i ") || norm.includes("tier 1") || norm === "tier i" || norm === "tier_1";
+      const context = await resolveMemberPlanContext(user.id || user._id);
+      const plan = context.planName;
+      const norm = context.norm;
 
-      if (isFree) {
+      if (context.isFree) {
         throw new ForbiddenError("Quotation posting is not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above.");
       }
+      // BUG-065: see message.service.js sendMessage for why this check exists now.
+      assertMembershipValid(context, ForbiddenError);
 
       let maxQuotes = 5;
       if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
@@ -561,16 +556,15 @@ export const leadService = {
 
       // Enforce lead unlock limit when accepting/advancing a lead
       if (!isAdmin && ["In Progress", "Accepted", "Contacted"].includes(status) && lead.status === "New") {
-        let plan = user.membershipPlan || user.membership;
-        if (!plan && lead.business) {
-          plan = lead.business.membership;
-        }
-        if (!plan) {
-          const uDoc = await User.findById(user.id).select("membershipPlan membership");
-          plan = uDoc?.membershipPlan || uDoc?.membership;
-        }
-        plan = plan || "Tier I (Free)";
-        const norm = String(plan).toLowerCase().trim();
+        const context = await resolveMemberPlanContext(user.id || user._id);
+        const plan = context.planName;
+        const norm = context.norm;
+        // BUG-065: see message.service.js sendMessage for why this check exists now.
+        // Unlike the quotation-posting check above, this block never blocked Free-tier
+        // entirely (it falls through to maxLeads=1 below) — assertMembershipValid
+        // already no-ops for a free-tier context, so this stays behavior-identical for
+        // Free and only adds the new expired/inactive check for paid tiers.
+        assertMembershipValid(context, ForbiddenError);
 
         let maxLeads = 1;
         if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {

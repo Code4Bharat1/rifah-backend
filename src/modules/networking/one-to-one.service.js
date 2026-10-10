@@ -3,6 +3,7 @@ import { resolveOwnBusiness, resolveMemberBusiness } from "./networking.utils.js
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../shared/errors/errors.js";
+import { resolveMemberPlanContext, assertMembershipValid } from "../../shared/utils/feature-access.js";
 
 const POPULATE_FIELDS = [
   ["initiatorBusiness", "name logo city"],
@@ -61,15 +62,17 @@ export const oneToOneService = {
     const isAdmin = ["central_admin", "state_admin", "chapter_admin"].includes(userDoc?.role);
 
     if (!isAdmin) {
-      let plan = userDoc?.membershipPlan || userDoc?.membership || initiatorBusiness.membership || "Tier I (Free)";
-      const norm = String(plan).toLowerCase().trim();
-      const isFree = norm === "free" || norm.includes("tier i ") || norm.includes("tier 1") || norm === "tier i" || norm === "tier_1";
+      const context = await resolveMemberPlanContext(userId);
+      const plan = context.planName;
+      const norm = context.norm;
 
-      if (isFree) {
+      if (context.isFree) {
         throw new ForbiddenError(
           "One-to-One Meeting Requests are not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above."
         );
       }
+      // BUG-065: see message.service.js sendMessage for why this check exists now.
+      assertMembershipValid(context, ForbiddenError);
 
       let maxMeetings = 5;
       if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {

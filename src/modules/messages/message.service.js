@@ -1,6 +1,7 @@
 import { Message } from "./message.model.js";
 import { User } from "../users/user.model.js";
-import { NotFoundError } from "../../shared/errors/errors.js";
+import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
+import { resolveMemberPlanContext, assertMembershipValid } from "../../shared/utils/feature-access.js";
 
 import { emitToUser } from "../../infrastructure/socket/socket.js";
 import { notificationService } from "../notifications/notification.service.js";
@@ -33,17 +34,19 @@ export const messageService = {
     const isAdmin = ["central_admin", "state_admin", "chapter_admin"].includes(senderDoc?.role);
 
     if (!isAdmin && senderDoc) {
-      const { Business } = await import("../businesses/business.model.js");
-      const senderBiz = await Business.findOne({ owner: senderId }).select("membership");
-      let plan = senderDoc.membershipPlan || senderDoc.membership || senderBiz?.membership || "Tier I (Free)";
-      const norm = String(plan).toLowerCase().trim();
-      const isFree = norm === "free" || norm.includes("tier i ") || norm.includes("tier 1") || norm === "tier i" || norm === "tier_1";
+      const context = await resolveMemberPlanContext(senderId);
+      const plan = context.planName;
+      const norm = context.norm;
 
-      if (isFree) {
+      if (context.isFree) {
         throw new ForbiddenError(
           "Direct messaging is not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above."
         );
       }
+      // BUG-065: a lapsed paid subscription previously kept full access forever — the
+      // cached plan-name string was never checked against the real Membership record's
+      // status/expiry. This is the first place that record actually gets consulted.
+      assertMembershipValid(context, ForbiddenError);
 
       let maxChats = 5;
       if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {

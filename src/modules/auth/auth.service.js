@@ -3,6 +3,7 @@ import { Business } from "../businesses/business.model.js";
 import { Verification } from "../verification/verification.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
 import { Plan } from "../memberships/plan.model.js";
+import { membershipService, DEFAULT_MEMBERSHIP_PLANS } from "../memberships/membership.service.js";
 import { categoryService } from "../categories/category.service.js";
 import { OtpVerification } from "./otp.model.js";
 import { Role } from "../roles/role.model.js";
@@ -123,6 +124,21 @@ function buildOrgWorkspace(roleDoc) {
   };
 }
 
+// BUG-065: registration only ever had a free-text tier string from the frontend (could
+// be a planId like "tier_2" or a display name like "Tier II (Starter)" depending on the
+// caller) — resolve it to a real planId membershipService.upgradePlan understands,
+// rather than passing it through raw and risking a silent NotFoundError that would skip
+// Membership creation entirely. Defaults to the baseline free tier when unresolvable.
+function resolveTierPlanId(tierString) {
+  const needle = String(tierString || "").trim().toLowerCase();
+  if (!needle || needle === "tier i (free)" || needle === "free") return "tier_1";
+  if (DEFAULT_MEMBERSHIP_PLANS[needle]) return needle;
+  const byName = Object.entries(DEFAULT_MEMBERSHIP_PLANS).find(
+    ([, plan]) => (plan.name || "").trim().toLowerCase() === needle
+  );
+  return byName ? byName[0] : "tier_1";
+}
+
 
 export const authService = {
   /**
@@ -215,7 +231,7 @@ export const authService = {
       try {
         const baseSlug = generateSlug(resolvedOrg);
         const uniqueSlug = `${baseSlug}-${user._id.toString().slice(-6)}`;
-        await Business.create({
+        const newBusiness = await Business.create({
           name: resolvedOrg,
           slug: uniqueSlug,
           owner: user._id,
@@ -240,6 +256,20 @@ export const authService = {
           membershipPlan: resolvedTier,
           isPaid: resolvedTier !== "Tier I (Free)",
         });
+        // BUG-065: registration used to stop here — it wrote `subscriberTier`/
+        // `membershipPlan` display strings directly onto User/Business (above, and a
+        // few lines above that) but never created a real Membership document or routed
+        // the choice through the canonical Plan/DEFAULT_MEMBERSHIP_PLANS catalogue. A
+        // freshly-registered user had no Membership at all, failing "every member must
+        // have both a valid membership and an active subscription." Route it through
+        // the one centralized, correct write path instead — reuses upgradePlan exactly
+        // as every paid upgrade already does, it just also runs once at signup now.
+        try {
+          const resolvedPlanId = resolveTierPlanId(resolvedTier);
+          await membershipService.upgradePlan(newBusiness._id, resolvedPlanId);
+        } catch (membershipErr) {
+          logger.warn("[AUTH] Failed to activate initial membership for new business:", membershipErr?.message || membershipErr);
+        }
       } catch (bizErr) {
         logger.warn("[AUTH] Failed to auto-create member business profile:", bizErr?.message || bizErr);
       }

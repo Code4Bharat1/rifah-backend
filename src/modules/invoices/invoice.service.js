@@ -4,6 +4,8 @@ import { Business } from "../businesses/business.model.js";
 import crypto from "crypto";
 import { generateInvoicePdfBuffer } from "../../shared/utils/pdf-generator.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
+import { revenueShareService } from "../revenue-sharing/revenueShare.service.js";
+import { logger } from "../../infrastructure/logger/logger.js";
 
 export const invoiceService = {
   /**
@@ -195,11 +197,26 @@ export const invoiceService = {
       throw new NotFoundError("Invoice record not found");
     }
 
+    const wasAlreadyRevoked = payment.isRevoked;
     payment.isRevoked = true;
     payment.revokedAt = new Date();
     payment.revokedReason = reason || "Revoked by RIFAH Chamber Central Administration";
     payment.revokedBy = revokedByUserId;
     await payment.save();
+
+    // Revenue Sharing: a revoked invoice reverses its allocations the same way a refund
+    // does — non-fatal, logged, never blocks the revoke the admin is performing.
+    if (!wasAlreadyRevoked) {
+      try {
+        await revenueShareService.reverseLedgerEntriesForPayment(
+          payment,
+          payment.revokedReason,
+          { id: revokedByUserId }
+        );
+      } catch (revShareErr) {
+        logger.error(`[REVENUE SHARE] Failed to reverse ledger entries for payment ${payment._id}:`, revShareErr);
+      }
+    }
 
     return {
       success: true,

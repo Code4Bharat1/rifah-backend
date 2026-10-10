@@ -36,5 +36,9 @@ export const ENUMS = Object.freeze({
     "VERIFY_CORRECTION",
     "LEAD_ROUTE",
     "PAYMENT_COMPLETE",
+    "GST_GROUP_INVITE",
+    "GST_GROUP_JOIN",
+    "GST_GROUP_REMOVE",
+    "GST_GROUP_ROLE_CHANGE",
   ],
 });

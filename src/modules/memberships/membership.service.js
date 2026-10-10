@@ -156,6 +156,26 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
   },
 };
 
+// BUG-065: upgradePlan has always updated Membership + Business.membership, but never
+// the owning User — so User.subscriberTier/membershipPlan stayed stuck at whatever
+// registration originally wrote, drifting from the business's actual current plan on
+// every subsequent upgrade/downgrade. Called from both upgradePlan branches below.
+// Failure here is logged, not thrown — a sync-field write must never roll back an
+// otherwise-successful plan change the member is actively waiting on.
+async function syncOwnerUserTier(business, membershipPlanName, subscriberTier) {
+  try {
+    if (!business?.owner) return;
+    await User.findByIdAndUpdate(business.owner, {
+      $set: {
+        membershipPlan: membershipPlanName || "",
+        subscriberTier: subscriberTier || "",
+      },
+    });
+  } catch (err) {
+    logger.error(`[MEMBERSHIP SYNC] Failed to sync tier fields onto User ${business?.owner}:`, err);
+  }
+}
+
 export const membershipService = {
   getPlans: async () => {
     let plansArray = await Plan.find().sort({ displayOrder: 1, createdAt: 1 }).lean();
@@ -393,6 +413,7 @@ export const membershipService = {
       business.membership = "Tier I (Free)";
       business.subscriberTier = "tier_1";
       await business.save();
+      await syncOwnerUserTier(business, "Tier I (Free)", "tier_1");
 
       return membership;
     }
@@ -425,6 +446,7 @@ export const membershipService = {
       business.subscriberTier = planKey;
     }
     await business.save();
+    await syncOwnerUserTier(business, plan.name, isUserPlan ? planKey : "");
 
     return membership;
   },

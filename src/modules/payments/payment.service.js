@@ -15,6 +15,8 @@ import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/err
 import { ROLES } from "../../shared/constants/roles.js";
 import { signAccessToken, signRefreshToken } from "../../infrastructure/auth/jwt.js";
 import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
+import { revenueShareService } from "../revenue-sharing/revenueShare.service.js";
+import { logger } from "../../infrastructure/logger/logger.js";
 
 const BUILTIN_MEMBERSHIP_PLANS = {
   free: { planId: "free", name: "Free Starter", price: 0, priceUsd: 0, durationYears: 0, gstRate: 0 },
@@ -426,6 +428,17 @@ export const paymentService = {
       await payment.save();
     }
 
+    // Revenue Sharing: ledger entries for this payment's chapter/state/central (or
+    // event-organizer) allocations. Non-fatal — a failure here must not break the
+    // payment/membership flow the member is actively waiting on; it's logged for
+    // follow-up instead. Safe to call unconditionally: createLedgerEntriesForPayment
+    // itself no-ops for out-of-scope itemTypes and is idempotent against retries.
+    try {
+      await revenueShareService.createLedgerEntriesForPayment(payment, { actor: user });
+    } catch (revShareErr) {
+      logger.error(`[REVENUE SHARE] Failed to create ledger entries for payment ${payment._id}:`, revShareErr);
+    }
+
     let updatedMembership = null;
     if (planId && finalBusinessId) {
       updatedMembership = await membershipService.upgradePlan(finalBusinessId, planId);
@@ -754,6 +767,13 @@ export const paymentService = {
       await payment.save();
     }
 
+    // Revenue Sharing: see verifyRazorpayPayment above for why this is non-fatal here.
+    try {
+      await revenueShareService.createLedgerEntriesForPayment(payment, { actor: user });
+    } catch (revShareErr) {
+      logger.error(`[REVENUE SHARE] Failed to create ledger entries for payment ${payment._id}:`, revShareErr);
+    }
+
     try {
       await notificationService.createNotification({
         recipientId: user.id,
@@ -983,8 +1003,26 @@ export const paymentService = {
     if (!payment) {
       throw new NotFoundError("Payment not found");
     }
+    const previousStatus = payment.status;
     payment.status = status;
     await payment.save();
+
+    // Revenue Sharing: this function is also how refunds are processed
+    // (payment.controller.js processRefund calls updatePaymentStatus(id, "Refunded", ...)),
+    // so both directions are handled here. Non-fatal — logged, never blocks the status
+    // change the admin is actively performing.
+    try {
+      if (status === "Paid" && previousStatus !== "Paid") {
+        await revenueShareService.createLedgerEntriesForPayment(payment, { actor: { id: adminUserId } });
+      } else if (status === "Refunded" && previousStatus !== "Refunded") {
+        await revenueShareService.reverseLedgerEntriesForPayment(payment, "Payment refunded by admin", {
+          id: adminUserId,
+        });
+      }
+    } catch (revShareErr) {
+      logger.error(`[REVENUE SHARE] Failed to process ledger update for payment ${payment._id}:`, revShareErr);
+    }
+
     return payment;
   },
 
@@ -996,8 +1034,18 @@ export const paymentService = {
     if (!payment) {
       throw new NotFoundError("Payment not found");
     }
+    const wasAlreadyPaid = payment.status === "Paid";
     payment.status = "Paid";
     await payment.save();
+
+    // Revenue Sharing: see updatePaymentStatus above.
+    if (!wasAlreadyPaid) {
+      try {
+        await revenueShareService.createLedgerEntriesForPayment(payment, { actor: { id: adminUserId } });
+      } catch (revShareErr) {
+        logger.error(`[REVENUE SHARE] Failed to create ledger entries for payment ${payment._id}:`, revShareErr);
+      }
+    }
 
     if (payment.business) {
       const businessDoc = await Business.findById(payment.business);
@@ -1146,6 +1194,16 @@ export const paymentService = {
       isCustomInvoice: true,
       createdBy: adminUser.id || adminUser._id,
     });
+
+    // Revenue Sharing: only takes effect when this admin invoice is itself tagged
+    // itemType "Membership" and created as status "Paid" — createLedgerEntriesForPayment
+    // already no-ops otherwise (e.g. the default "Custom Invoice" itemType, or a
+    // non-Paid status), so this is safe to call unconditionally.
+    try {
+      await revenueShareService.createLedgerEntriesForPayment(payment, { actor: adminUser });
+    } catch (revShareErr) {
+      logger.error(`[REVENUE SHARE] Failed to create ledger entries for payment ${payment._id}:`, revShareErr);
+    }
 
     const populatedPayment = await Payment.findById(payment._id)
       .populate("payer", "name email phone chapter state")

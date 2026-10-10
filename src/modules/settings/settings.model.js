@@ -67,6 +67,13 @@ const settingsSchema = new mongoose.Schema(
       type: Number,
       default: 5,
     },
+    // Tier 4 Shared GST Group member cap. Default 5 matches what the Tier IV plan
+    // already advertises ("5 Team member seats" in DEFAULT_MEMBERSHIP_PLANS) — this
+    // just makes that number real and admin-adjustable instead of only decorative text.
+    maxGstGroupMembers: {
+      type: Number,
+      default: 5,
+    },
   },
   { timestamps: true }
 );

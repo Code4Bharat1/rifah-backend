@@ -5,6 +5,7 @@ import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
+import { resolveMemberPlanContext, assertMembershipValid } from "../../shared/utils/feature-access.js";
 
 async function ensureSeedCatalogue() {
   try {
@@ -412,15 +413,17 @@ export const catalogueService = {
     }
 
     // --- Enforce plan-based limits ---
-    let planName = business.membership || "Tier I (Free)";
-    if (user?.id) {
-      try {
-        const { User } = await import("../users/user.model.js");
-        const userDoc = await User.findById(user.id).select("membershipPlan membership");
-        if (userDoc?.membershipPlan || userDoc?.membership) {
-          planName = userDoc.membershipPlan || userDoc.membership;
-        }
-      } catch (e) {}
+    // BUG-065: previously resolved business.membership first and only overrode with the
+    // user's own plan string if present — the other tier-gated services all do the
+    // reverse (user's own plan first, falling back to business). Standardized on the
+    // shared resolver's order here too: now that upgradePlan (membership.service.js)
+    // correctly syncs both User and Business on every plan change, these should agree
+    // going forward, and user-first matches every other gated feature.
+    const context = user?.id ? await resolveMemberPlanContext(user.id) : null;
+    const planName = context?.planName || business.membership || "Tier I (Free)";
+    if (context) {
+      // BUG-065: see message.service.js sendMessage for why this check exists now.
+      assertMembershipValid(context, ForbiddenError);
     }
 
     const norm = String(planName || "Free").toLowerCase().trim();
@@ -445,17 +448,30 @@ export const catalogueService = {
       maxServices = 1;
     }
 
+    const globalSettings = await Settings.findOne({ isSingleton: "global" });
+
+    // BUG-064: maxCatalogueItems already existed on the Settings schema (and this
+    // function's own docstring claimed it enforced it), but nothing ever read it — the
+    // per-type tier limits above were the only cap actually applied. Central Admin now
+    // gets a real, enforced global ceiling: whichever is smaller between the business's
+    // plan-tier limit and Central Admin's configured maxCatalogueItems wins, so lowering
+    // it in Settings caps everyone immediately, including "unlimited" top-tier plans.
+    const globalMaxPerType = Number(globalSettings?.maxCatalogueItems) || 50;
+
     const itemType = (data.type || "Product").toLowerCase() === "service" ? "Service" : "Product";
     const currentTypeCount = await Catalogue.countDocuments({ business: business._id, type: itemType });
-    const limit = itemType === "Service" ? maxServices : maxProducts;
+    const tierLimit = itemType === "Service" ? maxServices : maxProducts;
+    const limit = Math.min(isFinite(tierLimit) ? tierLimit : Infinity, globalMaxPerType);
 
     if (isFinite(limit) && currentTypeCount >= limit) {
+      const limitedByPlan = limit === tierLimit;
       throw new ForbiddenError(
-        `${itemType} catalogue limit reached (${limit} item allowed on ${planName}). Please upgrade your membership plan to list more ${itemType.toLowerCase()}s.`
+        limitedByPlan
+          ? `${itemType} catalogue limit reached (${limit} item allowed on ${planName}). Please upgrade your membership plan to list more ${itemType.toLowerCase()}s.`
+          : `${itemType} catalogue limit reached (${limit} items allowed per business, set by Central Admin).`
       );
     }
 
-    const globalSettings = await Settings.findOne({ isSingleton: "global" });
     const maxImages = globalSettings?.maxImagesPerItem ?? 5;
 
     if (data.images && Array.isArray(data.images) && data.images.length > maxImages) {

@@ -11,6 +11,14 @@ import { notificationService } from "../notifications/notification.service.js";
  * Creates a new course
  */
 export const createCourse = async (courseData, user) => {
+  // BUG-062: LMS course creation is Central Admin exclusive now — State, Chapter and
+  // Business accounts can no longer submit courses at all (the route already enforces
+  // this via requireRole; this guard is defense-in-depth so the rule holds even if this
+  // service function is ever called from somewhere else).
+  if (user.role !== ROLES.CENTRAL_ADMIN) {
+    throw new ForbiddenError("Only Central Admin can create and publish courses");
+  }
+
   if (!courseData.title || !String(courseData.title).trim()) {
     throw new BadRequestError("Course title is required");
   }
@@ -39,51 +47,19 @@ export const createCourse = async (courseData, user) => {
     throw new BadRequestError("Cannot publish an empty course. Please attach at least 1 video or PDF lesson.");
   }
 
-  const scope = getScopeFromRole(user.role);
-  
-  let businessId = null;
-  if (user.role === ROLES.BUSINESS_OWNER) {
-    businessId = user.businessId || user.business?._id;
-    if (!businessId && (user.id || user._id)) {
-      const biz = await Business.findOne({ owner: user.id || user._id }).select('_id');
-      businessId = biz?._id || null;
-    }
-  }
+  // Every course is now a Central Admin course — scope stays 'centre' and the approval
+  // workflow is skipped entirely (not just unused: there is no other creator left who
+  // would ever need it).
+  const scope = 'centre';
 
-  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
-
-  // Paid Course & Approval Rules:
-  // Paid courses can ONLY be uploaded by Central Admin.
-  // All other courses (uploaded by Businesses, Chapter Admins, State Admins) are free and require Central Admin approval before going live.
-  let isPaid = false;
+  let isPaid = Boolean(courseData.isPaid);
   let price = 0;
-  let approvalStatus = "pending";
-  let isActive = false;
-  let approvedBy = null;
-  let approvedAt = null;
-
-  if (isCentralAdmin) {
-    isPaid = Boolean(courseData.isPaid);
-    if (isPaid) {
-      const parsedPrice = Number(courseData.price);
-      if (isNaN(parsedPrice) || parsedPrice <= 0) {
-        throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
-      }
-      price = Math.round(parsedPrice);
+  if (isPaid) {
+    const parsedPrice = Number(courseData.price);
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
     }
-    approvalStatus = "not_required";
-    approvedBy = user.id || user._id;
-    approvedAt = new Date();
-    isActive = Boolean(courseData.isActive === true || courseData.status === "published");
-  } else {
-    // Chapter, State, and Business admins can ONLY upload free courses
-    if (courseData.isPaid === true || Number(courseData.price) > 0) {
-      throw new ForbiddenError("Chapter and State Admins can only upload free courses. Paid courses are exclusive to Central Admin.");
-    }
-    isPaid = false;
-    price = 0;
-    approvalStatus = "pending";
-    isActive = false;
+    price = Math.round(parsedPrice);
   }
 
   const course = new Course({
@@ -93,38 +69,20 @@ export const createCourse = async (courseData, user) => {
     category: normalizedCategory,
     subcategory: normalizedSubcategory,
     createdBy: user.id || user._id,
-    businessId,
+    businessId: null,
     scope,
-    state: scope === 'state' ? (user.state || user.stateId) : null,
-    chapterId: scope === 'chapter' ? (user.chapterId || user.chapter) : null,
+    state: null,
+    chapterId: null,
     isPaid,
     price,
-    approvalStatus,
-    isActive,
-    approvedBy,
-    approvedAt,
+    approvalStatus: "not_required",
+    isActive: Boolean(courseData.isActive === true || courseData.status === "published"),
+    approvedBy: user.id || user._id,
+    approvedAt: new Date(),
     enrollments: [],
   });
 
   const saved = await course.save();
-
-  // If submitted by non-central admin, notify Central Admin for review
-  if (!isCentralAdmin) {
-    setImmediate(async () => {
-      try {
-        const centralAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id");
-        for (const admin of centralAdmins) {
-          await notificationService.createNotification({
-            recipientId: admin._id,
-            type: "System",
-            title: "New Course Submitted for Approval",
-            body: `"${saved.title}" was submitted by ${user.name || "a member"} (${scope}) and is awaiting your review.`,
-            link: "/admin/lms",
-          });
-        }
-      } catch (err) {}
-    });
-  }
 
   return saved;
 };
@@ -160,7 +118,9 @@ export const updateCourse = async (courseId, courseData, user) => {
     throw new BadRequestError("Course description cannot be empty");
   }
 
-  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+  // BUG-062: canManageCourse now only ever returns true for Central Admin, so everything
+  // past the guard above is already guaranteed to be Central Admin — the old non-central
+  // branch (which stripped isPaid/price and enforced the approval workflow) is gone.
   const safeData = { ...courseData };
 
   if (safeData.title !== undefined) safeData.title = String(safeData.title).trim();
@@ -179,47 +139,23 @@ export const updateCourse = async (courseId, courseData, user) => {
   delete safeData.createdBy;
   delete safeData.businessId;
 
-  if (isCentralAdmin) {
-    if (safeData.isPaid !== undefined) {
-      safeData.isPaid = Boolean(safeData.isPaid);
-      if (safeData.isPaid) {
-        const parsedPrice = Number(safeData.price ?? course.price);
-        if (isNaN(parsedPrice) || parsedPrice <= 0) {
-          throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
-        }
-        safeData.price = Math.round(parsedPrice);
-      } else {
-        safeData.price = 0;
-      }
-    } else if (course.isPaid && safeData.price !== undefined) {
-      const parsedPrice = Number(safeData.price);
+  if (safeData.isPaid !== undefined) {
+    safeData.isPaid = Boolean(safeData.isPaid);
+    if (safeData.isPaid) {
+      const parsedPrice = Number(safeData.price ?? course.price);
       if (isNaN(parsedPrice) || parsedPrice <= 0) {
         throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
       }
       safeData.price = Math.round(parsedPrice);
+    } else {
+      safeData.price = 0;
     }
-  } else {
-    // Non-central admins cannot set paid courses or price
-    if (safeData.isPaid === true || Number(safeData.price) > 0) {
-      throw new ForbiddenError("Chapter and State Admins can only upload free courses. Paid courses cannot be set.");
+  } else if (course.isPaid && safeData.price !== undefined) {
+    const parsedPrice = Number(safeData.price);
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
     }
-    delete safeData.isPaid;
-    delete safeData.price;
-    delete safeData.approvedBy;
-    delete safeData.approvedAt;
-
-    // Non-central admins cannot make a course live unless it's already approved
-    if (safeData.isActive === true && course.approvalStatus !== "approved") {
-      safeData.isActive = false;
-      throw new BadRequestError("Course cannot go live until approved by Central Admin");
-    }
-
-    // If previously rejected and the user updates the course, resubmit as pending
-    if (course.approvalStatus === "rejected") {
-      safeData.approvalStatus = "pending";
-      safeData.approvalRemark = "";
-      safeData.isActive = false;
-    }
+    safeData.price = Math.round(parsedPrice);
   }
 
   Object.assign(course, safeData);
@@ -536,31 +472,9 @@ export const getCourseById = async (courseId, user) => {
 };
 
 // Helpers
-const getScopeFromRole = (role) => {
-  if (role === ROLES.CENTRAL_ADMIN) return 'centre';
-  if (role === ROLES.STATE_ADMIN) return 'state';
-  if (role === ROLES.CHAPTER_ADMIN) return 'chapter';
-  if (role === ROLES.BUSINESS_OWNER) return 'business';
-  return 'centre'; // fallback
-};
-
-const canManageCourse = (user, course) => {
-  if (user.role === ROLES.CENTRAL_ADMIN) return true;
-  if (user.role === ROLES.STATE_ADMIN) {
-    const userState = user.state || user.stateId;
-    return course.scope === 'state' && course.state === userState;
-  }
-  if (user.role === ROLES.CHAPTER_ADMIN) {
-    const userChapter = user.chapterId || user.chapter;
-    return course.scope === 'chapter' && String(course.chapterId) === String(userChapter);
-  }
-  if (user.role === ROLES.BUSINESS_OWNER) {
-    const userId = user.id || user._id;
-    const creatorId = course.createdBy?._id || course.createdBy;
-    return String(creatorId) === String(userId);
-  }
-  return false;
-};
+// BUG-062: LMS is Central Admin exclusive now — State/Chapter/Business can no longer
+// manage any course, including ones they created back when they still could.
+const canManageCourse = (user) => user.role === ROLES.CENTRAL_ADMIN;
 
 /**
  * Gets all enrollments for a course (Central Admin or Course Creator)

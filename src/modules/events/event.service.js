@@ -16,6 +16,8 @@ import { postService } from "../posts/post.service.js";
 import { followupService } from "../followups/followup.service.js";
 import { eventMediaService } from "../gallery/gallery.service.js";
 import { isValidEmail, isValidPhone, isValidName } from "../../shared/validators/common.validation.js";
+import { revenueShareService } from "../revenue-sharing/revenueShare.service.js";
+import { logger } from "../../infrastructure/logger/logger.js";
 
 // teamAssignments role keys that grant real Operations Centre tools (each one unlocks a
 // working panel on the member's /biz/operations page).
@@ -660,6 +662,13 @@ export const eventService = {
           payerPhone: user?.phone || "",
           notes: `Delegation Installment #${inst1.installmentNumber} (Base: ₹${inst1.baseAmount} + 5% GST: ₹${inst1.gstAmount} + 2% TCS: ₹${inst1.tcsAmount})`,
         });
+
+        // Revenue Sharing: see payDelegationInstallment below for why this is non-fatal.
+        try {
+          await revenueShareService.createLedgerEntriesForPayment(paymentDoc, { event, actor: { id: userId } });
+        } catch (revShareErr) {
+          logger.error(`[REVENUE SHARE] Failed to create ledger entries for payment ${paymentDoc._id}:`, revShareErr);
+        }
 
         inst1.status = "Paid";
         inst1.paymentId = String(paymentDoc._id);
@@ -2076,6 +2085,15 @@ export const eventService = {
       payerPhone: attendeeUser?.phone || "",
       notes: `Delegation Installment #${inst.installmentNumber} (Base: ₹${baseAmount} + 5% GST: ₹${gstAmount} + 2% TCS: ₹${tcsAmount})`,
     });
+
+    // Revenue Sharing: this installment is event revenue (eventId set, 100% to whichever
+    // chapter/state organized the event) — non-fatal, logged, never blocks the
+    // installment payment the delegate is actively completing.
+    try {
+      await revenueShareService.createLedgerEntriesForPayment(paymentDoc, { event, actor: { id: userId } });
+    } catch (revShareErr) {
+      logger.error(`[REVENUE SHARE] Failed to create ledger entries for payment ${paymentDoc._id}:`, revShareErr);
+    }
 
     inst.status = "Paid";
     inst.paymentId = String(paymentDoc._id);

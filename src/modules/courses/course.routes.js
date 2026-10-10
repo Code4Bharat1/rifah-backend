@@ -9,28 +9,33 @@ const router = Router();
 
 router.use(authMiddleware);
 
-// Course Management Routes (Admins & Business Owners)
+// BUG-062: LMS course creation/publishing is now Central Admin exclusive — State, Chapter
+// and Business accounts previously could create free courses that sat "pending" until
+// Central Admin approved them. That whole approval workflow is now unreachable (Central
+// Admin courses skip it already, via approvalStatus "not_required"), so it's left in
+// course.service.js as historical/dead-data support rather than ripped out, but nobody
+// can enter it anymore.
 router.post(
   "/",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN),
   courseController.createCourse
 );
 
 router.put(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN),
   courseController.updateCourse
 );
 
 router.delete(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN),
   courseController.deleteCourse
 );
 
 router.post(
   "/upload",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN),
   upload.single("file"),
   courseController.uploadContent
 );

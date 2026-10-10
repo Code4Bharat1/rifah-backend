@@ -102,6 +102,17 @@ const businessSchema = new mongoose.Schema(
       default: "Free",
       index: true,
     },
+    // BUG-065: membershipService.upgradePlan has always tried to write
+    // `business.subscriberTier = planKey` (e.g. "tier_2") after every plan purchase, but
+    // this field never existed on the schema, so Mongoose silently dropped it on every
+    // single save — only the display-name `membership` field above ever actually
+    // persisted. Adding it here is the fix; the write-side code in upgradePlan is
+    // unchanged (it was already correct, just writing into the void).
+    subscriberTier: {
+      type: String,
+      default: "",
+      index: true,
+    },
     membershipId: {
       type: String,
       trim: true,
@@ -174,6 +185,54 @@ const businessSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    // Tier 4 Shared GST Group. A business's own GSTIN — distinct from `taxId` above,
+    // which is a generic free-text field already used for ad-hoc tax IDs elsewhere.
+    gstin: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
+      index: true,
+    },
+    // true only when associateGstin found this GSTIN already claimed by a DIFFERENT
+    // business — flagged for Central Admin resolution rather than silently allowed or
+    // silently blocked forever. See gst-group.service.js associateGstin.
+    gstinDisputed: {
+      type: Boolean,
+      default: false,
+    },
+    // Modeled directly on Event.roleAssignments (event.model.js) — same shape, same
+    // reasoning: a sub-document array of real users linked to this parent record, each
+    // with a role. "owner" is implicitly the Business.owner the first time the group is
+    // used (lazily seeded, not duplicated here) plus anyone explicitly promoted.
+    // Removed members are never deleted from this array (status flips to "removed")
+    // so the history/audit trail survives a removal.
+    gstGroupMembers: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        role: { type: String, enum: ["owner", "member"], default: "member" },
+        status: { type: String, enum: ["invited", "active", "removed"], default: "active" },
+        invitedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        invitedAt: { type: Date, default: Date.now },
+        joinedAt: { type: Date, default: null },
+        removedAt: { type: Date, default: null },
+        removedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      },
+    ],
+    // Pending invitations by email (the invitee may not have a User account yet) —
+    // accepted via POST /businesses/gst-group/accept/:token, which then adds a row to
+    // gstGroupMembers above and marks the invite "accepted".
+    gstGroupInvites: [
+      {
+        token: { type: String, required: true },
+        email: { type: String, required: true, lowercase: true, trim: true },
+        role: { type: String, enum: ["owner", "member"], default: "member" },
+        invitedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+        invitedAt: { type: Date, default: Date.now },
+        expiresAt: { type: Date, required: true },
+        status: { type: String, enum: ["pending", "accepted", "expired", "revoked"], default: "pending" },
+      },
+    ],
     phone: {
       type: String,
       default: "",
@@ -385,6 +444,8 @@ businessSchema.index({ ownerEmail: 1 });
 businessSchema.index({ email: 1 });
 businessSchema.index({ chapter: 1, status: 1 });
 businessSchema.index({ state: 1, status: 1 });
+businessSchema.index({ "gstGroupInvites.token": 1 });
+businessSchema.index({ "gstGroupMembers.user": 1 });
 
 businessSchema.pre("save", function (next) {
   if (!this.membershipId && this._id) {

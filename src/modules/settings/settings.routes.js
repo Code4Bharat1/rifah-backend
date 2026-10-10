@@ -10,10 +10,13 @@ const router = Router();
 router.get("/", settingsController.getSettings);
 router.get("/public", settingsController.getSettings);
 
+// BUG-064: this route let State/Chapter Admin PATCH organisation-wide settings (fees,
+// catalogue limits, chamber details, etc.) via the API even though the frontend already
+// hid the settings form from them — only Central Admin should actually be able to.
 router.patch(
   "/",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN),
   settingsController.updateSettings
 );
 
