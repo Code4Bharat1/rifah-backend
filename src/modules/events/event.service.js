@@ -205,7 +205,7 @@ const broadcastEventToAudience = (event) => {
                 eventTitle: event.title,
                 eventDate: event.date,
                 location: event.city || "Virtual",
-                mode: event.mode || "In-person",
+                mode: event.mode || "Offline",
               });
             }
           } catch (innerErr) {
