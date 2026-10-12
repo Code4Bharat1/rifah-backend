@@ -149,16 +149,16 @@ const run = async () => {
   }
 
   const businessOwnerDefs = [
-    { name: "Zameer Qureshi", city: "Mumbai", biz: "Al-Ameen Industrial Machinery Ltd.", industry: "Manufacturing", category: "Industrial Machinery & Tools", tier: "Enterprise" },
-    { name: "Irfan Merchant", city: "Mumbai", biz: "Barakah Agro & Spices Export", industry: "Trading & Export", category: "Food & Spices Export", tier: "Premium" },
-    { name: "Rahul Gupta", city: "Delhi", biz: "Gupta Textiles & Apparel Co.", industry: "Manufacturing", category: "Textiles & Apparel", tier: "Basic" },
-    { name: "Neha Malhotra", city: "Delhi", biz: "Malhotra Logistics Network", industry: "Logistics", category: "Logistics & Supply Chain", tier: "Premium" },
-    { name: "Farhan Ansari", city: "Hyderabad", biz: "Crescent Enterprise Solutions", industry: "Technology", category: "IT & Software Services", tier: "Basic" },
-    { name: "Priya Reddy", city: "Hyderabad", biz: "Reddy Pharma Distributors", industry: "Healthcare", category: "Healthcare & Pharmaceuticals", tier: "Enterprise" },
-    { name: "Karthik Iyer", city: "Bengaluru", biz: "Iyer SaaS Labs", industry: "Technology", category: "IT & Software Services", tier: "Premium" },
-    { name: "Ananya Rao", city: "Bengaluru", biz: "Rao Solar Solutions", industry: "Green Tech", category: "Solar & Clean Energy", tier: "Basic" },
-    { name: "Suresh Deshmukh", city: "Pune", biz: "Deshmukh Auto Components", industry: "Manufacturing", category: "Industrial Machinery & Tools", tier: "Premium" },
-    { name: "Meera Kulkarni", city: "Pune", biz: "Kulkarni Fintech Advisors", industry: "Financial Services", category: "Fintech & Advisory", tier: "Free" },
+    { name: "Zameer Qureshi", city: "Mumbai", biz: "Al-Ameen Industrial Machinery Ltd.", industry: "Manufacturing", category: "Industrial Machinery & Tools", tier: "Diamond", subscriberTier: "tier_4" },
+    { name: "Irfan Merchant", city: "Mumbai", biz: "Barakah Agro & Spices Export", industry: "Trading & Export", category: "Food & Spices Export", tier: "Diamond", subscriberTier: "tier_4" },
+    { name: "Rahul Gupta", city: "Delhi", biz: "Gupta Textiles & Apparel Co.", industry: "Manufacturing", category: "Textiles & Apparel", tier: "Gold", subscriberTier: "tier_2" },
+    { name: "Neha Malhotra", city: "Delhi", biz: "Malhotra Logistics Network", industry: "Logistics", category: "Logistics & Supply Chain", tier: "Diamond", subscriberTier: "tier_4" },
+    { name: "Farhan Ansari", city: "Hyderabad", biz: "Crescent Enterprise Solutions", industry: "Technology", category: "IT & Software Services", tier: "Silver", subscriberTier: "tier_1" },
+    { name: "Priya Reddy", city: "Hyderabad", biz: "Reddy Pharma Distributors", industry: "Healthcare", category: "Healthcare & Pharmaceuticals", tier: "Platinum", subscriberTier: "tier_4" },
+    { name: "Karthik Iyer", city: "Bengaluru", biz: "Iyer SaaS Labs", industry: "Technology", category: "IT & Software Services", tier: "Platinum", subscriberTier: "tier_3" },
+    { name: "Ananya Rao", city: "Bengaluru", biz: "Rao Solar Solutions", industry: "Green Tech", category: "Solar & Clean Energy", tier: "Silver", subscriberTier: "tier_1" },
+    { name: "Suresh Deshmukh", city: "Pune", biz: "Deshmukh Auto Components", industry: "Manufacturing", category: "Industrial Machinery & Tools", tier: "Gold", subscriberTier: "tier_2" },
+    { name: "Meera Kulkarni", city: "Pune", biz: "Kulkarni Fintech Advisors", industry: "Financial Services", category: "Fintech & Advisory", tier: "Free", subscriberTier: "tier_1" },
   ];
 
   const owners = [];
@@ -230,6 +230,7 @@ const run = async () => {
       chapter: o.chapter.name,
       chapterId: o.chapter._id,
       membership: o.tier,
+      subscriberTier: o.subscriberTier || "tier_1",
       verification: "verified",
       rating: Number((4.2 + Math.random() * 0.7).toFixed(1)),
       reviewsCount: 0,

@@ -181,6 +181,16 @@ const userSchema = new mongoose.Schema(
       default: "",
       index: true,
     },
+    membershipId: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
+    isRifahMember: {
+      type: Boolean,
+      default: false,
+    },
     subscriberTier: {
       type: String,
       trim: true,

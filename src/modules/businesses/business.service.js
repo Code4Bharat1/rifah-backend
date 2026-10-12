@@ -441,12 +441,15 @@ export const businessService = {
       });
     }
 
-    // 8. Featured Only Filter - Only strictly verified & active businesses appear as Featured
+    // 8. Featured Only Filter - In Featured Businesses on Landing Page, Show Businesses of Tier 4 Subscribers + Diamond Members
     if (queryParams.featured === "true" || queryParams.featured === true) {
       andConditions.push({
         $or: [
+          { subscriberTier: { $regex: /^tier[_\s-]?4$/i } },
+          { subscriberTier: { $in: ["tier_4", "tier-4", "Tier 4", "Tier IV", "Tier IV (Enterprise)"] } },
+          { membership: { $regex: /diamond|tier\s*(?:4|iv)|enterprise/i } },
+          { membershipPlan: { $regex: /diamond|tier\s*(?:4|iv)|enterprise/i } },
           { featured: true },
-          { membership: { $in: ["Enterprise", "Premium"] } },
         ],
         // Must be verified and approved, never rejected or pending
         $and: [

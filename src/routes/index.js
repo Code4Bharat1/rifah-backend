@@ -44,6 +44,7 @@ import { ticketRoutes } from "../modules/tickets/ticket.routes.js";
 import { countryRoutes } from "../modules/countries/country.routes.js";
 import { revenueSharingRoutes } from "../modules/revenue-sharing/revenueSharing.routes.js";
 import { dignitaryRoutes } from "../modules/dignitaries/dignitary.routes.js";
+import { visaReferralRoutes } from "../modules/visa-referrals/visa-referral.routes.js";
 
 const apiRouter = Router();
 
@@ -95,6 +96,7 @@ apiRouter.use("/advertisements", advertisementRoutes);
 apiRouter.use("/tickets", ticketRoutes);
 apiRouter.use("/revenue-sharing", revenueSharingRoutes);
 apiRouter.use("/dignitaries", dignitaryRoutes);
+apiRouter.use("/visa-referrals", visaReferralRoutes);
 
 export { apiRouter };
 export default apiRouter;

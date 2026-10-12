@@ -194,6 +194,7 @@ export const authService = {
     city,
     sourcingInterest,
     subscriberTier,
+    membershipId,
     isGuestCheckout,
     verifiedToken,
   }) => {
@@ -234,10 +235,17 @@ export const authService = {
       await OtpVerification.deleteMany({ email: cleanEmail });
     }
 
+    const cleanMembershipId = (membershipId || "").trim().toUpperCase();
+    let linkedBusiness = null;
+    if (cleanMembershipId) {
+      linkedBusiness = await Business.findOne({ membershipId: cleanMembershipId });
+    }
+
     const passwordHash = await hashPassword(password);
-    const chapterId = await resolveChapterIdByName(chapter);
-    const resolvedOrg = (businessName || organization || "").trim();
-    const isCustomerAccount = !resolvedOrg && !subscriberTier;
+    const chapterName = chapter || linkedBusiness?.chapter || "";
+    const chapterId = (await resolveChapterIdByName(chapterName)) || linkedBusiness?.chapterId || null;
+    let resolvedOrg = (businessName || organization || linkedBusiness?.name || "").trim();
+    const isCustomerAccount = !resolvedOrg && !subscriberTier && !cleanMembershipId;
     const resolvedAccountType = isCustomerAccount ? "customer" : "user";
     const resolvedTier = isCustomerAccount
       ? ""
@@ -248,16 +256,18 @@ export const authService = {
       email: email.toLowerCase().trim(),
       passwordHash,
       phone: phone || "",
-      chapter: chapter || "",
+      chapter: chapterName,
       chapterId,
       organization: resolvedOrg,
       businessName: resolvedOrg,
-      category: category ? category.trim() : "",
-      subCategory: subCategory ? subCategory.trim() : "",
+      membershipId: cleanMembershipId || linkedBusiness?.membershipId || "",
+      isRifahMember: Boolean(cleanMembershipId || linkedBusiness),
+      category: category ? category.trim() : (linkedBusiness?.industry || ""),
+      subCategory: subCategory ? subCategory.trim() : (linkedBusiness?.subCategory || ""),
       country: country ? country.trim() : "India",
       countryCode: countryCode ? countryCode.trim() : "+91",
-      state: state ? state.trim() : "",
-      city: city ? city.trim() : "",
+      state: state ? state.trim() : (linkedBusiness?.state || ""),
+      city: city ? city.trim() : (linkedBusiness?.city || ""),
       sourcingInterest: sourcingInterest
         ? sourcingInterest.trim()
         : category
@@ -275,7 +285,27 @@ export const authService = {
       isProfileComplete: true,
     });
 
-    if (resolvedOrg) {
+    if (linkedBusiness) {
+      // Multiple members registrations under a single membership.
+      // Register this user into the parent business's member roster.
+      try {
+        const alreadyInGroup = linkedBusiness.gstGroupMembers?.some(
+          (m) => String(m.user) === String(user._id)
+        );
+        if (!alreadyInGroup) {
+          if (!linkedBusiness.gstGroupMembers) linkedBusiness.gstGroupMembers = [];
+          linkedBusiness.gstGroupMembers.push({
+            user: user._id,
+            role: "member",
+            status: "active",
+            joinedAt: new Date(),
+          });
+          await linkedBusiness.save();
+        }
+      } catch (err) {
+        logger.warn("[AUTH] Failed to link member to parent business roster:", err);
+      }
+    } else if (resolvedOrg) {
       try {
         const baseSlug = generateSlug(resolvedOrg);
         const uniqueSlug = `${baseSlug}-${user._id.toString().slice(-6)}`;
@@ -305,16 +335,9 @@ export const authService = {
           isVerified: true,
           membership: resolvedTier,
           membershipPlan: resolvedTier,
+          membershipId: cleanMembershipId || undefined,
           isPaid: resolvedTier !== "Tier I (Free)",
         });
-        // BUG-065: registration used to stop here — it wrote `subscriberTier`/
-        // `membershipPlan` display strings directly onto User/Business (above, and a
-        // few lines above that) but never created a real Membership document or routed
-        // the choice through the canonical Plan/DEFAULT_MEMBERSHIP_PLANS catalogue. A
-        // freshly-registered user had no Membership at all, failing "every member must
-        // have both a valid membership and an active subscription." Route it through
-        // the one centralized, correct write path instead — reuses upgradePlan exactly
-        // as every paid upgrade already does, it just also runs once at signup now.
         try {
           const resolvedPlanId = resolveTierPlanId(resolvedTier);
           await membershipService.upgradePlan(newBusiness._id, resolvedPlanId);
