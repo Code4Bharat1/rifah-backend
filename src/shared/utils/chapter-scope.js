@@ -24,6 +24,49 @@ export const getChapterFilter = async (user, entityType = "direct") => {
     return {};
   }
 
+  // Handle Country Admin scope (strictly isolated to their country)
+  if (user.role === ROLES.COUNTRY_ADMIN) {
+    if (!user.countryId && !user.country) return { _id: null };
+    const countryName = (user.country || "").trim();
+    const countryRegex = countryName ? new RegExp(`^${countryName}$`, "i") : null;
+
+    const countryChaptersQuery = [];
+    if (user.countryId) countryChaptersQuery.push({ countryId: user.countryId });
+    if (countryRegex) countryChaptersQuery.push({ country: countryRegex });
+
+    const countryChapters = countryChaptersQuery.length > 0
+      ? await Chapter.find({ $or: countryChaptersQuery }).select("_id name")
+      : [];
+    const chapterIds = countryChapters.map((c) => c._id);
+    const chapterNames = countryChapters.map((c) => new RegExp(c.name.trim(), "i"));
+
+    if (entityType === "direct_id") {
+      const orList = [];
+      if (user.countryId) orList.push({ countryId: user.countryId });
+      if (countryRegex) orList.push({ country: countryRegex });
+      if (chapterIds.length > 0) orList.push({ chapterId: { $in: chapterIds } });
+      if (chapterNames.length > 0) orList.push({ chapter: { $in: chapterNames } });
+      return orList.length === 1 ? orList[0] : (orList.length > 0 ? { $or: orList } : { _id: null });
+    }
+
+    if (entityType === "business_ref") {
+      const bizQuery = [];
+      if (user.countryId) bizQuery.push({ countryId: user.countryId });
+      if (countryRegex) bizQuery.push({ country: countryRegex });
+      if (chapterIds.length > 0) bizQuery.push({ chapterId: { $in: chapterIds } });
+
+      const businesses = await Business.find(bizQuery.length > 0 ? { $or: bizQuery } : { _id: null }).select("_id");
+      return { business: { $in: businesses.map((b) => b._id) } };
+    }
+
+    const orConditions = [];
+    if (user.countryId) orConditions.push({ countryId: user.countryId });
+    if (countryRegex) orConditions.push({ country: countryRegex });
+    if (chapterNames.length > 0) orConditions.push({ chapter: { $in: chapterNames } });
+    if (user._id || user.id) orConditions.push({ author: user._id || user.id });
+    return orConditions.length > 0 ? { $or: orConditions } : { _id: null };
+  }
+
   // Handle State Admin scope
   if (user.role === ROLES.STATE_ADMIN) {
     if (!user.state) return { _id: null };
@@ -192,7 +235,10 @@ export const resolveChapterIdForLocation = async (locationText) => {
  * @param {Object} req - The Express request object.
  */
 export const enforceBodyChapterScope = (req) => {
-  if (req.user && req.user.role === ROLES.CHAPTER_ADMIN && req.user.chapter) {
+  if (req.user && req.user.role === ROLES.COUNTRY_ADMIN) {
+    if (req.user.countryId) req.body.countryId = req.user.countryId;
+    if (req.user.country) req.body.country = req.user.country;
+  } else if (req.user && req.user.role === ROLES.CHAPTER_ADMIN && req.user.chapter) {
     req.body.chapter = req.user.chapter;
     if (req.user.chapterId) {
       req.body.chapterId = req.user.chapterId;
@@ -209,7 +255,10 @@ export const enforceBodyChapterScope = (req) => {
  * @param {Object} req - The Express request object.
  */
 export const preventChapterModification = (req) => {
-  if (req.user && req.user.role === ROLES.CHAPTER_ADMIN) {
+  if (req.user && req.user.role === ROLES.COUNTRY_ADMIN) {
+    delete req.body.countryId;
+    delete req.body.country;
+  } else if (req.user && req.user.role === ROLES.CHAPTER_ADMIN) {
     delete req.body.chapter;
     delete req.body.chapterId;
   } else if (req.user && req.user.role === ROLES.STATE_ADMIN) {

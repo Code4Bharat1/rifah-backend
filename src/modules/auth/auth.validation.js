@@ -40,7 +40,7 @@ export const validateRegisterBusiness = (data = {}) => {
   if (data.phone !== undefined && data.phone !== "" && !isValidPhone(data.phone)) {
     errors.push({ field: "phone", message: "Enter a valid phone number" });
   }
-  const isInternational = data.region === "international" || data.currency === "USD" || (data.state && data.state.toLowerCase() === "international");
+  const isInternational = data.region === "international" || data.currency === "USD" || (data.country && String(data.country).toLowerCase() !== "india") || (data.state && String(data.state).toLowerCase() === "international");
   if (data.pincode !== undefined && data.pincode !== "") {
     if (!isInternational && !isValidPincode(data.pincode)) {
       errors.push({ field: "pincode", message: "Enter a valid 6-digit PIN code" });

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { Business } from "./business.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
+import { Country } from "../countries/country.model.js";
 import { Catalogue } from "../catalogue/catalogue.model.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
@@ -365,19 +366,37 @@ export const businessService = {
     }
 
     // 5.7. Country Filter
+    const targetCountryParam = queryParams.country || queryParams.countryId;
     if (
-      queryParams.country &&
-      queryParams.country !== "undefined" &&
-      queryParams.country !== "null" &&
-      queryParams.country.toLowerCase() !== "all"
+      targetCountryParam &&
+      targetCountryParam !== "undefined" &&
+      targetCountryParam !== "null" &&
+      targetCountryParam.toLowerCase() !== "all"
     ) {
-      const countryRegex = new RegExp(`^${escapeRegex(queryParams.country.trim())}$`, "i");
-      andConditions.push({
-        $or: [
-          { country: countryRegex },
-          { state: countryRegex },
-        ],
-      });
+      const cleanTargetCountry = (queryParams.country && queryParams.country !== "all") ? queryParams.country.trim() : "";
+      const countryOrConditions = [];
+      if (cleanTargetCountry) {
+        const countryRegex = new RegExp(`^${escapeRegex(cleanTargetCountry)}$`, "i");
+        countryOrConditions.push({ country: countryRegex });
+        countryOrConditions.push({ state: countryRegex });
+        if (cleanTargetCountry.toLowerCase() === "india") {
+          countryOrConditions.push({ country: { $in: ["", null] }, region: { $ne: "international" } });
+        }
+        try {
+          const matchedCountryDoc = await Country.findOne({
+            $or: [{ name: countryRegex }, { code: countryRegex }]
+          }).select("_id").lean();
+          if (matchedCountryDoc) {
+            countryOrConditions.push({ countryId: matchedCountryDoc._id });
+          }
+        } catch {}
+      }
+      if (queryParams.countryId && mongoose.Types.ObjectId.isValid(queryParams.countryId)) {
+        countryOrConditions.push({ countryId: new mongoose.Types.ObjectId(queryParams.countryId) });
+      }
+      if (countryOrConditions.length > 0) {
+        andConditions.push({ $or: countryOrConditions });
+      }
     }
 
     // 6. Membership Level Filter (Supports Silver, Gold, Platinum, Diamond, Free & legacy aliases)
@@ -1088,9 +1107,42 @@ export const businessService = {
     const rawPassword = Math.random().toString(36).slice(-8);
     const finalAvatar = (data.avatar || data.ownerPhoto || "/images/default-avatar.svg").trim();
 
+    // Resolve Country & CountryId dynamically
+    let resolvedCountry = (data.country || "").trim();
+    let resolvedCountryId = data.countryId || null;
+
+    if (adminUser?.role === ROLES.COUNTRY_ADMIN) {
+      resolvedCountryId = adminUser.countryId || resolvedCountryId;
+      resolvedCountry = adminUser.country || resolvedCountry;
+    }
+
+    if (resolvedCountryId && !resolvedCountry) {
+      const cDoc = await Country.findById(resolvedCountryId).select("name");
+      if (cDoc) resolvedCountry = cDoc.name;
+    } else if (resolvedCountry && !resolvedCountryId) {
+      const cDoc = await Country.findOne({
+        $or: [
+          { name: new RegExp(`^${escapeRegex(resolvedCountry)}$`, "i") },
+          { code: new RegExp(`^${escapeRegex(resolvedCountry)}$`, "i") },
+        ],
+      }).select("_id name");
+      if (cDoc) {
+        resolvedCountryId = cDoc._id;
+        resolvedCountry = cDoc.name;
+      }
+    }
+
     if (!user) {
       const passwordHash = await hashPassword(rawPassword);
       const chapterId = await resolveChapterIdByName(finalChapter);
+      if (!resolvedCountry && chapterId) {
+        const chDoc = await Chapter.findById(chapterId).select("country countryId");
+        if (chDoc) {
+          resolvedCountry = chDoc.country || "";
+          resolvedCountryId = chDoc.countryId || null;
+        }
+      }
+      if (!resolvedCountry) resolvedCountry = "India";
       
       const cleanRole = (data.roleInBusiness || data.designation || "Founder / Owner").trim();
       user = await User.create({
@@ -1099,6 +1151,9 @@ export const businessService = {
         passwordHash,
         avatar: finalAvatar,
         phone: (data.phone || "").trim(),
+        country: resolvedCountry,
+        countryId: resolvedCountryId,
+        state: data.state || "",
         chapter: finalChapter || "",
         chapterId,
         designation: cleanRole,
@@ -1112,6 +1167,9 @@ export const businessService = {
       const cleanRole = (data.roleInBusiness || data.designation || user.designation || "Founder / Owner").trim();
       user.designation = cleanRole;
       user.roleInBusiness = cleanRole;
+      if (resolvedCountry) user.country = resolvedCountry;
+      if (resolvedCountryId) user.countryId = resolvedCountryId;
+      if (data.state) user.state = data.state;
       if (data.avatar || !user.avatar) {
         user.avatar = finalAvatar;
       }
@@ -1126,6 +1184,17 @@ export const businessService = {
     }
 
     const { chapterId, chapter } = await resolveChapterFields({ chapter: finalChapter });
+    if (!resolvedCountry && chapterId) {
+      const chDoc = await Chapter.findById(chapterId).select("country countryId");
+      if (chDoc) {
+        resolvedCountry = chDoc.country || "";
+        resolvedCountryId = chDoc.countryId || null;
+      }
+    }
+    if (!resolvedCountry) resolvedCountry = "India";
+    const isIntlCountry = resolvedCountry.toLowerCase() !== "india";
+    const resolvedRegion = data.region === "international" || isIntlCountry ? "international" : "national";
+
     const categories = await ensureCategoriesExist(data.industry, data.subCategory);
     const cleanRole = (data.roleInBusiness || data.designation || "Founder / Owner").trim();
 
@@ -1143,13 +1212,15 @@ export const businessService = {
       categories,
       businessType: data.businessType || "Proprietorship",
       city: data.city || "",
+      country: resolvedCountry,
+      countryId: resolvedCountryId,
       state: data.state || "",
       address: data.address || "",
       pincode: data.pincode || "",
       founded: data.founded || "",
       employees: data.employees || "1-10",
       taxId: data.taxId || "",
-      region: data.region || "national",
+      region: resolvedRegion,
       contactPerson: data.contactPerson || "",
       roleInBusiness: cleanRole,
       designation: cleanRole,

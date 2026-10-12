@@ -33,7 +33,7 @@ export const stateService = {
    * Lists states dynamically discovered from assigned State Admins and existing Chapters.
    * NO hardcoded states array. If requester is STATE_ADMIN, returns only their assigned state.
    */
-  listStates: async (requester) => {
+  listStates: async (requester, queryParams = {}) => {
     // If requester is a State Admin, restrict exclusively to their assigned state
     if (requester && requester.role === ROLES.STATE_ADMIN && requester.state) {
       const stateAdmin = await User.findOne({
@@ -66,13 +66,48 @@ export const stateService = {
       ];
     }
 
+    const isCountryAdmin = requester && requester.role === ROLES.COUNTRY_ADMIN;
+    const targetCountryId = isCountryAdmin ? requester.countryId : (queryParams?.countryId || null);
+    const targetCountryName = isCountryAdmin ? (requester?.country || "").trim() : (queryParams?.country || "").trim();
+    const countryRegex = targetCountryName ? new RegExp(`^${escapeRegex(targetCountryName)}$`, "i") : null;
+
+    const hasCountryFilter = Boolean(isCountryAdmin || targetCountryId || targetCountryName);
+
+    const userCountryQuery = hasCountryFilter
+      ? targetCountryId
+        ? { $or: [{ countryId: targetCountryId }, ...(countryRegex ? [{ country: countryRegex }] : [])] }
+        : countryRegex
+          ? { country: countryRegex }
+          : {}
+      : {};
+
+    const chapterCountryQuery = hasCountryFilter
+      ? targetCountryId
+        ? { $or: [{ countryId: targetCountryId }, ...(countryRegex ? [{ country: countryRegex }] : [])] }
+        : countryRegex
+          ? { country: countryRegex }
+          : {}
+      : {};
+
+    const profileCountryQuery = hasCountryFilter
+      ? targetCountryId
+        ? { $or: [{ countryId: targetCountryId }, ...(countryRegex ? [{ countryName: countryRegex }] : [])] }
+        : countryRegex
+          ? { countryName: countryRegex }
+          : {}
+      : {};
+
     // Discover all distinct states from State Admins and Chapters dynamically
     const [adminStates, chapterStates] = await Promise.all([
       User.distinct("state", {
         role: ROLES.STATE_ADMIN,
         state: { $nin: ["", null] },
+        ...userCountryQuery,
       }),
-      Chapter.distinct("state", { state: { $nin: ["", null] } }),
+      Chapter.distinct("state", {
+        state: { $nin: ["", null] },
+        ...chapterCountryQuery,
+      }),
     ]);
 
     // Consolidate unique states (case-insensitive deduplication)
@@ -92,6 +127,7 @@ export const stateService = {
     // Fetch all State Admins in one query
     const stateAdmins = await User.find({
       role: ROLES.STATE_ADMIN,
+      ...userCountryQuery,
     }).select("_id name email phone state createdAt lastLoginAt");
 
     const adminByStateMap = new Map();
@@ -102,7 +138,7 @@ export const stateService = {
     });
 
     // Fetch all Chapters in one query
-    const allChapters = await Chapter.find({}).select(
+    const allChapters = await Chapter.find(chapterCountryQuery).select(
       "_id name city state status businessesCount membersCount",
     );
     const chaptersByStateMap = new Map();
@@ -115,7 +151,7 @@ export const stateService = {
     });
 
     // Fetch all StateProfiles
-    const allProfiles = await StateProfile.find({});
+    const allProfiles = await StateProfile.find(profileCountryQuery);
     const profileByStateMap = new Map();
     allProfiles.forEach((p) => {
       profileByStateMap.set(p.name.trim().toLowerCase(), p);
@@ -322,10 +358,15 @@ export const stateService = {
     }
 
     const upsertStateProfile = async () => {
+      const countryMatch = requester?.countryId
+        ? { countryId: requester.countryId }
+        : {};
       await StateProfile.findOneAndUpdate(
-        { name: cleanState },
+        { name: cleanState, ...countryMatch },
         {
           name: cleanState,
+          ...(requester?.countryId && { countryId: requester.countryId }),
+          ...(requester?.country && { countryName: requester.country }),
           ...(image && { image }),
           ...(address && { address }),
           email: contactEmail !== undefined ? contactEmail : nominee.email,
@@ -341,6 +382,12 @@ export const stateService = {
     }
     nominee.role = ROLES.STATE_ADMIN;
     nominee.state = cleanState;
+    if (requester?.countryId) {
+      nominee.countryId = requester.countryId;
+    }
+    if (requester?.country) {
+      nominee.country = requester.country;
+    }
     await nominee.save();
 
     try {
@@ -379,32 +426,52 @@ export const stateService = {
   /**
    * Create a State Profile (optionally assigning an admin)
    */
-  createState: async ({
-    name,
-    businessId,
-    image,
-    address,
-    contactEmail,
-    contactPhone,
-    adminName,
-    adminEmail,
-    adminPhone,
-  }) => {
+  createState: async (
+    {
+      name,
+      countryId,
+      countryName,
+      businessId,
+      image,
+      address,
+      contactEmail,
+      contactPhone,
+      adminName,
+      adminEmail,
+      adminPhone,
+    },
+    requester = null,
+  ) => {
     if (!name || typeof name !== "string" || !name.trim()) {
       throw new BadRequestError("State name is required");
     }
     const cleanState = name.trim();
+
+    let targetCountryId = countryId || null;
+    let targetCountryName = countryName || "";
+
+    if (requester && requester.role === ROLES.COUNTRY_ADMIN) {
+      targetCountryId = requester.countryId || null;
+      targetCountryName = requester.country || "";
+    }
 
     // Atomic guard: If businessId provided, enforce verification check BEFORE modifying database
     if (businessId) {
       await resolveEligibleAdminBusiness(businessId);
     }
 
+    const stateMatchQuery = {
+      name: new RegExp(`^${escapeRegex(cleanState)}$`, "i"),
+      ...(targetCountryId ? { countryId: targetCountryId } : {}),
+    };
+
     // Create/update state profile
     const profile = await StateProfile.findOneAndUpdate(
-      { name: new RegExp(`^${escapeRegex(cleanState)}$`, "i") },
+      stateMatchQuery,
       {
         name: cleanState,
+        ...(targetCountryId && { countryId: targetCountryId }),
+        ...(targetCountryName && { countryName: targetCountryName }),
         ...(image && { image }),
         ...(address && { address }),
         ...(contactEmail !== undefined && { email: contactEmail }),
@@ -415,17 +482,20 @@ export const stateService = {
 
     // If businessId or manual admin credentials are provided, also allocate the admin
     if (businessId || (adminName && adminEmail)) {
-      await stateService.assignStateAdmin({
-        businessId,
-        image,
-        address,
-        explicitStateName: cleanState,
-        contactEmail,
-        contactPhone,
-        name: adminName,
-        email: adminEmail,
-        phone: adminPhone,
-      });
+      await stateService.assignStateAdmin(
+        {
+          businessId,
+          image,
+          address,
+          explicitStateName: cleanState,
+          contactEmail,
+          contactPhone,
+          name: adminName,
+          email: adminEmail,
+          phone: adminPhone,
+        },
+        requester,
+      );
     }
 
     return profile;

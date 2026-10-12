@@ -49,15 +49,31 @@ export const chapterService = {
 
     const query = {};
     if (filter.status) query.status = filter.status;
-    if (filter.country) {
+    if (filter.countryId) {
+      query.$or = [
+        { countryId: filter.countryId },
+        ...(filter.country ? [{ country: new RegExp(`^${escapeRegex(filter.country)}$`, "i") }] : []),
+      ];
+    } else if (filter.country) {
       query.country = new RegExp(`^${escapeRegex(filter.country)}$`, "i");
     }
     if (filter.state) {
       query.state = new RegExp(`^${escapeRegex(filter.state)}$`, "i");
     }
 
-    // RBAC: Chapter Admin & State Admin Scope Enforcement
-    if (user && user.role === ROLES.CHAPTER_ADMIN) {
+    // RBAC: Country Admin, State Admin, and Chapter Admin Scope Enforcement
+    if (user && user.role === ROLES.COUNTRY_ADMIN) {
+      if (user.countryId) {
+        query.$or = [
+          { countryId: user.countryId },
+          ...(user.country
+            ? [{ country: new RegExp(`^${escapeRegex(user.country)}$`, "i") }]
+            : []),
+        ];
+      } else if (user.country) {
+        query.country = new RegExp(`^${escapeRegex(user.country)}$`, "i");
+      }
+    } else if (user && user.role === ROLES.CHAPTER_ADMIN) {
       query._id = user.chapterId || null;
     } else if (user && user.role === ROLES.STATE_ADMIN) {
       let state = user.state;
@@ -158,7 +174,10 @@ export const chapterService = {
   },
 
   createChapter: async (data, user) => {
-    if (user && user.role === ROLES.STATE_ADMIN) {
+    if (user && user.role === ROLES.COUNTRY_ADMIN) {
+      if (user.countryId) data.countryId = user.countryId;
+      if (user.country) data.country = user.country;
+    } else if (user && user.role === ROLES.STATE_ADMIN) {
       let state = user.state;
       if (!state && user.id) {
         const userDoc = await User.findById(user.id).select("state");
@@ -167,6 +186,8 @@ export const chapterService = {
       if (state) {
         data.state = state;
       }
+      if (user.countryId) data.countryId = user.countryId;
+      if (user.country) data.country = user.country;
     }
     const slug = generateSlug(data.name);
     const existing = await Chapter.findOne({
@@ -200,6 +221,8 @@ export const chapterService = {
         cityStateQuery.state = new RegExp(`^${data.state.trim()}$`, "i");
       if (data.city)
         cityStateQuery.city = new RegExp(`^${data.city.trim()}$`, "i");
+      if (data.countryId)
+        cityStateQuery.countryId = data.countryId;
       const candidates =
         await Chapter.find(cityStateQuery).select("name city state");
       const nearDuplicate = candidates.find(
@@ -220,7 +243,9 @@ export const chapterService = {
     const chapter = await Chapter.create({
       name: data.name,
       city: data.city,
+      countryId: data.countryId || null,
       country: data.country || "",
+      stateId: data.stateId || null,
       state: data.state,
       slug,
       status: data.status || "Active",
@@ -482,6 +507,8 @@ export const chapterService = {
     nominee.chapterId = chapter._id;
     nominee.city = chapter.city || nominee.city || "";
     nominee.state = chapter.state || nominee.state || "";
+    if (chapter.countryId) nominee.countryId = chapter.countryId;
+    if (chapter.country) nominee.country = chapter.country;
     await nominee.save();
 
     // Send email with generated credentials or notification to the assigned chapter admin email

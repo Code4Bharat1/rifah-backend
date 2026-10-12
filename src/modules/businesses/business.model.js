@@ -55,6 +55,18 @@ const businessSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
+      default: null,
+      index: true,
+    },
+    country: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
     address: {
       type: String,
       default: "",

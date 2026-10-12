@@ -30,6 +30,12 @@ const countrySchema = new mongoose.Schema(
       default: "Active",
       index: true,
     },
+    assignedAdmin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

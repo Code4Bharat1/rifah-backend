@@ -63,13 +63,6 @@ router.delete(
 );
 
 router.delete(
-  "/:countryName",
-  authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
-  countryController.deleteCountryByName,
-);
-
-router.delete(
   "/:id",
   authMiddleware,
   requireRole(ROLES.CENTRAL_ADMIN),

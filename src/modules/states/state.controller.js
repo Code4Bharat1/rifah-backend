@@ -14,7 +14,7 @@ export const stateController = {
   }),
 
   listStates: asyncHandler(async (req, res) => {
-    const states = await stateService.listStates(req.user);
+    const states = await stateService.listStates(req.user, req.query);
     return ApiResponse.success(res, states, "States retrieved successfully");
   }),
 
@@ -25,7 +25,7 @@ export const stateController = {
   }),
 
   createState: asyncHandler(async (req, res) => {
-    const stateProfile = await stateService.createState(req.body);
+    const stateProfile = await stateService.createState(req.body, req.user);
     await auditService.logAction({
       actor: req.user,
       action: "CREATE",
@@ -38,7 +38,7 @@ export const stateController = {
   }),
 
   assignStateAdmin: asyncHandler(async (req, res) => {
-    const admin = await stateService.assignStateAdmin(req.body);
+    const admin = await stateService.assignStateAdmin(req.body, req.user);
     await auditService.logAction({
       actor: req.user,
       action: "CREATE",

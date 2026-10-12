@@ -28,11 +28,11 @@ router.get(
 
 router.get("/:id", validateObjectIdParam("id"), chapterController.getChapterById);
 
-// Admin routes (Super Admin and State Admin)
+// Admin routes (Super Admin, Country Admin, and State Admin)
 router.post(
   "/",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN),
   validateRequest(validateCreateChapter),
   chapterController.createChapter
 );
@@ -40,7 +40,7 @@ router.post(
 router.patch(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateUpdateChapter),
   chapterController.updateChapter
@@ -49,7 +49,7 @@ router.patch(
 router.patch(
   "/:id/status",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   chapterController.updateChapterStatus
 );
@@ -57,7 +57,7 @@ router.patch(
 router.post(
   "/:id/units",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateAddUnit),
   chapterController.addUnit
@@ -66,16 +66,16 @@ router.post(
 router.delete(
   "/:id/units/:unitId",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   chapterController.removeUnit
 );
 
-// Assign / Reallocate Chapter Admin (Central Admin or State Admin)
+// Assign / Reallocate Chapter Admin (Central Admin, Country Admin, or State Admin)
 router.post(
   "/:id/admins",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateAssignChapterAdmin),
   chapterController.assignAdmin
@@ -85,7 +85,7 @@ router.post(
 router.delete(
   "/:id/admins",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   chapterController.removeAdmin
 );
@@ -94,7 +94,7 @@ router.delete(
 router.delete(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   chapterController.deleteChapter
 );

@@ -5,9 +5,19 @@ const stateProfileSchema = new mongoose.Schema(
     name: {
       type: String,
       required: [true, "State name is required"],
-      unique: true,
       trim: true,
       lowercase: true,
+    },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
+      default: null,
+      index: true,
+    },
+    countryName: {
+      type: String,
+      trim: true,
+      default: "",
     },
     image: {
       type: String,
@@ -30,6 +40,9 @@ const stateProfileSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// Compound unique index so different countries can share state names
+stateProfileSchema.index({ countryId: 1, name: 1 }, { unique: true });
 
 // Virtual for formatted name
 stateProfileSchema.virtual("formattedName").get(function () {

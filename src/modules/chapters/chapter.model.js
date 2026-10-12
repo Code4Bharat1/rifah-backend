@@ -27,7 +27,7 @@ const chapterSchema = new mongoose.Schema(
       type: String,
       required: [true, "Chapter name is required"],
       trim: true,
-      unique: true,
+      index: true,
     },
     slug: {
       type: String,
@@ -41,15 +41,29 @@ const chapterSchema = new mongoose.Schema(
       required: [true, "City is required"],
       trim: true,
     },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
+      default: null,
+      index: true,
+    },
     country: {
       type: String,
       default: "",
       trim: true,
+      index: true,
+    },
+    stateId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "StateProfile",
+      default: null,
+      index: true,
     },
     state: {
       type: String,
       default: "",
       trim: true,
+      index: true,
     },
     lead: {
       type: String,

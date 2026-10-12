@@ -59,14 +59,14 @@ export const countryController = {
   }),
 
   deleteCountry: asyncHandler(async (req, res) => {
-    const result = await countryService.deleteCountry(req.params.id);
+    const identifier = req.params.id || req.params.countryName;
+    const result = await countryService.deleteCountry(identifier);
     return ApiResponse.success(res, result, "Country deleted successfully");
   }),
 
   deleteCountryByName: asyncHandler(async (req, res) => {
-    const result = await countryService.deleteCountryByName(
-      req.params.countryName,
-    );
+    const identifier = req.params.countryName || req.params.id;
+    const result = await countryService.deleteCountry(identifier);
     return ApiResponse.success(res, result, "Country deleted successfully");
   }),
 };

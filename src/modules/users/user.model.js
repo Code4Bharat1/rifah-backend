@@ -160,10 +160,17 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
+      default: null,
+      index: true,
+    },
     country: {
       type: String,
       trim: true,
       default: "India",
+      index: true,
     },
     countryCode: {
       type: String,

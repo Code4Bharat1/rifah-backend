@@ -1,5 +1,7 @@
+import mongoose from "mongoose";
 import { Country } from "./country.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
+import { StateProfile } from "../states/state-profile.model.js";
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
 import { ROLES, isResponsibilityRole } from "../../shared/constants/roles.js";
@@ -33,11 +35,68 @@ export const countryService = {
       ];
     }
 
-    return Country.find(query).sort({ name: 1 });
+    const countries = await Country.find(query)
+      .populate("assignedAdmin", "name email phone avatar role")
+      .sort({ name: 1 })
+      .lean();
+
+    const results = await Promise.all(
+      countries.map(async (c) => {
+        const countryNameRegex = new RegExp(`^${escapeRegex(c.name)}$`, "i");
+        const [statesCount, chaptersCount, businessesCount, membersCount] =
+          await Promise.all([
+            StateProfile.countDocuments({
+              $or: [{ countryId: c._id }, { countryName: countryNameRegex }],
+            }),
+            Chapter.countDocuments({
+              $or: [{ countryId: c._id }, { country: countryNameRegex }],
+            }),
+            Business.countDocuments({
+              $or: [{ countryId: c._id }, { country: countryNameRegex }],
+            }),
+            User.countDocuments({
+              $or: [{ countryId: c._id }, { country: countryNameRegex }],
+            }),
+          ]);
+
+        let admin = c.assignedAdmin;
+        if (!admin) {
+          admin = await User.findOne({
+            role: ROLES.COUNTRY_ADMIN,
+            $or: [{ countryId: c._id }, { country: countryNameRegex }],
+          })
+            .select("name email phone avatar role")
+            .lean();
+        }
+
+        return {
+          ...c,
+          assignedAdmin: admin || null,
+          statesCount,
+          chaptersCount,
+          businessesCount,
+          membersCount,
+        };
+      })
+    );
+
+    return results;
   },
 
   getCountryById: async (id) => {
-    const country = await Country.findById(id);
+    let country = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      country = await Country.findById(id);
+    }
+    if (!country) {
+      country = await Country.findOne({
+        $or: [
+          { name: new RegExp(`^${escapeRegex(id)}$`, "i") },
+          { slug: slugify(id) },
+          { code: new RegExp(`^${escapeRegex(id)}$`, "i") },
+        ],
+      });
+    }
     if (!country) throw new NotFoundError("Country not found");
     return country;
   },
@@ -46,9 +105,19 @@ export const countryService = {
     const cleanName = String(countryName || "").trim();
     if (!cleanName) throw new BadRequestError("Country name is required");
 
-    const country = await Country.findOne({
-      name: new RegExp(`^${escapeRegex(cleanName)}$`, "i"),
-    });
+    let country = null;
+    if (mongoose.Types.ObjectId.isValid(cleanName)) {
+      country = await Country.findById(cleanName);
+    }
+    if (!country) {
+      country = await Country.findOne({
+        $or: [
+          { name: new RegExp(`^${escapeRegex(cleanName)}$`, "i") },
+          { slug: slugify(cleanName) },
+          { code: new RegExp(`^${escapeRegex(cleanName)}$`, "i") },
+        ],
+      });
+    }
 
     if (!country) throw new NotFoundError("Country not found");
     return country;
@@ -156,8 +225,12 @@ export const countryService = {
     }
 
     nominee.role = ROLES.COUNTRY_ADMIN;
-    nominee.country = countryName;
+    nominee.country = country.name;
+    nominee.countryId = country._id;
     await nominee.save();
+
+    country.assignedAdmin = nominee._id;
+    await country.save();
 
     return nominee;
   },
@@ -166,9 +239,16 @@ export const countryService = {
     const cleanName = String(countryName || "").trim();
     if (!cleanName) throw new BadRequestError("Country name is required");
 
+    const country = await Country.findOne({
+      name: new RegExp(`^${escapeRegex(cleanName)}$`, "i"),
+    });
+
     const admin = await User.findOne({
       role: ROLES.COUNTRY_ADMIN,
-      country: new RegExp(`^${escapeRegex(cleanName)}$`, "i"),
+      $or: [
+        { country: new RegExp(`^${escapeRegex(cleanName)}$`, "i") },
+        ...(country ? [{ countryId: country._id }] : []),
+      ],
     });
 
     if (!admin)
@@ -177,7 +257,13 @@ export const countryService = {
     admin.role = admin.previousRole || ROLES.CUSTOMER;
     admin.previousRole = "";
     admin.country = "";
+    admin.countryId = null;
     await admin.save();
+
+    if (country) {
+      country.assignedAdmin = null;
+      await country.save();
+    }
 
     return admin;
   },
@@ -227,36 +313,83 @@ export const countryService = {
     return countryService.updateCountry(country._id, data);
   },
 
-  deleteCountry: async (id) => {
-    const country = await Country.findById(id);
+  deleteCountry: async (identifier) => {
+    const cleanId = String(identifier || "").trim();
+    if (!cleanId) throw new BadRequestError("Country identifier is required");
+
+    let country = null;
+    if (mongoose.Types.ObjectId.isValid(cleanId)) {
+      country = await Country.findById(cleanId);
+    }
+    if (!country) {
+      country = await Country.findOne({
+        $or: [
+          { name: new RegExp(`^${escapeRegex(cleanId)}$`, "i") },
+          { slug: slugify(cleanId) },
+          { code: new RegExp(`^${escapeRegex(cleanId)}$`, "i") },
+        ],
+      });
+    }
     if (!country) throw new NotFoundError("Country not found");
 
-    const chapterRefs = await Chapter.countDocuments({
-      country: new RegExp(`^${escapeRegex(country.name)}$`, "i"),
-    });
-    if (chapterRefs > 0) {
+    const countryNameRegex = new RegExp(`^${escapeRegex(country.name)}$`, "i");
+    const [chapterRefs, stateRefs] = await Promise.all([
+      Chapter.countDocuments({
+        $or: [{ countryId: country._id }, { country: countryNameRegex }],
+      }),
+      StateProfile.countDocuments({
+        $or: [{ countryId: country._id }, { countryName: countryNameRegex }],
+      }),
+    ]);
+
+    if (chapterRefs > 0 || stateRefs > 0) {
       throw new BadRequestError(
-        "Cannot delete this country while chapters are still assigned to it",
+        "Cannot delete this country while states or chapters are still assigned to it. Please remove or reassign them first.",
       );
+    }
+
+    // Revoke any active Country Admin allocated to this country
+    const admin = await User.findOne({
+      role: ROLES.COUNTRY_ADMIN,
+      $or: [
+        { countryId: country._id },
+        { country: countryNameRegex },
+      ],
+    });
+    if (admin) {
+      admin.role = admin.previousRole || ROLES.CUSTOMER;
+      admin.previousRole = "";
+      admin.country = "";
+      admin.countryId = null;
+      await admin.save();
     }
 
     await Promise.all([
       User.updateMany(
-        { country: new RegExp(`^${escapeRegex(country.name)}$`, "i") },
-        { $set: { country: "" } },
+        {
+          $or: [
+            { countryId: country._id },
+            { country: countryNameRegex },
+          ],
+        },
+        { $set: { country: "", countryId: null } },
       ),
       Business.updateMany(
-        { country: new RegExp(`^${escapeRegex(country.name)}$`, "i") },
-        { $set: { country: "" } },
+        {
+          $or: [
+            { countryId: country._id },
+            { country: countryNameRegex },
+          ],
+        },
+        { $set: { country: "", countryId: null } },
       ),
     ]);
 
-    await Country.findByIdAndDelete(id);
+    await Country.findByIdAndDelete(country._id);
     return { deletedCountry: country.name };
   },
 
   deleteCountryByName: async (countryName) => {
-    const country = await countryService.getCountryByName(countryName);
-    return countryService.deleteCountry(country._id);
+    return countryService.deleteCountry(countryName);
   },
 };

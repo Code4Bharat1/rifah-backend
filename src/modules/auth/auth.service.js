@@ -2,6 +2,7 @@ import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
 import { Verification } from "../verification/verification.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
+import { Country } from "../countries/country.model.js";
 import { Plan } from "../memberships/plan.model.js";
 import {
   membershipService,
@@ -189,6 +190,7 @@ export const authService = {
     category,
     subCategory,
     country,
+    countryId,
     countryCode,
     state,
     city,
@@ -251,6 +253,25 @@ export const authService = {
       ? ""
       : subscriberTier || "Tier I (Free)";
 
+    let resolvedCountry = (country || "").trim();
+    let resolvedCountryId = countryId || null;
+    if (resolvedCountryId) {
+      const cDoc = await Country.findById(resolvedCountryId).select("name");
+      if (cDoc) resolvedCountry = cDoc.name;
+    } else if (resolvedCountry) {
+      const cDoc = await Country.findOne({
+        $or: [
+          { name: new RegExp(`^${resolvedCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+          { code: new RegExp(`^${resolvedCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+        ],
+      }).select("_id name");
+      if (cDoc) {
+        resolvedCountryId = cDoc._id;
+        resolvedCountry = cDoc.name;
+      }
+    }
+    if (!resolvedCountry) resolvedCountry = "India";
+
     const user = await User.create({
       name: name.trim(),
       email: email.toLowerCase().trim(),
@@ -264,7 +285,8 @@ export const authService = {
       isRifahMember: Boolean(cleanMembershipId || linkedBusiness),
       category: category ? category.trim() : (linkedBusiness?.industry || ""),
       subCategory: subCategory ? subCategory.trim() : (linkedBusiness?.subCategory || ""),
-      country: country ? country.trim() : "India",
+      country: resolvedCountry,
+      countryId: resolvedCountryId,
       countryCode: countryCode ? countryCode.trim() : "+91",
       state: state ? state.trim() : (linkedBusiness?.state || ""),
       city: city ? city.trim() : (linkedBusiness?.city || ""),
@@ -327,6 +349,7 @@ export const authService = {
               ? "international"
               : "national",
           country: user.country || "India",
+          countryId: user.countryId || null,
           state: user.state || "",
           city: user.city || "",
           status: "Active",
@@ -749,7 +772,12 @@ export const authService = {
     email,
     password,
     phone,
+    country,
+    countryId,
+    state,
+    stateId,
     chapter,
+    chapterId: inputChapterId,
     businessName,
     businessEmail,
     contactPerson,
@@ -759,7 +787,6 @@ export const authService = {
     subCategory,
     businessType,
     city,
-    state,
     address,
     pincode,
     founded,
@@ -816,7 +843,44 @@ export const authService = {
       }
     }
 
-    const chapterId = await resolveChapterIdByName(chapter);
+    const chapterId = inputChapterId || (await resolveChapterIdByName(chapter));
+
+    // Resolve Country & CountryId dynamically
+    let resolvedCountry = (country || "").trim();
+    let resolvedCountryId = countryId || null;
+
+    if (resolvedCountryId) {
+      const cDoc = await Country.findById(resolvedCountryId).select("name code");
+      if (cDoc) {
+        resolvedCountry = cDoc.name;
+      }
+    } else if (resolvedCountry) {
+      const cDoc = await Country.findOne({
+        $or: [
+          { name: new RegExp(`^${resolvedCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+          { code: new RegExp(`^${resolvedCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+        ],
+      }).select("_id name");
+      if (cDoc) {
+        resolvedCountryId = cDoc._id;
+        resolvedCountry = cDoc.name;
+      }
+    }
+
+    if (!resolvedCountry && chapterId) {
+      const chDoc = await Chapter.findById(chapterId).select("country countryId");
+      if (chDoc) {
+        resolvedCountry = chDoc.country || "";
+        resolvedCountryId = chDoc.countryId || null;
+      }
+    }
+    if (!resolvedCountry) {
+      resolvedCountry = "India";
+    }
+
+    const isIntlCountry = resolvedCountry.toLowerCase() !== "india";
+    const resolvedRegion = region === "international" || isIntlCountry ? "international" : "national";
+    const resolvedCurrency = currency === "USD" || isIntlCountry ? "USD" : "INR";
 
     // Check if user exists
     let user = await User.findOne({ email: cleanEmail });
@@ -832,6 +896,9 @@ export const authService = {
       user.name = name.trim();
       user.passwordHash = passwordHash;
       user.phone = phone || "";
+      user.country = resolvedCountry;
+      user.countryId = resolvedCountryId;
+      user.state = state || "";
       user.chapter = chapter || "";
       user.chapterId = chapterId;
       user.taxId = cleanTaxId;
@@ -855,6 +922,9 @@ export const authService = {
         passwordHash,
         phone: phone || "",
         avatar: cleanAvatar || cleanLogo || "",
+        country: resolvedCountry,
+        countryId: resolvedCountryId,
+        state: state || "",
         chapter: chapter || "",
         chapterId,
         taxId: cleanTaxId,
@@ -925,6 +995,8 @@ export const authService = {
       categories,
       businessType: businessType || "Proprietorship",
       city: city || "",
+      country: resolvedCountry,
+      countryId: resolvedCountryId,
       state: state || "",
       address: address || "",
       pincode: pincode || "",
@@ -943,9 +1015,8 @@ export const authService = {
           ? parsedJoiningDate
           : new Date(),
       timezone: cleanTimezone,
-      region: region === "international" ? "international" : "national",
-      currency:
-        currency === "USD" || region === "international" ? "USD" : "INR",
+      region: resolvedRegion,
+      currency: resolvedCurrency,
       phone: phone || "",
       email: cleanBusinessEmail || cleanEmail,
       ownerEmail: cleanEmail,

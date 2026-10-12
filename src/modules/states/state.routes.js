@@ -29,7 +29,7 @@ router.get(
 router.post(
   "/",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   stateController.createState
 );
 
@@ -39,20 +39,20 @@ router.get(
   stateController.getStateByName
 );
 
-// ONLY Super Admin can allocate State Admins
+// Central Admin and Country Admin can allocate State Admins
 router.post(
   "/assign-admin",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   validateRequest(validateAssignStateAdmin),
   stateController.assignStateAdmin
 );
 
-// ONLY Super Admin can revoke a State Admin
+// Central Admin and Country Admin can revoke a State Admin
 router.delete(
   "/:stateName/admin",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   stateController.removeStateAdmin
 );
 
@@ -60,7 +60,7 @@ router.delete(
 router.put(
   "/:stateName",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   stateController.updateState
 );
 
@@ -68,7 +68,7 @@ router.put(
 router.delete(
   "/:stateName",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   stateController.deleteState
 );
 
@@ -76,7 +76,7 @@ router.delete(
 router.put(
   "/:stateName/profile",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN),
   validateRequest(validateUpdateStateProfile),
   stateController.updateStateProfile
 );
