@@ -37,24 +37,17 @@ router.post(
   advertisementController.createAdvertisement
 );
 
-// 5. Unified Admin Verification Queue (Chapter Admin, State Admin, Central Admin)
+// 5. Central Admin Verification Queue
 router.get(
   "/admin/list",
-  requireRole(ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN),
   advertisementController.getAdminAdvertisements
 );
 
-// Backward-compatible alias for Chapter Admin
-router.get(
-  "/chapter-admin",
-  requireRole(ROLES.CHAPTER_ADMIN, ROLES.CENTRAL_ADMIN),
-  advertisementController.getChapterAdvertisements
-);
-
-// 6. Admin Review / Verification Action with schema validation
+// 6. Admin Review / Verification Action with schema validation (Central Admin only)
 router.patch(
   "/:id/review",
-  requireRole(ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN),
   validateRequest(validateReviewAdvertisement),
   advertisementController.reviewAdvertisement
 );

@@ -35,8 +35,7 @@ export const advertisementController = {
     };
 
     const ad = await advertisementService.createAdvertisement(payload, req.user);
-    const scopeLabel = ad.targetScope === "global" ? "Central Admin" : ad.targetScope === "state" ? "State Admin" : "Chapter Admin";
-    return ApiResponse.created(res, ad, `Advertisement submitted to ${scopeLabel} for verification.`);
+    return ApiResponse.created(res, ad, "Advertisement submitted to Central Admin for verification.");
   }),
 
   /**
@@ -85,7 +84,7 @@ export const advertisementController = {
    */
   getCalendarSlots: asyncHandler(async (req, res) => {
     const { month, year, targetScope } = req.query;
-    const slots = await advertisementService.getCalendarSlots(month, year, targetScope, req.user);
+    const slots = await advertisementService.getCalendarSlots(month, year, targetScope, req.user, req.query);
     return ApiResponse.success(res, slots, "Advertisement calendar slots retrieved");
   }),
 
