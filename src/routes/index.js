@@ -43,6 +43,7 @@ import { advertisementRoutes } from "../modules/advertisements/advertisement.rou
 import { ticketRoutes } from "../modules/tickets/ticket.routes.js";
 import { countryRoutes } from "../modules/countries/country.routes.js";
 import { revenueSharingRoutes } from "../modules/revenue-sharing/revenueSharing.routes.js";
+import { dignitaryRoutes } from "../modules/dignitaries/dignitary.routes.js";
 
 const apiRouter = Router();
 
@@ -93,6 +94,7 @@ apiRouter.use("/copilot", copilotRoutes);
 apiRouter.use("/advertisements", advertisementRoutes);
 apiRouter.use("/tickets", ticketRoutes);
 apiRouter.use("/revenue-sharing", revenueSharingRoutes);
+apiRouter.use("/dignitaries", dignitaryRoutes);
 
 export { apiRouter };
 export default apiRouter;

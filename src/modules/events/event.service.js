@@ -1282,6 +1282,42 @@ export const eventService = {
 
     const updated = await Event.findByIdAndUpdate(eventId, { $set: updateObj }, { new: true, runValidators: true });
     if (!updated) throw new NotFoundError("Event not found");
+
+    if (Array.isArray(updateObj.speakers)) {
+      try {
+        const { Dignitary } = await import("../dignitaries/dignitary.model.js");
+        for (const sp of updateObj.speakers) {
+          if (sp && sp.name && sp.name.trim()) {
+            const filter = sp.mobile && sp.mobile.trim()
+              ? { mobile: sp.mobile.trim() }
+              : { name: new RegExp(`^${sp.name.trim()}$`, "i") };
+
+            await Dignitary.findOneAndUpdate(
+              filter,
+              {
+                $set: {
+                  name: sp.name.trim(),
+                  category: sp.category || "",
+                  mobile: sp.mobile || "",
+                  email: sp.email || "",
+                  org: sp.org || "",
+                  designation: sp.designation || "",
+                  type: sp.type || "Guest Speaker",
+                  topic: sp.topic || "",
+                },
+                $setOnInsert: {
+                  createdBy: user?._id || user?.id,
+                },
+              },
+              { upsert: true, new: true }
+            );
+          }
+        }
+      } catch (err) {
+        // Non-blocking sync error
+      }
+    }
+
     return updated;
   },
 
