@@ -16,9 +16,26 @@ export const enquiryController = {
   }),
 
   createEnquiry: asyncHandler(async (req, res) => {
-    // Direct business enquiries from the profile page and public RFQs from the home page are allowed for guests.
+    // Direct business enquiries from the profile page and public RFQs from home/forms are allowed for guests.
+    const guestContactName = req.body.guestName || req.body.buyerName || req.body.name || req.body.senderName;
+    const guestContactEmail = req.body.guestEmail || req.body.buyerEmail || req.body.email || req.body.senderEmail;
+    const guestContactPhone = req.body.guestPhone || req.body.buyerPhone || req.body.phone || req.body.senderPhone;
+
+    if (!req.body.targetType) {
+      req.body.targetType = req.body.targetBusiness ? "business" : "all";
+    }
+    if (!req.body.guestName && guestContactName) {
+      req.body.guestName = guestContactName;
+    }
+    if (!req.body.guestEmail && guestContactEmail) {
+      req.body.guestEmail = guestContactEmail;
+    }
+    if (!req.body.guestPhone && guestContactPhone) {
+      req.body.guestPhone = guestContactPhone;
+    }
+
     const isDirectBusinessEnquiry = req.body.targetType === "business" && req.body.targetBusiness;
-    const isPublicRfq = req.body.targetType === "all" && req.body.guestName && (req.body.guestEmail || req.body.guestPhone);
+    const isPublicRfq = (req.body.targetType === "all" || !req.body.targetType) && Boolean(guestContactName) && Boolean(guestContactEmail || guestContactPhone);
 
     if (!req.user && !isDirectBusinessEnquiry && !isPublicRfq) {
       const { Settings } = await import("../settings/settings.model.js");

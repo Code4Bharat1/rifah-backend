@@ -57,15 +57,15 @@ export const validateCreateEnquiry = (data = {}, req = null) => {
   }
   // BUG-001/002/003: RFQ/contact form guest name, email and phone were accepted with
   // no format validation whenever provided (previously only presence was checked).
-  const guestName = data.guestName ?? data.name ?? data.senderName;
+  const guestName = data.guestName ?? data.name ?? data.senderName ?? data.buyerName;
   if (guestName !== undefined && guestName !== "" && !isValidName(guestName)) {
     errors.push({ field: "guestName", message: "Name must contain only letters" });
   }
-  const guestEmail = data.guestEmail ?? data.email ?? data.senderEmail;
+  const guestEmail = data.guestEmail ?? data.email ?? data.senderEmail ?? data.buyerEmail;
   if (guestEmail !== undefined && guestEmail !== "" && !isValidEmail(guestEmail)) {
     errors.push({ field: "guestEmail", message: "Enter a valid email address" });
   }
-  const guestPhone = data.guestPhone ?? data.phone ?? data.senderPhone;
+  const guestPhone = data.guestPhone ?? data.phone ?? data.senderPhone ?? data.buyerPhone;
   if (guestPhone !== undefined && guestPhone !== "" && !isValidPhone(guestPhone)) {
     errors.push({ field: "guestPhone", message: "Enter a valid phone number" });
   }

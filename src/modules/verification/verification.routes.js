@@ -70,7 +70,7 @@ router.patch(
 router.delete(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   verificationController.deleteVerification
 );

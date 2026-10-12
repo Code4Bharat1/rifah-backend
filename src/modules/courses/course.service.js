@@ -8,15 +8,30 @@ import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/err
 import { notificationService } from "../notifications/notification.service.js";
 
 /**
+ * Helper to determine if a user can manage/edit/delete a specific course
+ */
+export const canManageCourse = (user, course) => {
+  if (!user) return false;
+  if (user.role === ROLES.CENTRAL_ADMIN) return true;
+  if (user.role === ROLES.BUSINESS_OWNER && course) {
+    const creatorId = String(course.createdBy?._id || course.createdBy || "");
+    const userId = String(user.id || user._id || "");
+    return Boolean(creatorId && userId && creatorId === userId);
+  }
+  return false;
+};
+
+/**
  * Creates a new course
+ * Central Admin: Creates official courses (scope: 'centre', can be paid, published directly)
+ * Business Owner: Creates community courses (scope: 'business', free, submitted for Central Admin approval)
  */
 export const createCourse = async (courseData, user) => {
-  // BUG-062: LMS course creation is Central Admin exclusive now — State, Chapter and
-  // Business accounts can no longer submit courses at all (the route already enforces
-  // this via requireRole; this guard is defense-in-depth so the rule holds even if this
-  // service function is ever called from somewhere else).
-  if (user.role !== ROLES.CENTRAL_ADMIN) {
-    throw new ForbiddenError("Only Central Admin can create and publish courses");
+  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+  const isBusinessOwner = user.role === ROLES.BUSINESS_OWNER;
+
+  if (!isCentralAdmin && !isBusinessOwner) {
+    throw new ForbiddenError("Only Central Admin and Business Owners can create courses");
   }
 
   if (!courseData.title || !String(courseData.title).trim()) {
@@ -47,19 +62,41 @@ export const createCourse = async (courseData, user) => {
     throw new BadRequestError("Cannot publish an empty course. Please attach at least 1 video or PDF lesson.");
   }
 
-  // Every course is now a Central Admin course — scope stays 'centre' and the approval
-  // workflow is skipped entirely (not just unused: there is no other creator left who
-  // would ever need it).
-  const scope = 'centre';
-
-  let isPaid = Boolean(courseData.isPaid);
+  let scope = 'centre';
+  let businessId = null;
+  let isPaid = false;
   let price = 0;
-  if (isPaid) {
-    const parsedPrice = Number(courseData.price);
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
+  let approvalStatus = 'not_required';
+  let isActive = false;
+  let approvedBy = null;
+  let approvedAt = null;
+
+  if (isCentralAdmin) {
+    scope = 'centre';
+    businessId = null;
+    isPaid = Boolean(courseData.isPaid);
+    if (isPaid) {
+      const parsedPrice = Number(courseData.price);
+      if (isNaN(parsedPrice) || parsedPrice <= 0) {
+        throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
+      }
+      price = Math.round(parsedPrice);
     }
-    price = Math.round(parsedPrice);
+    approvalStatus = 'not_required';
+    approvedBy = user.id || user._id;
+    approvedAt = new Date();
+    isActive = Boolean(courseData.isActive === true || courseData.status === "published");
+  } else if (isBusinessOwner) {
+    let business = user.business;
+    if (!business && (user.businessId || user.id || user._id)) {
+      business = await Business.findOne(user.businessId ? { _id: user.businessId } : { owner: user.id || user._id });
+    }
+    businessId = business?._id || user.businessId || null;
+    scope = 'business';
+    isPaid = false;
+    price = 0;
+    approvalStatus = 'pending';
+    isActive = false; // Business courses require Central Admin approval to go live
   }
 
   const course = new Course({
@@ -69,20 +106,38 @@ export const createCourse = async (courseData, user) => {
     category: normalizedCategory,
     subcategory: normalizedSubcategory,
     createdBy: user.id || user._id,
-    businessId: null,
+    businessId,
     scope,
     state: null,
     chapterId: null,
     isPaid,
     price,
-    approvalStatus: "not_required",
-    isActive: Boolean(courseData.isActive === true || courseData.status === "published"),
-    approvedBy: user.id || user._id,
-    approvedAt: new Date(),
+    approvalStatus,
+    isActive,
+    approvedBy,
+    approvedAt,
     enrollments: [],
   });
 
   const saved = await course.save();
+
+  // If business owner submitted course for review, notify Central Admin
+  if (isBusinessOwner && isPublishing) {
+    setImmediate(async () => {
+      try {
+        const centralAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id");
+        for (const admin of centralAdmins) {
+          await notificationService.createNotification({
+            recipientId: admin._id,
+            type: "System",
+            title: "New Course Pending Approval",
+            body: `Business member submitted course "${saved.title}" for approval.`,
+            link: "/admin/lms",
+          });
+        }
+      } catch (e) {}
+    });
+  }
 
   return saved;
 };
@@ -97,6 +152,9 @@ export const updateCourse = async (courseId, courseData, user) => {
   if (!canManageCourse(user, course)) {
     throw new ForbiddenError("You don't have permission to modify this course");
   }
+
+  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+  const isBusinessOwner = user.role === ROLES.BUSINESS_OWNER;
 
   if (courseData.title !== undefined) {
     if (!String(courseData.title).trim()) {
@@ -118,9 +176,6 @@ export const updateCourse = async (courseId, courseData, user) => {
     throw new BadRequestError("Course description cannot be empty");
   }
 
-  // BUG-062: canManageCourse now only ever returns true for Central Admin, so everything
-  // past the guard above is already guaranteed to be Central Admin — the old non-central
-  // branch (which stripped isPaid/price and enforced the approval workflow) is gone.
   const safeData = { ...courseData };
 
   if (safeData.title !== undefined) safeData.title = String(safeData.title).trim();
@@ -139,23 +194,38 @@ export const updateCourse = async (courseId, courseData, user) => {
   delete safeData.createdBy;
   delete safeData.businessId;
 
-  if (safeData.isPaid !== undefined) {
-    safeData.isPaid = Boolean(safeData.isPaid);
-    if (safeData.isPaid) {
-      const parsedPrice = Number(safeData.price ?? course.price);
+  if (isCentralAdmin) {
+    if (safeData.isPaid !== undefined) {
+      safeData.isPaid = Boolean(safeData.isPaid);
+      if (safeData.isPaid) {
+        const parsedPrice = Number(safeData.price ?? course.price);
+        if (isNaN(parsedPrice) || parsedPrice <= 0) {
+          throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
+        }
+        safeData.price = Math.round(parsedPrice);
+      } else {
+        safeData.price = 0;
+      }
+    } else if (course.isPaid && safeData.price !== undefined) {
+      const parsedPrice = Number(safeData.price);
       if (isNaN(parsedPrice) || parsedPrice <= 0) {
         throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
       }
       safeData.price = Math.round(parsedPrice);
-    } else {
-      safeData.price = 0;
     }
-  } else if (course.isPaid && safeData.price !== undefined) {
-    const parsedPrice = Number(safeData.price);
-    if (isNaN(parsedPrice) || parsedPrice <= 0) {
-      throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
+  } else if (isBusinessOwner) {
+    // Business owners cannot change pricing or approval flags directly
+    delete safeData.isPaid;
+    delete safeData.price;
+    delete safeData.approvalStatus;
+
+    // If business owner was editing an already approved course or submitting for publish,
+    // mark back as pending so Central Admin can review
+    if (safeData.status === "published" || safeData.isActive === true) {
+      safeData.approvalStatus = "pending";
+      safeData.isActive = false;
+      safeData.status = "draft";
     }
-    safeData.price = Math.round(parsedPrice);
   }
 
   Object.assign(course, safeData);
@@ -470,11 +540,6 @@ export const getCourseById = async (courseId, user) => {
 
   return courseObj;
 };
-
-// Helpers
-// BUG-062: LMS is Central Admin exclusive now — State/Chapter/Business can no longer
-// manage any course, including ones they created back when they still could.
-const canManageCourse = (user) => user.role === ROLES.CENTRAL_ADMIN;
 
 /**
  * Gets all enrollments for a course (Central Admin or Course Creator)

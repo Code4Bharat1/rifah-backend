@@ -9,33 +9,28 @@ const router = Router();
 
 router.use(authMiddleware);
 
-// BUG-062: LMS course creation/publishing is now Central Admin exclusive — State, Chapter
-// and Business accounts previously could create free courses that sat "pending" until
-// Central Admin approved them. That whole approval workflow is now unreachable (Central
-// Admin courses skip it already, via approvalStatus "not_required"), so it's left in
-// course.service.js as historical/dead-data support rather than ripped out, but nobody
-// can enter it anymore.
+// Course Management: Central Admin (Sole Official Publisher) & Business Owner (Community Creator Studio)
 router.post(
   "/",
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
   courseController.createCourse
 );
 
 router.put(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
   courseController.updateCourse
 );
 
 router.delete(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
   courseController.deleteCourse
 );
 
 router.post(
   "/upload",
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
   upload.single("file"),
   courseController.uploadContent
 );

@@ -72,51 +72,26 @@ export const verificationService = {
     }
     await business.save();
 
-    // Send in-app notification strictly to the Chapter Admin(s) of the business's chapter
+    // Send in-app notification to Central Admins
     try {
       const targetChapter = (business.chapter || "").trim();
-      const targetChapterId = business.chapterId;
-      const cleanChapter = targetChapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
-      const chapterAdminFilter = {
-        role: ROLES.CHAPTER_ADMIN,
-        $or: [
-          ...(targetChapterId ? [{ chapterId: targetChapterId }] : []),
-          ...(cleanChapter ? [{ chapter: new RegExp(cleanChapter, "i") }] : []),
-          ...(targetChapter ? [{ chapter: new RegExp(`^${targetChapter}$`, "i") }] : []),
-        ],
-      };
-      let chapterAdmins = [];
-      if (targetChapterId || cleanChapter) {
-        chapterAdmins = await User.find(chapterAdminFilter);
-      }
+      const targetState = (business.state || "").trim();
+      const centralAdmins = await User.find({
+        role: { $in: [ROLES.CENTRAL_ADMIN, "central_admin", "admin", "super_admin"] },
+      });
 
-      if (chapterAdmins && chapterAdmins.length > 0) {
-        for (const admin of chapterAdmins) {
-          await notificationService.createNotification({
-            recipientId: admin._id,
-            type: "Verification",
-            title: "New Verification Submission",
-            body: `Business "${business.name}" from your chapter (${targetChapter || "your chapter"}) has submitted verification documents for approval.`,
-            entityId: verification._id,
-            link: "/chapter-admin/verification",
-          });
-        }
-      } else {
-        // Fallback: Notify Central Admins if chapter has no specific Chapter Admin assigned
-        const centralAdmins = await User.find({ role: { $in: [ROLES.CENTRAL_ADMIN, "central_admin", "admin"] } });
-        for (const admin of centralAdmins) {
-          await notificationService.createNotification({
-            recipientId: admin._id,
-            type: "Verification",
-            title: "New Verification Submission",
-            body: `Business "${business.name}" (${targetChapter || "Unassigned Chapter"}) has submitted verification documents for approval.`,
-            entityId: verification._id,
-            link: "/admin/verification",
-          });
-        }
+      for (const admin of centralAdmins) {
+        await notificationService.createNotification({
+          recipientId: admin._id,
+          type: "Verification",
+          title: "New Verification Submission",
+          body: `Business "${business.name}" (${targetState ? `${targetState} / ` : ""}${targetChapter || "National"}) has submitted verification documents for approval.`,
+          entityId: verification._id,
+          link: "/admin/verification",
+        });
       }
     } catch (notifErr) {
-      console.error("Failed to notify admins on verification submission:", notifErr);
+      console.error("Failed to notify central admins on verification submission:", notifErr);
     }
 
     return verification;
@@ -153,11 +128,48 @@ export const verificationService = {
     const chapterScope = await getChapterFilter(requester, 'business_ref');
     Object.assign(filter, chapterScope);
 
-    if (queryParams.chapter && queryParams.chapter.toLowerCase() !== "all" && !chapterScope.business) {
-      const chapterRegex = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
-      const chapterBusinesses = await Business.find({ chapter: chapterRegex }).select('_id');
-      const businessIds = chapterBusinesses.map(b => b._id);
-      filter.business = { $in: businessIds };
+    // State, Chapter, and Search filtering
+    const hasStateFilter = queryParams.state && queryParams.state.toLowerCase() !== "all";
+    const hasChapterFilter = queryParams.chapter && queryParams.chapter.toLowerCase() !== "all";
+    const hasSearchFilter = queryParams.search && queryParams.search.trim();
+
+    if (!chapterScope.business && (hasStateFilter || hasChapterFilter || hasSearchFilter)) {
+      const bizQuery = {};
+      if (hasStateFilter) {
+        bizQuery.state = new RegExp(`^${queryParams.state.trim()}$`, "i");
+      }
+      if (hasChapterFilter) {
+        bizQuery.chapter = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
+      }
+      if (hasSearchFilter) {
+        const sRegex = new RegExp(queryParams.search.trim(), "i");
+        bizQuery.$or = [
+          { name: sRegex },
+          { taxId: sRegex },
+          { city: sRegex },
+          { email: sRegex },
+        ];
+      }
+      const matchedBusinesses = await Business.find(bizQuery).select('_id');
+      const businessIds = matchedBusinesses.map(b => b._id);
+
+      if (hasSearchFilter && !hasStateFilter && !hasChapterFilter) {
+        // Also search submittedBy users when performing global text search
+        const matchedUsers = await User.find({
+          $or: [
+            { name: new RegExp(queryParams.search.trim(), "i") },
+            { email: new RegExp(queryParams.search.trim(), "i") },
+            { phone: new RegExp(queryParams.search.trim(), "i") },
+          ]
+        }).select('_id');
+        const userIds = matchedUsers.map(u => u._id);
+        filter.$or = [
+          { business: { $in: businessIds } },
+          { submittedBy: { $in: userIds } },
+        ];
+      } else {
+        filter.business = { $in: businessIds };
+      }
     }
 
     if (queryParams.status) {
@@ -357,7 +369,7 @@ export const verificationService = {
             type: "Verification",
             title: isApproved ? "Business Verification Approved" : "Verification Status Updated",
             body: isApproved
-              ? `Congratulations! Your business "${business.name}" has been verified and approved by your Chapter Administrator.`
+              ? `Congratulations! Your business "${business.name}" has been verified and approved by RIFAH Central Administration.`
               : `Your verification request has been updated to "${finalStatus}". Remarks: ${finalRemarks || "None"}.`,
             entityId: business._id,
             link: "/biz/profile",
@@ -484,8 +496,8 @@ export const verificationService = {
       throw new NotFoundError("Verification record not found");
     }
 
-    if (requester.role !== ROLES.CHAPTER_ADMIN) {
-      throw new ForbiddenError("Only Chapter Administrators can delete orphaned verification records.");
+    if (![ROLES.CENTRAL_ADMIN, ROLES.CHAPTER_ADMIN, "admin", "super_admin"].includes(requester.role)) {
+      throw new ForbiddenError("Only Administrators can delete orphaned verification records.");
     }
 
     // Ensure it is orphaned

@@ -148,7 +148,7 @@ export const enquiryService = {
     if (!sourceType || !["b2b", "guest", "general", "marketplace"].includes(sourceType)) {
       if (user && (user.role === "business" || userBusiness)) {
         sourceType = "b2b";
-      } else if (!user && targetType === "business") {
+      } else if (!user) {
         sourceType = "guest";
       } else if (user && (user.role === "customer" || user.role === "buyer")) {
         sourceType = "marketplace";
@@ -270,10 +270,40 @@ export const enquiryService = {
         const settings = await Settings.findOne({ isSingleton: "global" });
         const autoRoute = settings ? settings.autoRouteLeadsByCategory : true;
 
-        if (autoRoute && data.category) {
+        const isGuestPost = !user || sourceType === "guest" || sourceType === "general";
+
+        if (isGuestPost) {
+          // Guest RFQs broadcast to ALL active chamber businesses without category restriction
           const query = {
             status: { $in: ["Live", "Active"] },
-            categories: data.category,
+            ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
+          };
+
+          const matchingBusinesses = await Business.find(query);
+
+          if (matchingBusinesses.length > 0) {
+            const businessIds = matchingBusinesses.map(b => b._id.toString());
+            const { leadService } = await import("../leads/lead.service.js");
+            leadService.routeEnquiryToBusinesses(enquiry._id.toString(), businessIds).catch(err => {
+              console.error("Guest auto routing background task failed:", err);
+            });
+
+            enquiry.timeline = enquiry.timeline.map(t =>
+              t.label === "Routing to matching businesses"
+                ? { label: `Broadcasted to all ${matchingBusinesses.length} active chamber businesses`, at: "Just now", done: true }
+                : t
+            );
+            await enquiry.save();
+          }
+        } else if (autoRoute && data.category) {
+          // Member RFQ with auto-routing: matches category or industry
+          const catRegex = new RegExp(`^${data.category.trim()}$`, "i");
+          const query = {
+            status: { $in: ["Live", "Active"] },
+            $or: [
+              { categories: { $in: [catRegex, data.category] } },
+              { industry: catRegex },
+            ],
             ...(userBusiness ? { _id: { $ne: userBusiness._id } } : {}),
           };
 
@@ -471,12 +501,7 @@ export const enquiryService = {
             { targetBusiness: userBusiness._id },
             { _id: { $in: routedEnquiryIds } },
             stateFilterCondition,
-            { targetType: "all", sourceType: "b2b" },
-            {
-              targetType: "all",
-              sourceType: { $ne: "b2b" },
-              ...categoryCondition,
-            },
+            { targetType: "all" },
             { targetType: { $exists: false }, targetBusiness: userBusiness._id },
           ],
         },
