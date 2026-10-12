@@ -1,5 +1,6 @@
 import { User } from "../users/user.model.js";
-import { ROLES } from "../../shared/constants/roles.js";
+import { ROLES, isResponsibilityRole } from "../../shared/constants/roles.js";
+import { ConflictError } from "../../shared/errors/errors.js";
 import { resolveEligibleAdminBusiness } from "../../shared/utils/admin-eligibility.js";
 
 export const centralAdminService = {
@@ -23,6 +24,15 @@ export const centralAdminService = {
     const business = await resolveEligibleAdminBusiness(businessId);
     const nominee = business.owner;
 
+    if (
+      isResponsibilityRole(nominee.role) &&
+      nominee.role !== ROLES.CENTRAL_ADMIN
+    ) {
+      throw new ConflictError(
+        "This member already holds another responsibility role. A second non-business responsibility role is not allowed.",
+      );
+    }
+
     const currentAdmins = await User.find({
       role: ROLES.CENTRAL_ADMIN,
       _id: { $ne: nominee._id },
@@ -42,7 +52,8 @@ export const centralAdminService = {
 
     // Real-time Copilot Knowledge Base Sync
     try {
-      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      const { syncLiveEntitiesToFile } =
+        await import("../copilot/copilot.sync.js");
       syncLiveEntitiesToFile(true).catch(() => {});
     } catch {}
 

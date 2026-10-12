@@ -41,6 +41,7 @@ import { galleryRoutes } from "../modules/gallery/gallery.routes.js";
 import { copilotRoutes } from "../modules/copilot/copilot.routes.js";
 import { advertisementRoutes } from "../modules/advertisements/advertisement.routes.js";
 import { ticketRoutes } from "../modules/tickets/ticket.routes.js";
+import { countryRoutes } from "../modules/countries/country.routes.js";
 import { revenueSharingRoutes } from "../modules/revenue-sharing/revenueSharing.routes.js";
 
 const apiRouter = Router();
@@ -55,6 +56,7 @@ apiRouter.use("/users", userRoutes);
 apiRouter.use("/businesses", businessRoutes);
 apiRouter.use("/categories", categoryRoutes);
 apiRouter.use("/chapters", chapterRoutes);
+apiRouter.use("/countries", countryRoutes);
 apiRouter.use("/verification", verificationRoutes);
 apiRouter.use("/catalogue", catalogueRoutes);
 apiRouter.use("/enquiries", enquiryRoutes);

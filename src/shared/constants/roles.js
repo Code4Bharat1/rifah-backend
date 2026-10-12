@@ -4,6 +4,7 @@ export const ROLES = Object.freeze({
   SECRETARIAT: "secretariat",
   SUPER_ADMIN: "central_admin", // alias for backwards compatibility
   ADMIN: "central_admin", // alias for backwards compatibility
+  COUNTRY_ADMIN: "country_admin",
   STATE_ADMIN: "state_admin",
   CHAPTER_ADMIN: "chapter_admin",
   BUSINESS_OWNER: "business_owner",
@@ -12,11 +13,20 @@ export const ROLES = Object.freeze({
   PUBLIC: "public",
 });
 
+export const RESPONSIBILITY_ROLES = Object.freeze([
+  ROLES.CENTRAL_ADMIN,
+  ROLES.SECRETARIAT,
+  ROLES.COUNTRY_ADMIN,
+  ROLES.STATE_ADMIN,
+  ROLES.CHAPTER_ADMIN,
+]);
+
 export const ROLE_HIERARCHY = Object.freeze({
   [ROLES.CENTRAL_ADMIN]: 100,
   [ROLES.SECRETARIAT]: 100,
   super_admin: 100,
   admin: 100,
+  [ROLES.COUNTRY_ADMIN]: 85,
   [ROLES.STATE_ADMIN]: 80,
   [ROLES.CHAPTER_ADMIN]: 60,
   [ROLES.BUSINESS_OWNER]: 40,
@@ -25,3 +35,12 @@ export const ROLE_HIERARCHY = Object.freeze({
   buyer: 20,
   [ROLES.PUBLIC]: 0,
 });
+
+export const isResponsibilityRole = (role) =>
+  Boolean(role) && RESPONSIBILITY_ROLES.includes(role);
+
+export const canAssignAnotherResponsibilityRole = (currentRole, nextRole) => {
+  if (!nextRole || !isResponsibilityRole(nextRole)) return true;
+  if (!currentRole || !isResponsibilityRole(currentRole)) return true;
+  return currentRole === nextRole;
+};

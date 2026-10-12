@@ -9,13 +9,24 @@ import { OneToOne } from "../networking/one-to-one.model.js";
 import { ThankYouNote } from "../networking/thank-you-note.model.js";
 import { StateProfile } from "./state-profile.model.js";
 import { Role } from "../roles/role.model.js";
-import { ROLES } from "../../shared/constants/roles.js";
+import { ROLES, isResponsibilityRole } from "../../shared/constants/roles.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
-import { NotFoundError, ConflictError, BadRequestError } from "../../shared/errors/errors.js";
+import {
+  NotFoundError,
+  ConflictError,
+  BadRequestError,
+} from "../../shared/errors/errors.js";
 import { ERROR_CODES } from "../../shared/errors/error-codes.js";
-import { resolveEligibleAdminBusiness, isBusinessVerified } from "../../shared/utils/admin-eligibility.js";
+import {
+  resolveEligibleAdminBusiness,
+  isBusinessVerified,
+} from "../../shared/utils/admin-eligibility.js";
 
-const escapeRegex = (s) => (s || "").toString().trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (s) =>
+  (s || "")
+    .toString()
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export const stateService = {
   /**
@@ -34,8 +45,13 @@ export const stateService = {
         state: new RegExp(`^${escapeRegex(requester.state)}$`, "i"),
       }).select("_id name city state status businessesCount membersCount");
 
-      const activeChaptersCount = stateChapters.filter((c) => c.status === "Active").length;
-      const totalBusinesses = stateChapters.reduce((sum, c) => sum + (c.businessesCount || 0), 0);
+      const activeChaptersCount = stateChapters.filter(
+        (c) => c.status === "Active",
+      ).length;
+      const totalBusinesses = stateChapters.reduce(
+        (sum, c) => sum + (c.businessesCount || 0),
+        0,
+      );
 
       return [
         {
@@ -52,7 +68,10 @@ export const stateService = {
 
     // Discover all distinct states from State Admins and Chapters dynamically
     const [adminStates, chapterStates] = await Promise.all([
-      User.distinct("state", { role: ROLES.STATE_ADMIN, state: { $nin: ["", null] } }),
+      User.distinct("state", {
+        role: ROLES.STATE_ADMIN,
+        state: { $nin: ["", null] },
+      }),
       Chapter.distinct("state", { state: { $nin: ["", null] } }),
     ]);
 
@@ -83,7 +102,9 @@ export const stateService = {
     });
 
     // Fetch all Chapters in one query
-    const allChapters = await Chapter.find({}).select("_id name city state status businessesCount membersCount");
+    const allChapters = await Chapter.find({}).select(
+      "_id name city state status businessesCount membersCount",
+    );
     const chaptersByStateMap = new Map();
     allChapters.forEach((ch) => {
       const st = (ch.state || "").trim().toLowerCase();
@@ -115,8 +136,13 @@ export const stateService = {
       const admin = adminByStateMap.get(key) || null;
       const chapters = chaptersByStateMap.get(key) || [];
       const profile = profileByStateMap.get(key) || null;
-      const activeChaptersCount = chapters.filter((c) => c.status === "Active").length;
-      const totalBusinesses = chapters.reduce((sum, c) => sum + (c.businessesCount || 0), 0);
+      const activeChaptersCount = chapters.filter(
+        (c) => c.status === "Active",
+      ).length;
+      const totalBusinesses = chapters.reduce(
+        (sum, c) => sum + (c.businessesCount || 0),
+        0,
+      );
 
       return {
         state: stateName,
@@ -147,21 +173,29 @@ export const stateService = {
     if (!stateName) throw new BadRequestError("State name is required");
 
     if (requester && requester.role === ROLES.STATE_ADMIN) {
-      if ((requester.state || "").trim().toLowerCase() !== stateName.trim().toLowerCase()) {
+      if (
+        (requester.state || "").trim().toLowerCase() !==
+        stateName.trim().toLowerCase()
+      ) {
         throw new NotFoundError("State not found or access denied");
       }
     }
 
     const stateRegex = new RegExp(`^${escapeRegex(stateName)}$`, "i");
     const [admin, chapters, profile] = await Promise.all([
-      User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex }).select("-passwordHash"),
+      User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex }).select(
+        "-passwordHash",
+      ),
       Chapter.find({ state: stateRegex }).sort({ name: 1 }),
-      StateProfile.findOne({ name: stateRegex })
+      StateProfile.findOne({ name: stateRegex }),
     ]);
 
     const chapterIds = chapters.map((c) => c._id);
     const [chapterAdmins, totalBusinesses] = await Promise.all([
-      User.find({ role: ROLES.CHAPTER_ADMIN, chapterId: { $in: chapterIds } }).select("_id name email phone chapterId chapter"),
+      User.find({
+        role: ROLES.CHAPTER_ADMIN,
+        chapterId: { $in: chapterIds },
+      }).select("_id name email phone chapterId chapter"),
       Business.countDocuments({ chapterId: { $in: chapterIds } }),
     ]);
 
@@ -192,18 +226,30 @@ export const stateService = {
    * itself is derived from the business, not free-typed, so it can't drift.
    * Upserts the StateProfile with image and address.
    */
-  assignStateAdmin: async ({ businessId, image, address, explicitStateName, contactEmail, contactPhone, name, email, phone }) => {
+  assignStateAdmin: async ({
+    businessId,
+    image,
+    address,
+    explicitStateName,
+    contactEmail,
+    contactPhone,
+    name,
+    email,
+    phone,
+  }) => {
     let nominee;
     let cleanState = explicitStateName;
     let isNewUser = false;
     let randomPassword = null;
-    
+
     if (businessId) {
       const business = await resolveEligibleAdminBusiness(businessId);
       const nomineeId = business.owner?._id || business.owner;
       nominee = await User.findById(nomineeId);
       if (!nominee && (business.ownerEmail || business.email)) {
-        nominee = await User.findOne({ email: (business.ownerEmail || business.email).toLowerCase().trim() });
+        nominee = await User.findOne({
+          email: (business.ownerEmail || business.email).toLowerCase().trim(),
+        });
       }
       isNewUser = false;
       if (!cleanState) {
@@ -213,7 +259,7 @@ export const stateService = {
       // Manual entry: find user by email
       const cleanEmail = email.toLowerCase().trim();
       nominee = await User.findOne({ email: cleanEmail });
-      
+
       let ownedBusiness = null;
       if (nominee) {
         ownedBusiness = await Business.findOne({
@@ -226,33 +272,47 @@ export const stateService = {
       }
 
       if (!nominee || !ownedBusiness) {
-        throw new BadRequestError("The user must be a registered RIFAH member with an active business profile to be appointed as an Admin.");
+        throw new BadRequestError(
+          "The user must be a registered RIFAH member with an active business profile to be appointed as an Admin.",
+        );
       }
 
       if (!isBusinessVerified(ownedBusiness)) {
         throw new BadRequestError(
           "This business is currently pending verification. It cannot be allocated to a State Admin or Chapter Admin until the verification process is completed.",
           null,
-          ERROR_CODES.BUSINESS_VERIFICATION_PENDING
+          ERROR_CODES.BUSINESS_VERIFICATION_PENDING,
         );
       }
       isNewUser = false;
     } else {
-      throw new BadRequestError("Please select a business owner or provide name and email to allocate an admin.");
+      throw new BadRequestError(
+        "Please select a business owner or provide name and email to allocate an admin.",
+      );
     }
 
     cleanState = (cleanState || "").trim();
     if (!cleanState) {
-      throw new BadRequestError("This business does not have a state on file, and no explicit state was provided.");
+      throw new BadRequestError(
+        "This business does not have a state on file, and no explicit state was provided.",
+      );
     }
     const stateRegex = new RegExp(`^${escapeRegex(cleanState)}$`, "i");
 
-    if (nominee.role === ROLES.CENTRAL_ADMIN) {
-      throw new ConflictError("Cannot reassign a Central Admin as a State Admin");
+    if (
+      isResponsibilityRole(nominee.role) &&
+      nominee.role !== ROLES.STATE_ADMIN
+    ) {
+      throw new ConflictError(
+        "This member already holds another responsibility role. A second non-business responsibility role is not allowed.",
+      );
     }
 
     // Check if an admin already exists for this state
-    const currentAdmin = await User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex });
+    const currentAdmin = await User.findOne({
+      role: ROLES.STATE_ADMIN,
+      state: stateRegex,
+    });
     if (currentAdmin && String(currentAdmin._id) !== String(nominee._id)) {
       // Demote current admin
       currentAdmin.role = currentAdmin.previousRole || ROLES.CUSTOMER;
@@ -269,9 +329,10 @@ export const stateService = {
           ...(image && { image }),
           ...(address && { address }),
           email: contactEmail !== undefined ? contactEmail : nominee.email,
-          phone: contactPhone !== undefined ? contactPhone : (nominee.phone || ""),
+          phone:
+            contactPhone !== undefined ? contactPhone : nominee.phone || "",
         },
-        { upsert: true, new: true, runValidators: true }
+        { upsert: true, new: true, runValidators: true },
       );
     };
 
@@ -284,19 +345,31 @@ export const stateService = {
 
     try {
       if (isNewUser && randomPassword) {
-        await emailService.sendStateAdminInvite(nominee.email, randomPassword, cleanState, nominee.name);
+        await emailService.sendStateAdminInvite(
+          nominee.email,
+          randomPassword,
+          cleanState,
+          nominee.name,
+        );
       } else {
-        await emailService.sendStateAdminUpgradeEmail(nominee.email, cleanState, nominee.name);
+        await emailService.sendStateAdminUpgradeEmail(
+          nominee.email,
+          cleanState,
+          nominee.name,
+        );
       }
     } catch (mailErr) {
-      logger.warn(`Failed to send state admin email to ${nominee.email}: ${mailErr.message}`);
+      logger.warn(
+        `Failed to send state admin email to ${nominee.email}: ${mailErr.message}`,
+      );
     }
 
     await upsertStateProfile();
 
     // Real-time Copilot Knowledge Base Sync
     try {
-      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      const { syncLiveEntitiesToFile } =
+        await import("../copilot/copilot.sync.js");
       syncLiveEntitiesToFile(true).catch(() => {});
     } catch {}
 
@@ -306,7 +379,17 @@ export const stateService = {
   /**
    * Create a State Profile (optionally assigning an admin)
    */
-  createState: async ({ name, businessId, image, address, contactEmail, contactPhone, adminName, adminEmail, adminPhone }) => {
+  createState: async ({
+    name,
+    businessId,
+    image,
+    address,
+    contactEmail,
+    contactPhone,
+    adminName,
+    adminEmail,
+    adminPhone,
+  }) => {
     if (!name || typeof name !== "string" || !name.trim()) {
       throw new BadRequestError("State name is required");
     }
@@ -316,7 +399,7 @@ export const stateService = {
     if (businessId) {
       await resolveEligibleAdminBusiness(businessId);
     }
-    
+
     // Create/update state profile
     const profile = await StateProfile.findOneAndUpdate(
       { name: new RegExp(`^${escapeRegex(cleanState)}$`, "i") },
@@ -327,7 +410,7 @@ export const stateService = {
         ...(contactEmail !== undefined && { email: contactEmail }),
         ...(contactPhone !== undefined && { phone: contactPhone }),
       },
-      { upsert: true, new: true, runValidators: true }
+      { upsert: true, new: true, runValidators: true },
     );
 
     // If businessId or manual admin credentials are provided, also allocate the admin
@@ -353,7 +436,10 @@ export const stateService = {
    */
   removeStateAdmin: async (stateName) => {
     const stateRegex = new RegExp(`^${escapeRegex(stateName)}$`, "i");
-    const admin = await User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex });
+    const admin = await User.findOne({
+      role: ROLES.STATE_ADMIN,
+      state: stateRegex,
+    });
 
     if (!admin) {
       throw new NotFoundError(`No active State Admin found for ${stateName}`);
@@ -380,32 +466,56 @@ export const stateService = {
 
     // Update Users
     await User.updateMany({ state: oldRegex }, { $set: { state: newName } });
-    
+
     // Update Chapters
     await Chapter.updateMany({ state: oldRegex }, { $set: { state: newName } });
-    
+
     // Update Businesses
-    await Business.updateMany({ state: oldRegex }, { $set: { state: newName } });
+    await Business.updateMany(
+      { state: oldRegex },
+      { $set: { state: newName } },
+    );
 
     // Update Events (targetStates array)
     await Event.updateMany(
       { targetStates: oldRegex },
-      { $set: { "targetStates.$": newName } }
+      { $set: { "targetStates.$": newName } },
     );
 
     // Update StateProfile
-    await StateProfile.updateMany({ name: oldRegex }, { $set: { name: newName } });
+    await StateProfile.updateMany(
+      { name: oldRegex },
+      { $set: { name: newName } },
+    );
 
     // Update Role
     await Role.updateMany({ state: oldRegex }, { $set: { state: newName } });
 
     // Update Networking Modules
-    await Referral.updateMany({ referrerState: oldRegex }, { $set: { referrerState: newName } });
-    await Referral.updateMany({ referredState: oldRegex }, { $set: { referredState: newName } });
-    await OneToOne.updateMany({ initiatorState: oldRegex }, { $set: { initiatorState: newName } });
-    await OneToOne.updateMany({ memberState: oldRegex }, { $set: { memberState: newName } });
-    await ThankYouNote.updateMany({ giverState: oldRegex }, { $set: { giverState: newName } });
-    await ThankYouNote.updateMany({ receiverState: oldRegex }, { $set: { receiverState: newName } });
+    await Referral.updateMany(
+      { referrerState: oldRegex },
+      { $set: { referrerState: newName } },
+    );
+    await Referral.updateMany(
+      { referredState: oldRegex },
+      { $set: { referredState: newName } },
+    );
+    await OneToOne.updateMany(
+      { initiatorState: oldRegex },
+      { $set: { initiatorState: newName } },
+    );
+    await OneToOne.updateMany(
+      { memberState: oldRegex },
+      { $set: { memberState: newName } },
+    );
+    await ThankYouNote.updateMany(
+      { giverState: oldRegex },
+      { $set: { giverState: newName } },
+    );
+    await ThankYouNote.updateMany(
+      { receiverState: oldRegex },
+      { $set: { receiverState: newName } },
+    );
 
     return { message: "State renamed successfully", state: newName };
   },
@@ -414,7 +524,10 @@ export const stateService = {
     const stateRegex = new RegExp(`^${escapeRegex(stateName)}$`, "i");
 
     // 1. Revoke State Admin if exists
-    const admin = await User.findOne({ role: ROLES.STATE_ADMIN, state: stateRegex });
+    const admin = await User.findOne({
+      role: ROLES.STATE_ADMIN,
+      state: stateRegex,
+    });
     if (admin) {
       admin.role = admin.previousRole || ROLES.CUSTOMER;
       admin.previousRole = "";
@@ -444,32 +557,48 @@ export const stateService = {
       await cAdmin.save();
       if (cAdmin.email) {
         try {
-          await emailService.sendChapterAdminRemovalEmail(cAdmin.email, cAdmin.name, cAdmin.chapter || stateName);
+          await emailService.sendChapterAdminRemovalEmail(
+            cAdmin.email,
+            cAdmin.name,
+            cAdmin.chapter || stateName,
+          );
         } catch (e) {}
       }
     }
 
     // 4. Detach related users from state and deleted chapters to 'Unassigned'
     await User.updateMany(
-      { $or: [{ state: stateRegex }, { chapterId: { $in: chapterIds } }, { chapter: { $in: chapterNames } }] },
-      { $set: { state: "Unassigned", chapterId: null, chapter: "Unassigned" } }
+      {
+        $or: [
+          { state: stateRegex },
+          { chapterId: { $in: chapterIds } },
+          { chapter: { $in: chapterNames } },
+        ],
+      },
+      { $set: { state: "Unassigned", chapterId: null, chapter: "Unassigned" } },
     );
 
     // 4.5 Set all related roles' state to Unassigned
-    await Role.updateMany({ state: stateRegex }, { $set: { state: "Unassigned" } });
+    await Role.updateMany(
+      { state: stateRegex },
+      { $set: { state: "Unassigned" } },
+    );
 
     // 5. Delete all chapters inside that state
     await Chapter.deleteMany({
-      $or: [
-        { state: stateRegex },
-        { _id: { $in: chapterIds } },
-      ],
+      $or: [{ state: stateRegex }, { _id: { $in: chapterIds } }],
     });
 
     // 6. Set all Businesses' state to Unassigned and detach deleted chapters
     await Business.updateMany(
-      { $or: [{ state: stateRegex }, { chapterId: { $in: chapterIds } }, { chapter: { $in: chapterNames } }] },
-      { $set: { state: "Unassigned", chapterId: null, chapter: "Unassigned" } }
+      {
+        $or: [
+          { state: stateRegex },
+          { chapterId: { $in: chapterIds } },
+          { chapter: { $in: chapterNames } },
+        ],
+      },
+      { $set: { state: "Unassigned", chapterId: null, chapter: "Unassigned" } },
     );
 
     // 7. Delete events specifically tied to deleted chapters & pull state from targetStates
@@ -481,28 +610,49 @@ export const stateService = {
     });
     await Event.updateMany(
       { targetStates: stateRegex },
-      { $pull: { targetStates: stateRegex } }
+      { $pull: { targetStates: stateRegex } },
     );
 
     // 8. Update Networking Modules to Unassigned
     const unassigned = "Unassigned";
-    await Referral.updateMany({ referrerState: stateRegex }, { $set: { referrerState: unassigned } });
-    await Referral.updateMany({ referredState: stateRegex }, { $set: { referredState: unassigned } });
-    await OneToOne.updateMany({ initiatorState: stateRegex }, { $set: { initiatorState: unassigned } });
-    await OneToOne.updateMany({ memberState: stateRegex }, { $set: { memberState: unassigned } });
-    await ThankYouNote.updateMany({ giverState: stateRegex }, { $set: { giverState: unassigned } });
-    await ThankYouNote.updateMany({ receiverState: stateRegex }, { $set: { receiverState: unassigned } });
+    await Referral.updateMany(
+      { referrerState: stateRegex },
+      { $set: { referrerState: unassigned } },
+    );
+    await Referral.updateMany(
+      { referredState: stateRegex },
+      { $set: { referredState: unassigned } },
+    );
+    await OneToOne.updateMany(
+      { initiatorState: stateRegex },
+      { $set: { initiatorState: unassigned } },
+    );
+    await OneToOne.updateMany(
+      { memberState: stateRegex },
+      { $set: { memberState: unassigned } },
+    );
+    await ThankYouNote.updateMany(
+      { giverState: stateRegex },
+      { $set: { giverState: unassigned } },
+    );
+    await ThankYouNote.updateMany(
+      { receiverState: stateRegex },
+      { $set: { receiverState: unassigned } },
+    );
 
     // 9. Delete the state profile
     await StateProfile.deleteMany({ name: stateRegex });
 
     // Real-time Copilot Knowledge Base Sync: immediately update file
     try {
-      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      const { syncLiveEntitiesToFile } =
+        await import("../copilot/copilot.sync.js");
       syncLiveEntitiesToFile(true).catch(() => {});
     } catch {}
 
-    return { message: "State and all associated chapters deleted successfully" };
+    return {
+      message: "State and all associated chapters deleted successfully",
+    };
   },
 
   /**
@@ -516,16 +666,16 @@ export const stateService = {
 
     const updatedProfile = await StateProfile.findOneAndUpdate(
       { name: new RegExp(`^${escapeRegex(cleanState)}$`, "i") },
-      { 
+      {
         $set: {
           name: cleanState,
           ...(image !== undefined && { image }),
           ...(address !== undefined && { address }),
           ...(phone !== undefined && { phone }),
-          ...(email !== undefined && { email })
-        }
+          ...(email !== undefined && { email }),
+        },
       },
-      { upsert: true, new: true, runValidators: true }
+      { upsert: true, new: true, runValidators: true },
     );
 
     return updatedProfile;

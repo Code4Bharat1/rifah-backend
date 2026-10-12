@@ -3,13 +3,23 @@ import { Business } from "../businesses/business.model.js";
 import { Verification } from "../verification/verification.model.js";
 import { Chapter } from "../chapters/chapter.model.js";
 import { Plan } from "../memberships/plan.model.js";
-import { membershipService, DEFAULT_MEMBERSHIP_PLANS } from "../memberships/membership.service.js";
+import {
+  membershipService,
+  DEFAULT_MEMBERSHIP_PLANS,
+} from "../memberships/membership.service.js";
 import { categoryService } from "../categories/category.service.js";
 import { OtpVerification } from "./otp.model.js";
 import { Role } from "../roles/role.model.js";
 import crypto from "crypto";
-import { hashPassword, comparePassword } from "../../infrastructure/auth/password.js";
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../infrastructure/auth/jwt.js";
+import {
+  hashPassword,
+  comparePassword,
+} from "../../infrastructure/auth/password.js";
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} from "../../infrastructure/auth/jwt.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
 import { notificationService } from "../notifications/notification.service.js";
@@ -32,6 +42,7 @@ const googleClient = new OAuth2Client(env.GOOGLE.CLIENT_ID || undefined);
 // the same door, so the workspace picker must not offer them as separate choices.
 const WORKSPACE_BY_ROLE = {
   [ROLES.CENTRAL_ADMIN]: "central",
+  [ROLES.COUNTRY_ADMIN]: "central",
   [ROLES.STATE_ADMIN]: "state",
   [ROLES.CHAPTER_ADMIN]: "chapter",
   [ROLES.BUSINESS_OWNER]: "business",
@@ -39,7 +50,17 @@ const WORKSPACE_BY_ROLE = {
   [ROLES.BUYER]: "customer",
 };
 
-const ADMIN_ROLE_LIST = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"];
+const ADMIN_ROLE_LIST = [
+  "central_admin",
+  "super_admin",
+  "admin",
+  "secretariat",
+  "country_admin",
+  "state_admin",
+  "chapter_admin",
+];
+
+const ADMIN_ROLE_SET = new Set(ADMIN_ROLE_LIST);
 
 // Business this account really owns. A business only counts through its contact email when it was
 // listed by an admin (or its owner is gone); a business owned by another member is never
@@ -47,7 +68,9 @@ const ADMIN_ROLE_LIST = ["central_admin", "super_admin", "admin", "secretariat",
 async function findOwnedBusiness(user, { claim = false } = {}) {
   const { Business } = await import("../businesses/business.model.js");
   const live = { $nin: ["Deactivated", "Suspended", "Deleted"] };
-  const mine = await Business.findOne({ owner: user._id, status: live }).lean(!claim);
+  const mine = await Business.findOne({ owner: user._id, status: live }).lean(
+    !claim,
+  );
   if (mine) return mine;
   const cleanEmail = (user.email || "").toLowerCase().trim();
   if (!cleanEmail) return null;
@@ -58,7 +81,9 @@ async function findOwnedBusiness(user, { claim = false } = {}) {
     status: live,
   }).lean(!claim);
   if (!candidate) return null;
-  const currentOwner = await User.findById(candidate.owner).select("role").lean();
+  const currentOwner = await User.findById(candidate.owner)
+    .select("role")
+    .lean();
   if (currentOwner && !ADMIN_ROLE_LIST.includes(currentOwner.role)) return null;
   if (claim) {
     candidate.owner = user._id;
@@ -70,7 +95,8 @@ async function findOwnedBusiness(user, { claim = false } = {}) {
 // A member who registered as a subscriber "user" owns a Business record (created at sign-up) but
 // must keep landing in the /user portal. Only admins/explicit upgrades (role === business_owner)
 // move them to the business workspace; merely owning or sharing an email with a Business must not.
-const isSubscriberUser = (user) => user.accountType === "user" && user.role !== ROLES.BUSINESS_OWNER;
+const isSubscriberUser = (user) =>
+  user.accountType === "user" && user.role !== ROLES.BUSINESS_OWNER;
 
 /**
  * Find all active org-role assignments for a user that have a permissionTemplateId
@@ -105,19 +131,25 @@ function buildOrgWorkspace(roleDoc) {
   const tpl = roleDoc.permissionTemplateId;
   if (!tpl) return null;
 
-  const panelType = roleDoc.panelType ||
-    (tpl.level === "Chapter" ? "chapter-admin" :
-      tpl.level === "State" ? "state-admin" : "central-admin");
+  const panelType =
+    roleDoc.panelType ||
+    (tpl.level === "Chapter"
+      ? "chapter-admin"
+      : tpl.level === "State"
+        ? "state-admin"
+        : "central-admin");
 
   return {
-    type: "org_role",                    // workspace discriminator
-    workspaceId: String(roleDoc._id),    // the Role._id
-    roleName: tpl.name,                  // e.g. "Chapter Secretary"
+    type: "org_role", // workspace discriminator
+    workspaceId: String(roleDoc._id), // the Role._id
+    roleName: tpl.name, // e.g. "Chapter Secretary"
     level: tpl.level,
-    panelType,                           // "chapter-admin" | "state-admin" | "central-admin"
+    panelType, // "chapter-admin" | "state-admin" | "central-admin"
     permissions: tpl.permissions || [],
     allowedNavRoutes: tpl.allowedNavRoutes || [],
-    chapterId: roleDoc.chapterId ? String(roleDoc.chapterId._id || roleDoc.chapterId) : null,
+    chapterId: roleDoc.chapterId
+      ? String(roleDoc.chapterId._id || roleDoc.chapterId)
+      : null,
     chapterName: roleDoc.chapterId?.name || null,
     state: roleDoc.state || null,
     templateId: String(tpl._id),
@@ -130,15 +162,17 @@ function buildOrgWorkspace(roleDoc) {
 // rather than passing it through raw and risking a silent NotFoundError that would skip
 // Membership creation entirely. Defaults to the baseline free tier when unresolvable.
 function resolveTierPlanId(tierString) {
-  const needle = String(tierString || "").trim().toLowerCase();
-  if (!needle || needle === "tier i (free)" || needle === "free") return "tier_1";
+  const needle = String(tierString || "")
+    .trim()
+    .toLowerCase();
+  if (!needle || needle === "tier i (free)" || needle === "free")
+    return "tier_1";
   if (DEFAULT_MEMBERSHIP_PLANS[needle]) return needle;
   const byName = Object.entries(DEFAULT_MEMBERSHIP_PLANS).find(
-    ([, plan]) => (plan.name || "").trim().toLowerCase() === needle
+    ([, plan]) => (plan.name || "").trim().toLowerCase() === needle,
   );
   return byName ? byName[0] : "tier_1";
 }
-
 
 export const authService = {
   /**
@@ -180,7 +214,9 @@ export const authService = {
         const refreshToken = signRefreshToken(tokenPayload);
         return { user: existing, accessToken, refreshToken };
       }
-      throw new ConflictError("An account with this email address already exists");
+      throw new ConflictError(
+        "An account with this email address already exists",
+      );
     }
 
     // Verify OTP token if provided
@@ -191,7 +227,9 @@ export const authService = {
         verified: true,
       });
       if (!record) {
-        throw new BadRequestError("Email verification is required or has expired. Please verify your email again.");
+        throw new BadRequestError(
+          "Email verification is required or has expired. Please verify your email again.",
+        );
       }
       await OtpVerification.deleteMany({ email: cleanEmail });
     }
@@ -201,7 +239,9 @@ export const authService = {
     const resolvedOrg = (businessName || organization || "").trim();
     const isCustomerAccount = !resolvedOrg && !subscriberTier;
     const resolvedAccountType = isCustomerAccount ? "customer" : "user";
-    const resolvedTier = isCustomerAccount ? "" : (subscriberTier || "Tier I (Free)");
+    const resolvedTier = isCustomerAccount
+      ? ""
+      : subscriberTier || "Tier I (Free)";
 
     const user = await User.create({
       name: name.trim(),
@@ -218,8 +258,16 @@ export const authService = {
       countryCode: countryCode ? countryCode.trim() : "+91",
       state: state ? state.trim() : "",
       city: city ? city.trim() : "",
-      sourcingInterest: sourcingInterest ? sourcingInterest.trim() : (category ? `${category}${subCategory ? ` - ${subCategory}` : ""}` : ""),
-      sourcingInterests: sourcingInterest ? [sourcingInterest.trim()] : (category ? [category] : []),
+      sourcingInterest: sourcingInterest
+        ? sourcingInterest.trim()
+        : category
+          ? `${category}${subCategory ? ` - ${subCategory}` : ""}`
+          : "",
+      sourcingInterests: sourcingInterest
+        ? [sourcingInterest.trim()]
+        : category
+          ? [category]
+          : [],
       subscriberTier: resolvedTier,
       membershipPlan: resolvedTier,
       role: ROLES.CUSTOMER,
@@ -244,7 +292,10 @@ export const authService = {
           industry: user.category || "General",
           subCategory: user.subCategory || "",
           categories: [user.category, user.subCategory].filter(Boolean),
-          region: (user.country && user.country !== "India") ? "international" : "national",
+          region:
+            user.country && user.country !== "India"
+              ? "international"
+              : "national",
           country: user.country || "India",
           state: user.state || "",
           city: user.city || "",
@@ -268,16 +319,28 @@ export const authService = {
           const resolvedPlanId = resolveTierPlanId(resolvedTier);
           await membershipService.upgradePlan(newBusiness._id, resolvedPlanId);
         } catch (membershipErr) {
-          logger.warn("[AUTH] Failed to activate initial membership for new business:", membershipErr?.message || membershipErr);
+          logger.warn(
+            "[AUTH] Failed to activate initial membership for new business:",
+            membershipErr?.message || membershipErr,
+          );
         }
       } catch (bizErr) {
-        logger.warn("[AUTH] Failed to auto-create member business profile:", bizErr?.message || bizErr);
+        logger.warn(
+          "[AUTH] Failed to auto-create member business profile:",
+          bizErr?.message || bizErr,
+        );
       }
     }
 
     // Scaled for 10k/50k users: Async non-blocking welcome email
-    emailService.sendWelcomeEmail({ email: user.email, name: user.name, role: user.role })
-      .catch((err) => logger.warn("[AUTH] Failed to send welcome email:", err?.message || err));
+    emailService
+      .sendWelcomeEmail({ email: user.email, name: user.name, role: user.role })
+      .catch((err) =>
+        logger.warn(
+          "[AUTH] Failed to send welcome email:",
+          err?.message || err,
+        ),
+      );
 
     const tokenPayload = {
       id: user._id,
@@ -304,20 +367,24 @@ export const authService = {
     const cleanEmail = email.toLowerCase().trim();
 
     // 1. Check if an account already exists with this email
-    const existingUser = await User.findOne({ email: cleanEmail }).select("_id").lean();
+    const existingUser = await User.findOne({ email: cleanEmail })
+      .select("_id")
+      .lean();
     if (existingUser) {
       const existingBiz = await Business.findOne({
         $or: [
           { owner: existingUser._id },
           { email: cleanEmail },
           { ownerEmail: cleanEmail },
-        ]
-      }).select("_id").lean();
+        ],
+      })
+        .select("_id")
+        .lean();
       return {
         available: false,
         exists: true,
         hasBusiness: !!existingBiz,
-        message: existingBiz 
+        message: existingBiz
           ? "Email validation failed: This email is already registered with an existing business. Email duplicity is not allowed."
           : "Email validation failed: An account with this email address already exists. Email duplicity is not allowed.",
       };
@@ -332,7 +399,8 @@ export const authService = {
         available: false,
         exists: true,
         hasBusiness: true,
-        message: "Email validation failed: This email is already registered with an existing business. Email duplicity is not allowed.",
+        message:
+          "Email validation failed: This email is already registered with an existing business. Email duplicity is not allowed.",
       };
     }
 
@@ -356,13 +424,16 @@ export const authService = {
     // Check if user already exists
     const existing = await User.findOne({ email: cleanEmail });
     if (existing) {
-      throw new ConflictError("An account with this email address already exists. Please log in.");
+      throw new ConflictError(
+        "An account with this email address already exists. Please log in.",
+      );
     }
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
-    const purpose = type === "customer" ? "register_customer" : "register_business";
+    const purpose =
+      type === "customer" ? "register_customer" : "register_business";
 
     // Upsert OtpVerification record
     await OtpVerification.findOneAndUpdate(
@@ -373,22 +444,30 @@ export const authService = {
         verifiedToken: null,
         expiresAt,
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
 
     // Send email
     let emailDelivered = false;
     try {
       if (type === "customer" && emailService.sendCustomerRegisterOtpEmail) {
-        emailDelivered = await emailService.sendCustomerRegisterOtpEmail({ email: cleanEmail, otp });
+        emailDelivered = await emailService.sendCustomerRegisterOtpEmail({
+          email: cleanEmail,
+          otp,
+        });
       } else {
-        emailDelivered = await emailService.sendRegisterOtpEmail({ email: cleanEmail, otp });
+        emailDelivered = await emailService.sendRegisterOtpEmail({
+          email: cleanEmail,
+          otp,
+        });
       }
     } catch (err) {
       console.error("Failed to send registration OTP email:", err);
     }
 
-    console.log(`\n========================================\n[${type.toUpperCase()} REGISTRATION OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? 'YES' : 'NO - SMTP LIMIT REACHED'})\n========================================\n`);
+    console.log(
+      `\n========================================\n[${type.toUpperCase()} REGISTRATION OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? "YES" : "NO - SMTP LIMIT REACHED"})\n========================================\n`,
+    );
 
     return {
       message: emailDelivered
@@ -405,14 +484,17 @@ export const authService = {
    */
   verifyRegistrationOtp: async ({ email, otp, type = "business" }) => {
     if (!email || !otp) {
-      throw new BadRequestError("Email and 6-digit verification code are required");
+      throw new BadRequestError(
+        "Email and 6-digit verification code are required",
+      );
     }
     const cleanEmail = email.toLowerCase().trim();
     const cleanOtp = String(otp).trim();
 
-    const allowedPurposes = type === "customer"
-      ? ["register_customer", "register_business"]
-      : ["register_business", "register_customer"];
+    const allowedPurposes =
+      type === "customer"
+        ? ["register_customer", "register_business"]
+        : ["register_business", "register_customer"];
 
     const record = await OtpVerification.findOne({
       email: cleanEmail,
@@ -422,11 +504,15 @@ export const authService = {
     });
 
     if (!record) {
-      throw new BadRequestError("Invalid or expired verification code. Please try again.");
+      throw new BadRequestError(
+        "Invalid or expired verification code. Please try again.",
+      );
     }
 
     // Generate verifiedToken
-    const verifiedToken = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const verifiedToken = crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).substring(2) + Date.now().toString(36);
     record.verified = true;
     record.verifiedToken = verifiedToken;
     await record.save();
@@ -448,10 +534,14 @@ export const authService = {
     const cleanEmail = email.toLowerCase().trim();
     const user = await User.findOne({ email: cleanEmail });
     if (!user) {
-      throw new NotFoundError("No account found with this email address. Please register as a customer first.");
+      throw new NotFoundError(
+        "No account found with this email address. Please register as a customer first.",
+      );
     }
     if (user.status === "Suspended" || user.status === "Deactivated") {
-      throw new UnauthorizedError(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+      throw new UnauthorizedError(
+        `Account is ${user.status.toLowerCase()}. Please contact support.`,
+      );
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -465,17 +555,22 @@ export const authService = {
         verifiedToken: null,
         expiresAt,
       },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     );
 
     let emailDelivered = false;
     try {
-      emailDelivered = await emailService.sendLoginOtpEmail({ email: cleanEmail, otp });
+      emailDelivered = await emailService.sendLoginOtpEmail({
+        email: cleanEmail,
+        otp,
+      });
     } catch (err) {
       console.error("Failed to send login OTP email:", err);
     }
 
-    console.log(`\n========================================\n[LOGIN OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? 'YES' : 'NO - SMTP LIMIT REACHED'})\n========================================\n`);
+    console.log(
+      `\n========================================\n[LOGIN OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? "YES" : "NO - SMTP LIMIT REACHED"})\n========================================\n`,
+    );
 
     return {
       message: emailDelivered
@@ -492,7 +587,9 @@ export const authService = {
    */
   verifyLoginOtp: async ({ email, otp }) => {
     if (!email || !otp) {
-      throw new BadRequestError("Email and 6-digit verification code are required");
+      throw new BadRequestError(
+        "Email and 6-digit verification code are required",
+      );
     }
     const cleanEmail = email.toLowerCase().trim();
     const cleanOtp = String(otp).trim();
@@ -505,7 +602,9 @@ export const authService = {
     });
 
     if (!record) {
-      throw new BadRequestError("Invalid or expired sign-in code. Please try again.");
+      throw new BadRequestError(
+        "Invalid or expired sign-in code. Please try again.",
+      );
     }
 
     const user = await User.findOne({ email: cleanEmail });
@@ -513,22 +612,37 @@ export const authService = {
       throw new NotFoundError("User account not found");
     }
     if (user.status === "Suspended" || user.status === "Deactivated") {
-      throw new UnauthorizedError(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+      throw new UnauthorizedError(
+        `Account is ${user.status.toLowerCase()}. Please contact support.`,
+      );
     }
 
     // Clean up OTP
-    await OtpVerification.deleteMany({ email: cleanEmail, purpose: "login_otp" });
+    await OtpVerification.deleteMany({
+      email: cleanEmail,
+      purpose: "login_otp",
+    });
 
     let userOwnedBiz = null;
     try {
       userOwnedBiz = await findOwnedBusiness(user, { claim: true });
 
       if (userOwnedBiz) {
-        if (!userOwnedBiz.owner || String(userOwnedBiz.owner) !== String(user._id)) {
+        if (
+          !userOwnedBiz.owner ||
+          String(userOwnedBiz.owner) !== String(user._id)
+        ) {
           userOwnedBiz.owner = user._id;
           await userOwnedBiz.save().catch(() => {});
         }
-        const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
+        const isAdmin = [
+          "central_admin",
+          "super_admin",
+          "admin",
+          "secretariat",
+          "state_admin",
+          "chapter_admin",
+        ].includes(user.role);
         if (!isAdmin && !isSubscriberUser(user)) {
           user.role = ROLES.BUSINESS_OWNER;
           user.accountType = "business";
@@ -536,17 +650,32 @@ export const authService = {
         }
       }
     } catch (bizErr) {
-      console.error("Error auto-healing business_owner role on OTP login:", bizErr);
+      console.error(
+        "Error auto-healing business_owner role on OTP login:",
+        bizErr,
+      );
     }
 
-    await User.findByIdAndUpdate(user._id, { $set: { lastLoginAt: new Date() } });
+    await User.findByIdAndUpdate(user._id, {
+      $set: { lastLoginAt: new Date() },
+    });
     await user.populate("savedBusinesses");
 
-    const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
+    const isAdmin = [
+      "central_admin",
+      "super_admin",
+      "admin",
+      "secretariat",
+      "state_admin",
+      "chapter_admin",
+    ].includes(user.role);
     let determinedAccountType = user.accountType;
     if (isAdmin) {
       determinedAccountType = "admin";
-    } else if (user.role === ROLES.BUSINESS_OWNER || (userOwnedBiz && !isSubscriberUser(user))) {
+    } else if (
+      user.role === ROLES.BUSINESS_OWNER ||
+      (userOwnedBiz && !isSubscriberUser(user))
+    ) {
       determinedAccountType = "business";
       user.role = ROLES.BUSINESS_OWNER;
       user.accountType = "business";
@@ -629,17 +758,26 @@ export const authService = {
     linkedin,
   }) => {
     const cleanEmail = email.toLowerCase().trim();
-    const cleanBusinessEmail = businessEmail ? businessEmail.toLowerCase().trim() : "";
+    const cleanBusinessEmail = businessEmail
+      ? businessEmail.toLowerCase().trim()
+      : "";
     const cleanTaxId = taxId ? taxId.trim().toUpperCase() : "";
     const cleanLogo = (logo || "").trim();
     const cleanAvatar = (avatar || ownerPhoto || photo || "").trim();
-    const cleanRole = (roleInBusiness || designation || "Founder / Owner").trim();
+    const cleanRole = (
+      roleInBusiness ||
+      designation ||
+      "Founder / Owner"
+    ).trim();
     const cleanWebsite = (website || "").trim();
     const cleanInstagram = (instagram || "").trim();
     const cleanLinkedin = (linkedin || "").trim();
     const parsedDob = dob ? new Date(dob) : null;
     const parsedJoiningDate = joiningDate ? new Date(joiningDate) : new Date();
-    const cleanTimezone = timezone && typeof timezone === "string" ? timezone.trim() : "Asia/Kolkata";
+    const cleanTimezone =
+      timezone && typeof timezone === "string"
+        ? timezone.trim()
+        : "Asia/Kolkata";
 
     // If verifiedToken was passed, ensure it is verified
     if (verifiedToken) {
@@ -649,7 +787,9 @@ export const authService = {
         verified: true,
       });
       if (!record) {
-        throw new BadRequestError("Email verification is required or has expired. Please verify your email again.");
+        throw new BadRequestError(
+          "Email verification is required or has expired. Please verify your email again.",
+        );
       }
     }
 
@@ -660,7 +800,9 @@ export const authService = {
     if (user) {
       const existingBiz = await Business.findOne({ owner: user._id });
       if (existingBiz) {
-        throw new ConflictError("An account and business with this email address already exists");
+        throw new ConflictError(
+          "An account and business with this email address already exists",
+        );
       }
       // User created in previous attempt that failed during business provisioning
       const passwordHash = await hashPassword(password);
@@ -675,7 +817,8 @@ export const authService = {
       if (cleanAvatar) user.avatar = cleanAvatar;
       else if (cleanLogo && !user.avatar) user.avatar = cleanLogo;
       if (parsedDob && !isNaN(parsedDob.getTime())) user.dob = parsedDob;
-      if (parsedJoiningDate && !isNaN(parsedJoiningDate.getTime())) user.joiningDate = parsedJoiningDate;
+      if (parsedJoiningDate && !isNaN(parsedJoiningDate.getTime()))
+        user.joiningDate = parsedJoiningDate;
       if (cleanTimezone) user.timezone = cleanTimezone;
       user.role = ROLES.BUSINESS_OWNER;
       user.accountType = "business";
@@ -695,7 +838,10 @@ export const authService = {
         designation: cleanRole,
         roleInBusiness: cleanRole,
         dob: parsedDob && !isNaN(parsedDob.getTime()) ? parsedDob : null,
-        joiningDate: parsedJoiningDate && !isNaN(parsedJoiningDate.getTime()) ? parsedJoiningDate : new Date(),
+        joiningDate:
+          parsedJoiningDate && !isNaN(parsedJoiningDate.getTime())
+            ? parsedJoiningDate
+            : new Date(),
         timezone: cleanTimezone,
         role: ROLES.BUSINESS_OWNER,
         accountType: "business",
@@ -712,7 +858,19 @@ export const authService = {
 
     // Normalize membership tier
     const cleanMembership = membership
-      ? ((await Plan.findOne({ $or: [{ planId: String(membership).toLowerCase().trim() }, { name: { $regex: new RegExp(`^${String(membership).trim()}$`, "i") } }] }).lean())?.name || (membership.charAt(0).toUpperCase() + membership.slice(1).toLowerCase()))
+      ? (
+          await Plan.findOne({
+            $or: [
+              { planId: String(membership).toLowerCase().trim() },
+              {
+                name: {
+                  $regex: new RegExp(`^${String(membership).trim()}$`, "i"),
+                },
+              },
+            ],
+          }).lean()
+        )?.name ||
+        membership.charAt(0).toUpperCase() + membership.slice(1).toLowerCase()
       : "Free";
 
     // Categories are grown organically: the category/sub-category typed here
@@ -757,10 +915,14 @@ export const authService = {
       linkedin: cleanLinkedin,
       taxId: cleanTaxId,
       dob: parsedDob && !isNaN(parsedDob.getTime()) ? parsedDob : null,
-      joiningDate: parsedJoiningDate && !isNaN(parsedJoiningDate.getTime()) ? parsedJoiningDate : new Date(),
+      joiningDate:
+        parsedJoiningDate && !isNaN(parsedJoiningDate.getTime())
+          ? parsedJoiningDate
+          : new Date(),
       timezone: cleanTimezone,
       region: region === "international" ? "international" : "national",
-      currency: currency === "USD" || region === "international" ? "USD" : "INR",
+      currency:
+        currency === "USD" || region === "international" ? "USD" : "INR",
       phone: phone || "",
       email: cleanBusinessEmail || cleanEmail,
       ownerEmail: cleanEmail,
@@ -776,7 +938,8 @@ export const authService = {
         submittedBy: user._id,
         documents: [],
         status: "pending",
-        remarks: "New business registration awaiting verification and chapter approval",
+        remarks:
+          "New business registration awaiting verification and chapter approval",
       });
     }
 
@@ -786,15 +949,22 @@ export const authService = {
     }
 
     // Scaled for 10k/50k users: Send Rich Welcome Email asynchronously
-    emailService.sendWelcomeEmail({
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      businessName: business.name,
-      chapter: business.chapter,
-      industry: business.industry,
-      membership: business.membership,
-    }).catch((err) => logger.warn("[AUTH] Failed to send welcome email:", err?.message || err));
+    emailService
+      .sendWelcomeEmail({
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        businessName: business.name,
+        chapter: business.chapter,
+        industry: business.industry,
+        membership: business.membership,
+      })
+      .catch((err) =>
+        logger.warn(
+          "[AUTH] Failed to send welcome email:",
+          err?.message || err,
+        ),
+      );
 
     // 1. Notify the Chapter Admin(s) of the chapter selected during registration
     try {
@@ -802,33 +972,51 @@ export const authService = {
         role: ROLES.CHAPTER_ADMIN,
         $or: [
           ...(chapterId ? [{ chapterId }] : []),
-          ...(chapter ? [{ chapter: new RegExp(chapter.replace(/\b(chapter|chamber)\b/gi, "").trim(), "i") }] : []),
+          ...(chapter
+            ? [
+                {
+                  chapter: new RegExp(
+                    chapter.replace(/\b(chapter|chamber)\b/gi, "").trim(),
+                    "i",
+                  ),
+                },
+              ]
+            : []),
         ],
       };
       const chapterAdmins = await User.find(chapterAdminFilter);
       for (const admin of chapterAdmins) {
         // In-app notification
-        notificationService.createNotification({
-          recipientId: admin._id,
-          type: "Verification",
-          title: `👋 New Member Joined: ${business.name}`,
-          body: `New business "${business.name}" (${business.industry || "Business"}) has joined your chapter (${chapter || "your chapter"}). Say hello and welcome them to RIFAH!`,
-          entityId: verification._id,
-          link: `/biz/messages?recipient=${user._id}`,
-        }).catch(() => {});
+        notificationService
+          .createNotification({
+            recipientId: admin._id,
+            type: "Verification",
+            title: `👋 New Member Joined: ${business.name}`,
+            body: `New business "${business.name}" (${business.industry || "Business"}) has joined your chapter (${chapter || "your chapter"}). Say hello and welcome them to RIFAH!`,
+            entityId: verification._id,
+            link: `/biz/messages?recipient=${user._id}`,
+          })
+          .catch(() => {});
 
         // Async Email Alert to Chapter Admin
         if (admin.email) {
-          emailService.sendNewMemberChapterAlertEmail({
-            adminEmail: admin.email,
-            adminName: admin.name,
-            memberName: user.name,
-            businessName: business.name,
-            chapter: business.chapter,
-            industry: business.industry,
-            phone: user.phone,
-            email: user.email,
-          }).catch((adminMailErr) => logger.warn("[AUTH] Failed to send new member chapter alert email to admin:", adminMailErr?.message || adminMailErr));
+          emailService
+            .sendNewMemberChapterAlertEmail({
+              adminEmail: admin.email,
+              adminName: admin.name,
+              memberName: user.name,
+              businessName: business.name,
+              chapter: business.chapter,
+              industry: business.industry,
+              phone: user.phone,
+              email: user.email,
+            })
+            .catch((adminMailErr) =>
+              logger.warn(
+                "[AUTH] Failed to send new member chapter alert email to admin:",
+                adminMailErr?.message || adminMailErr,
+              ),
+            );
         }
       }
 
@@ -840,10 +1028,20 @@ export const authService = {
           status: "Active",
           $or: [
             ...(chapterId ? [{ chapterId }] : []),
-            ...(chapter ? [{ chapter: new RegExp(chapter.replace(/\b(chapter|chamber)\b/gi, "").trim(), "i") }] : []),
+            ...(chapter
+              ? [
+                  {
+                    chapter: new RegExp(
+                      chapter.replace(/\b(chapter|chamber)\b/gi, "").trim(),
+                      "i",
+                    ),
+                  },
+                ]
+              : []),
           ],
         };
-        const chapterUsers = await User.find(chapterBizFilter).select("_id name");
+        const chapterUsers =
+          await User.find(chapterBizFilter).select("_id name");
         for (const chapUser of chapterUsers) {
           await notificationService.createNotification({
             recipientId: chapUser._id,
@@ -856,7 +1054,10 @@ export const authService = {
         }
       }
     } catch (notifErr) {
-      console.error("Failed to notify chapter members on new registration:", notifErr);
+      console.error(
+        "Failed to notify chapter members on new registration:",
+        notifErr,
+      );
     }
 
     const tokenPayload = {
@@ -871,7 +1072,13 @@ export const authService = {
     const accessToken = signAccessToken(tokenPayload);
     const refreshToken = signRefreshToken(tokenPayload);
 
-    return { user, accessToken, refreshToken, business, pendingBusinessName: businessName };
+    return {
+      user,
+      accessToken,
+      refreshToken,
+      business,
+      pendingBusinessName: businessName,
+    };
   },
 
   /**
@@ -884,7 +1091,10 @@ export const authService = {
       throw new BadRequestError("Please provide both email and password");
     }
 
-    const emailRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+    const emailRegex = new RegExp(
+      `^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+      "i",
+    );
     const digitsOnly = normalizedEmail.replace(/\D/g, "");
 
     // 1. Search User by email, regex email, exact phone, or stripped digits
@@ -900,8 +1110,11 @@ export const authService = {
 
     // Fast path: exact (indexed, unique) email. The broad $or below contains an unanchored phone
     // regex, which forces a full users-collection scan, so it only runs when the exact match misses.
-    let user = await User.findOne({ email: normalizedEmail }).select("+passwordHash");
-    if (!user) user = await User.findOne({ $or: userOrFilters }).select("+passwordHash");
+    let user = await User.findOne({ email: normalizedEmail }).select(
+      "+passwordHash",
+    );
+    if (!user)
+      user = await User.findOne({ $or: userOrFilters }).select("+passwordHash");
 
     // 2. Dynamic fallback: check if a business exists with this email / ownerEmail / phone
     if (!user) {
@@ -923,7 +1136,10 @@ export const authService = {
           user = await User.findById(matchedBiz.owner).select("+passwordHash");
         }
       } catch (bizSearchErr) {
-        logger.warn("Business search fallback during login:", bizSearchErr.message);
+        logger.warn(
+          "Business search fallback during login:",
+          bizSearchErr.message,
+        );
       }
     }
 
@@ -934,11 +1150,21 @@ export const authService = {
         if (localPart && domain) {
           const cleanLocal = localPart.replace(/[.\-_0]/g, "");
           const candidates = await User.find({
-            email: { $regex: new RegExp(`@${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
-          }).select("+passwordHash").limit(50); // bound the alias scan so a common domain cannot load thousands of hashes
+            email: {
+              $regex: new RegExp(
+                `@${domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+                "i",
+              ),
+            },
+          })
+            .select("+passwordHash")
+            .limit(50); // bound the alias scan so a common domain cannot load thousands of hashes
 
           for (const candidate of candidates) {
-            const candLocal = (candidate.email.split("@")[0] || "").replace(/[.\-_0]/g, "");
+            const candLocal = (candidate.email.split("@")[0] || "").replace(
+              /[.\-_0]/g,
+              "",
+            );
             if (candLocal === cleanLocal) {
               user = candidate;
               break;
@@ -951,15 +1177,24 @@ export const authService = {
     }
 
     if (!user) {
-      throw new UnauthorizedError("Invalid email or password", ERROR_CODES.INVALID_CREDENTIALS);
+      throw new UnauthorizedError(
+        "Invalid email or password",
+        ERROR_CODES.INVALID_CREDENTIALS,
+      );
     }
 
     if (user.status === "Suspended" || user.status === "Deactivated") {
-      throw new UnauthorizedError(`Account is ${user.status.toLowerCase()}. Please contact support.`);
+      throw new UnauthorizedError(
+        `Account is ${user.status.toLowerCase()}. Please contact support.`,
+      );
     }
 
     let isMatch = false;
-    if (user.passwordHash && typeof user.passwordHash === "string" && user.passwordHash.startsWith("$2")) {
+    if (
+      user.passwordHash &&
+      typeof user.passwordHash === "string" &&
+      user.passwordHash.startsWith("$2")
+    ) {
       try {
         isMatch = await comparePassword(password, user.passwordHash);
       } catch (pwErr) {
@@ -968,7 +1203,10 @@ export const authService = {
     }
 
     if (!isMatch) {
-      throw new UnauthorizedError("Invalid email or password", ERROR_CODES.INVALID_CREDENTIALS);
+      throw new UnauthorizedError(
+        "Invalid email or password",
+        ERROR_CODES.INVALID_CREDENTIALS,
+      );
     }
 
     // Restore an administrative role (central/state/chapter admin) if previously demoted,
@@ -976,8 +1214,14 @@ export const authService = {
     // Crucially: never auto-swap standard customer or business_owner identities.
     if (
       user.previousRole &&
-      ["central_admin", "state_admin", "chapter_admin"].includes(user.previousRole) &&
-      (ROLE_HIERARCHY[user.previousRole] || 0) > (ROLE_HIERARCHY[user.role] || 0)
+      [
+        "central_admin",
+        "country_admin",
+        "state_admin",
+        "chapter_admin",
+      ].includes(user.previousRole) &&
+      (ROLE_HIERARCHY[user.previousRole] || 0) >
+        (ROLE_HIERARCHY[user.role] || 0)
     ) {
       user.role = user.previousRole;
       user.previousRole = "";
@@ -993,13 +1237,16 @@ export const authService = {
 
       if (userOwnedBiz) {
         // Firmly attach owner reference to this user if not already set
-        if (!userOwnedBiz.owner || String(userOwnedBiz.owner) !== String(user._id)) {
+        if (
+          !userOwnedBiz.owner ||
+          String(userOwnedBiz.owner) !== String(user._id)
+        ) {
           userOwnedBiz.owner = user._id;
           await userOwnedBiz.save().catch(() => {});
         }
 
         // For non-administrative users, permanently ensure role is business_owner and accountType is business
-        const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
+        const isAdmin = ADMIN_ROLE_SET.has(user.role);
         if (!isAdmin && !isSubscriberUser(user)) {
           user.role = ROLES.BUSINESS_OWNER;
           user.accountType = "business";
@@ -1007,27 +1254,41 @@ export const authService = {
         }
       }
     } catch (bizOwnerCheckErr) {
-      console.error("Error auto-healing business_owner role on login:", bizOwnerCheckErr);
+      console.error(
+        "Error auto-healing business_owner role on login:",
+        bizOwnerCheckErr,
+      );
     }
 
     // Check chapter status if user is associated with a chapter and is not Super Admin / State Admin
-    if (user.chapter && user.role !== ROLES.CENTRAL_ADMIN && user.role !== ROLES.STATE_ADMIN) {
+    if (
+      user.chapter &&
+      user.role !== ROLES.CENTRAL_ADMIN &&
+      user.role !== ROLES.STATE_ADMIN
+    ) {
       const chapter = await Chapter.findOne({ name: user.chapter });
       if (chapter && chapter.status === "Inactive") {
-        throw new UnauthorizedError("Your chapter is currently inactive. Please contact the RIFAH Administration.");
+        throw new UnauthorizedError(
+          "Your chapter is currently inactive. Please contact the RIFAH Administration.",
+        );
       }
     }
 
-    await User.findByIdAndUpdate(user._id, { $set: { lastLoginAt: new Date() } });
+    await User.findByIdAndUpdate(user._id, {
+      $set: { lastLoginAt: new Date() },
+    });
     await user.populate("savedBusinesses");
 
-    const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
+    const isAdmin = ADMIN_ROLE_SET.has(user.role);
 
     // Determine accountType for deterministic frontend workspace routing
     let determinedAccountType = user.accountType;
     if (isAdmin) {
       determinedAccountType = "admin";
-    } else if (user.role === ROLES.BUSINESS_OWNER || (userOwnedBiz && !isSubscriberUser(user))) {
+    } else if (
+      user.role === ROLES.BUSINESS_OWNER ||
+      (userOwnedBiz && !isSubscriberUser(user))
+    ) {
       determinedAccountType = "business";
       user.role = ROLES.BUSINESS_OWNER;
       user.accountType = "business";
@@ -1100,35 +1361,69 @@ export const authService = {
           let wsType = "business";
           let wsLabel = "Business Panel";
           let wsPath = "/biz";
-          if (sysRole === "central_admin" || sysRole === "secretariat") { wsType = "central-admin"; wsLabel = "Central Admin Panel"; wsPath = "/admin"; }
-          else if (sysRole === "state_admin") { wsType = "state-admin"; wsLabel = "State Admin Panel"; wsPath = "/state-admin"; }
-          else if (sysRole === "chapter_admin") { wsType = "chapter-admin"; wsLabel = "Chapter Admin Panel"; wsPath = "/chapter-admin"; }
-          baseWorkspaces.push({ type: "system_role", workspaceId: sysRole, roleName: wsLabel, level: null, panelType: wsType, path: wsPath, permissions: [], allowedNavRoutes: [] });
+          if (
+            [
+              "central_admin",
+              "super_admin",
+              "admin",
+              "secretariat",
+              "country_admin",
+            ].includes(sysRole)
+          ) {
+            wsType = "central-admin";
+            wsLabel = "Central Admin Panel";
+            wsPath = "/admin";
+          } else if (sysRole === "state_admin") {
+            wsType = "state-admin";
+            wsLabel = "State Admin Panel";
+            wsPath = "/state-admin";
+          } else if (sysRole === "chapter_admin") {
+            wsType = "chapter-admin";
+            wsLabel = "Chapter Admin Panel";
+            wsPath = "/chapter-admin";
+          }
+          baseWorkspaces.push({
+            type: "system_role",
+            workspaceId: sysRole,
+            roleName: wsLabel,
+            level: null,
+            panelType: wsType,
+            path: wsPath,
+            permissions: [],
+            allowedNavRoutes: [],
+          });
         }
         // Add org-role workspaces
         const orgWorkspaces = orgRoles.map(buildOrgWorkspace).filter(Boolean);
         availableWorkspaces = [...baseWorkspaces, ...orgWorkspaces];
       }
     } catch (orgRoleErr) {
-      logger.warn("[AUTH] Failed to fetch org roles on login:", orgRoleErr?.message);
+      logger.warn(
+        "[AUTH] Failed to fetch org roles on login:",
+        orgRoleErr?.message,
+      );
     }
 
     return {
       user: userObj,
       accessToken,
       refreshToken,
-      requiresRoleSelection: availableRoles.length > 1 || (availableWorkspaces && availableWorkspaces.length > 1),
+      requiresRoleSelection:
+        availableRoles.length > 1 ||
+        (availableWorkspaces && availableWorkspaces.length > 1),
       availableRoles,
       availableWorkspaces, // null if no org roles; populated otherwise
     };
   },
 
-
   /**
    * End every session of the user: tokens issued before now are rejected.
    */
   logout: async (userId) => {
-    await User.updateOne({ _id: userId }, { $set: { tokensValidAfter: new Date() } });
+    await User.updateOne(
+      { _id: userId },
+      { $set: { tokensValidAfter: new Date() } },
+    );
   },
 
   /**
@@ -1142,12 +1437,18 @@ export const authService = {
       if (!user || user.status !== "Active") {
         throw new UnauthorizedError("Invalid session or account deactivated");
       }
-      if (user.tokensValidAfter && decoded.iat < Math.floor(user.tokensValidAfter.getTime() / 1000)) {
+      if (
+        user.tokensValidAfter &&
+        decoded.iat < Math.floor(user.tokensValidAfter.getTime() / 1000)
+      ) {
         throw new UnauthorizedError("Session has ended");
       }
 
       // Preserve a valid workspace switch (e.g. central_admin -> business_owner) across refresh.
-      const { role: sessionRole } = await authService.resolveSessionRole(user, decoded.role);
+      const { role: sessionRole } = await authService.resolveSessionRole(
+        user,
+        decoded.role,
+      );
       const tokenPayload = {
         id: user._id,
         email: user.email,
@@ -1178,7 +1479,10 @@ export const authService = {
         user,
       };
     } catch (err) {
-      throw new UnauthorizedError("Invalid or expired refresh token", ERROR_CODES.TOKEN_EXPIRED);
+      throw new UnauthorizedError(
+        "Invalid or expired refresh token",
+        ERROR_CODES.TOKEN_EXPIRED,
+      );
     }
   },
 
@@ -1189,12 +1493,12 @@ export const authService = {
    * Returns { role, ownedBusiness } where role === user.role unless a valid switch applies.
    */
   resolveSessionRole: async (user, requestedRole) => {
-    if (!requestedRole || requestedRole === user.role) return { role: user.role, ownedBusiness: null };
-    if (
-      requestedRole === "business_owner" &&
-      ["central_admin", "state_admin", "chapter_admin"].includes(user.role)
-    ) {
-      const ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
+    if (!requestedRole || requestedRole === user.role)
+      return { role: user.role, ownedBusiness: null };
+    if (requestedRole === "business_owner" && ADMIN_ROLE_SET.has(user.role)) {
+      const ownedBusiness = await Business.findOne({ owner: user._id }).select(
+        "_id slug name",
+      );
       if (ownedBusiness) return { role: "business_owner", ownedBusiness };
     }
     return { role: user.role, ownedBusiness: null };
@@ -1214,20 +1518,24 @@ export const authService = {
         userId,
         status: "Active",
         permissionTemplateId: { $ne: null },
-      }).populate({
-        path: "permissionTemplateId",
-        select: "name level permissions allowedNavRoutes",
-      }).populate("chapterId", "name slug city state").lean();
+      })
+        .populate({
+          path: "permissionTemplateId",
+          select: "name level permissions allowedNavRoutes",
+        })
+        .populate("chapterId", "name slug city state")
+        .lean();
 
       if (!orgRole) throw new BadRequestError("Invalid org-role workspace");
 
       const workspace = buildOrgWorkspace(orgRole);
-      if (!workspace) throw new BadRequestError("Org role has no permission template");
+      if (!workspace)
+        throw new BadRequestError("Org role has no permission template");
 
       const tokenPayload = {
         id: user._id,
         email: user.email,
-        role: user.role,               // keeps real DB role intact in token
+        role: user.role, // keeps real DB role intact in token
         orgWorkspaceId: targetWorkspaceId,
         orgRoleName: workspace.roleName,
         orgPermissions: workspace.permissions,
@@ -1264,12 +1572,26 @@ export const authService = {
           let wsType = "business";
           let wsLabel = "Business Panel";
           let wsPath = "/biz";
-          if (["central_admin", "super_admin", "admin", "secretariat"].includes(user.role)) {
-            wsType = "central-admin"; wsLabel = "Central Admin Panel"; wsPath = "/admin";
+          if (
+            [
+              "central_admin",
+              "super_admin",
+              "admin",
+              "secretariat",
+              "country_admin",
+            ].includes(user.role)
+          ) {
+            wsType = "central-admin";
+            wsLabel = "Central Admin Panel";
+            wsPath = "/admin";
           } else if (user.role === "state_admin") {
-            wsType = "state-admin"; wsLabel = "State Admin Panel"; wsPath = "/state-admin";
+            wsType = "state-admin";
+            wsLabel = "State Admin Panel";
+            wsPath = "/state-admin";
           } else if (user.role === "chapter_admin") {
-            wsType = "chapter-admin"; wsLabel = "Chapter Admin Panel"; wsPath = "/chapter-admin";
+            wsType = "chapter-admin";
+            wsLabel = "Chapter Admin Panel";
+            wsPath = "/chapter-admin";
           }
           baseWorkspaces.push({
             type: "system_role",
@@ -1285,7 +1607,12 @@ export const authService = {
         }
       } catch (_) {}
 
-      return { user: userObj, accessToken, refreshToken, activeWorkspace: workspace };
+      return {
+        user: userObj,
+        accessToken,
+        refreshToken,
+        activeWorkspace: workspace,
+      };
     }
 
     // --- Original system-role switching (admin ↔ business_owner) ---
@@ -1299,8 +1626,10 @@ export const authService = {
 
     // An admin can switch to business_owner ONLY if they have a registered business
     let ownedBusiness = null;
-    if (["central_admin", "state_admin", "chapter_admin"].includes(user.role)) {
-      ownedBusiness = await Business.findOne({ owner: user._id }).select("_id slug name");
+    if (ADMIN_ROLE_SET.has(user.role)) {
+      ownedBusiness = await Business.findOne({ owner: user._id }).select(
+        "_id slug name",
+      );
       if (ownedBusiness) {
         validRoles.add("business_owner");
       }
@@ -1338,7 +1667,17 @@ export const authService = {
     // user.role in the database is left exactly as it was.
     const userObj = user.toJSON ? user.toJSON() : { ...user._doc };
     userObj.role = targetRole;
-    if (["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(targetRole)) {
+    if (
+      [
+        "central_admin",
+        "super_admin",
+        "admin",
+        "secretariat",
+        "country_admin",
+        "state_admin",
+        "chapter_admin",
+      ].includes(targetRole)
+    ) {
       userObj.accountType = "admin";
     } else if (targetRole === "business_owner" || targetRole === "business") {
       userObj.accountType = "business";
@@ -1359,12 +1698,26 @@ export const authService = {
         let wsType = "business";
         let wsLabel = "Business Panel";
         let wsPath = "/biz";
-        if (["central_admin", "super_admin", "admin", "secretariat"].includes(user.role)) {
-          wsType = "central-admin"; wsLabel = "Central Admin Panel"; wsPath = "/admin";
+        if (
+          [
+            "central_admin",
+            "super_admin",
+            "admin",
+            "secretariat",
+            "country_admin",
+          ].includes(user.role)
+        ) {
+          wsType = "central-admin";
+          wsLabel = "Central Admin Panel";
+          wsPath = "/admin";
         } else if (user.role === "state_admin") {
-          wsType = "state-admin"; wsLabel = "State Admin Panel"; wsPath = "/state-admin";
+          wsType = "state-admin";
+          wsLabel = "State Admin Panel";
+          wsPath = "/state-admin";
         } else if (user.role === "chapter_admin") {
-          wsType = "chapter-admin"; wsLabel = "Chapter Admin Panel"; wsPath = "/chapter-admin";
+          wsType = "chapter-admin";
+          wsLabel = "Chapter Admin Panel";
+          wsPath = "/chapter-admin";
         }
         baseWorkspaces.push({
           type: "system_role",
@@ -1402,18 +1755,35 @@ export const authService = {
       userObj.businessSlug = ownedBusiness.slug;
     }
 
-    const isAdmin = ["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(userObj.role);
+    const isAdmin = [
+      "central_admin",
+      "super_admin",
+      "admin",
+      "secretariat",
+      "country_admin",
+      "state_admin",
+      "chapter_admin",
+    ].includes(userObj.role);
     if (isAdmin) {
       userObj.accountType = "admin";
-    } else if (userObj.role === ROLES.BUSINESS_OWNER || (ownedBusiness && !isSubscriberUser(user))) {
+    } else if (
+      userObj.role === ROLES.BUSINESS_OWNER ||
+      (ownedBusiness && !isSubscriberUser(user))
+    ) {
       userObj.accountType = "business";
       userObj.role = ROLES.BUSINESS_OWNER;
-      if (user.role !== ROLES.BUSINESS_OWNER || user.accountType !== "business") {
+      if (
+        user.role !== ROLES.BUSINESS_OWNER ||
+        user.accountType !== "business"
+      ) {
         user.role = ROLES.BUSINESS_OWNER;
         user.accountType = "business";
         await user.save().catch(() => {});
       }
-    } else if (userObj.accountType === "user" || Boolean(userObj.subscriberTier)) {
+    } else if (
+      userObj.accountType === "user" ||
+      Boolean(userObj.subscriberTier)
+    ) {
       userObj.accountType = "user";
     } else {
       userObj.accountType = "customer";
@@ -1425,7 +1795,7 @@ export const authService = {
     if (activeRole !== user.role) {
       userObj.previousRole = user.role;
       userObj.role = activeRole;
-      if (["central_admin", "super_admin", "admin", "secretariat", "state_admin", "chapter_admin"].includes(activeRole)) {
+      if (ADMIN_ROLE_SET.has(activeRole)) {
         userObj.accountType = "admin";
       } else if (activeRole === "business_owner" || activeRole === "business") {
         userObj.accountType = "business";
@@ -1445,12 +1815,26 @@ export const authService = {
         let wsType = "business";
         let wsLabel = "Business Panel";
         let wsPath = "/biz";
-        if (["central_admin", "super_admin", "admin", "secretariat"].includes(user.role)) {
-          wsType = "central-admin"; wsLabel = "Central Admin Panel"; wsPath = "/admin";
+        if (
+          [
+            "central_admin",
+            "super_admin",
+            "admin",
+            "secretariat",
+            "country_admin",
+          ].includes(user.role)
+        ) {
+          wsType = "central-admin";
+          wsLabel = "Central Admin Panel";
+          wsPath = "/admin";
         } else if (user.role === "state_admin") {
-          wsType = "state-admin"; wsLabel = "State Admin Panel"; wsPath = "/state-admin";
+          wsType = "state-admin";
+          wsLabel = "State Admin Panel";
+          wsPath = "/state-admin";
         } else if (user.role === "chapter_admin") {
-          wsType = "chapter-admin"; wsLabel = "Chapter Admin Panel"; wsPath = "/chapter-admin";
+          wsType = "chapter-admin";
+          wsLabel = "Chapter Admin Panel";
+          wsPath = "/chapter-admin";
         }
         baseWorkspaces.push({
           type: "system_role",
@@ -1494,7 +1878,10 @@ export const authService = {
   /**
    * Change password (forced or manual)
    */
-  changePassword: async (userId, { oldPassword, currentPassword, newPassword }) => {
+  changePassword: async (
+    userId,
+    { oldPassword, currentPassword, newPassword },
+  ) => {
     const user = await User.findById(userId).select("+passwordHash");
     if (!user) {
       throw new NotFoundError("User not found");
@@ -1503,15 +1890,22 @@ export const authService = {
     const previousPassword = oldPassword || currentPassword;
 
     if (previousPassword && previousPassword === newPassword) {
-      throw new BadRequestError("New password cannot be the same as the current password.");
+      throw new BadRequestError(
+        "New password cannot be the same as the current password.",
+      );
     }
 
     if (!user.forcePasswordChange) {
       if (!previousPassword) {
-        throw new BadRequestError("Current password is required to change password.");
+        throw new BadRequestError(
+          "Current password is required to change password.",
+        );
       }
-      
-      const isMatch = await comparePassword(previousPassword, user.passwordHash);
+
+      const isMatch = await comparePassword(
+        previousPassword,
+        user.passwordHash,
+      );
       if (!isMatch) {
         throw new BadRequestError("Invalid current password");
       }
@@ -1598,7 +1992,9 @@ export const authService = {
    */
   resetPassword: async ({ email, resetToken, newPassword }) => {
     if (!email || !resetToken || !newPassword) {
-      throw new BadRequestError("Email, verification code, and new password are required");
+      throw new BadRequestError(
+        "Email, verification code, and new password are required",
+      );
     }
     const cleanEmail = email.toLowerCase().trim();
     const cleanToken = String(resetToken).trim();
@@ -1619,7 +2015,10 @@ export const authService = {
     user.resetPasswordExpires = undefined;
     await user.save();
 
-    return { message: "Password has been successfully reset. Please log in with your new password." };
+    return {
+      message:
+        "Password has been successfully reset. Please log in with your new password.",
+    };
   },
 
   /**
@@ -1633,7 +2032,8 @@ export const authService = {
 
     let googlePayload;
     try {
-      const isJwt = typeof credential === "string" && credential.split(".").length === 3;
+      const isJwt =
+        typeof credential === "string" && credential.split(".").length === 3;
       if (isJwt) {
         if (env.GOOGLE.CLIENT_ID) {
           try {
@@ -1645,14 +2045,14 @@ export const authService = {
           } catch (jwtErr) {
             // Fallback to tokeninfo endpoint
             const tokenInfoRes = await fetch(
-              `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`
+              `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`,
             );
             if (!tokenInfoRes.ok) throw jwtErr;
             googlePayload = await tokenInfoRes.json();
           }
         } else {
           const tokenInfoRes = await fetch(
-            `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`
+            `https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`,
           );
           if (!tokenInfoRes.ok) {
             throw new Error("Google verification failed");
@@ -1661,15 +2061,18 @@ export const authService = {
         }
       } else {
         // It's an OAuth2 Access Token (e.g. from Google popup token client)
-        const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-          headers: { Authorization: `Bearer ${credential}` },
-        });
+        const userinfoRes = await fetch(
+          "https://www.googleapis.com/oauth2/v3/userinfo",
+          {
+            headers: { Authorization: `Bearer ${credential}` },
+          },
+        );
         if (userinfoRes.ok) {
           googlePayload = await userinfoRes.json();
         } else {
           // Fallback to tokeninfo with access_token
           const tokenInfoRes = await fetch(
-            `https://oauth2.googleapis.com/tokeninfo?access_token=${credential}`
+            `https://oauth2.googleapis.com/tokeninfo?access_token=${credential}`,
           );
           if (!tokenInfoRes.ok) {
             throw new Error("Google access token verification failed");
@@ -1679,11 +2082,15 @@ export const authService = {
       }
     } catch (err) {
       console.error("Google Auth verification error:", err.message);
-      throw new UnauthorizedError("Google authentication failed. Invalid token.");
+      throw new UnauthorizedError(
+        "Google authentication failed. Invalid token.",
+      );
     }
 
     if (!googlePayload || !googlePayload.email) {
-      throw new UnauthorizedError("Google token does not contain a valid email address");
+      throw new UnauthorizedError(
+        "Google token does not contain a valid email address",
+      );
     }
 
     const email = googlePayload.email.toLowerCase().trim();
@@ -1698,17 +2105,23 @@ export const authService = {
       ) {
         throw new UnauthorizedError(
           "Administrative accounts must sign in using email and password credentials.",
-          ERROR_CODES.FORBIDDEN
+          ERROR_CODES.FORBIDDEN,
         );
       }
 
-      if (existingUser.status === "Suspended" || existingUser.status === "Deactivated") {
-        throw new UnauthorizedError(`Account is ${existingUser.status.toLowerCase()}. Please contact support.`);
+      if (
+        existingUser.status === "Suspended" ||
+        existingUser.status === "Deactivated"
+      ) {
+        throw new UnauthorizedError(
+          `Account is ${existingUser.status.toLowerCase()}. Please contact support.`,
+        );
       }
 
       // Link Google ID if not linked
       if (!existingUser.googleId) existingUser.googleId = googlePayload.sub;
-      if (!existingUser.avatar && googlePayload.picture) existingUser.avatar = googlePayload.picture;
+      if (!existingUser.avatar && googlePayload.picture)
+        existingUser.avatar = googlePayload.picture;
       existingUser.lastLoginAt = new Date();
       await existingUser.save();
       await existingUser.populate("savedBusinesses");
@@ -1741,7 +2154,9 @@ export const authService = {
 
     // New User Provisioning (Customer or Business Owner initially with isProfileComplete: false)
     const assignedRole =
-      roleTarget === ROLES.BUSINESS_OWNER ? ROLES.BUSINESS_OWNER : ROLES.CUSTOMER;
+      roleTarget === ROLES.BUSINESS_OWNER
+        ? ROLES.BUSINESS_OWNER
+        : ROLES.CUSTOMER;
 
     const defaultChapterId = await resolveChapterIdByName("Mumbai Chapter");
     const newUser = await User.create({
@@ -1818,9 +2233,17 @@ export const authService = {
     user.passwordHash = await hashPassword(password);
 
     // Set role and profile details - protect any admin role from being demoted
-    const ADMIN_ROLES = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.SECRETARIAT, "super_admin", "admin"];
+    const ADMIN_ROLES = [
+      ROLES.CENTRAL_ADMIN,
+      ROLES.STATE_ADMIN,
+      ROLES.CHAPTER_ADMIN,
+      ROLES.SECRETARIAT,
+      "super_admin",
+      "admin",
+    ];
     if (!ADMIN_ROLES.includes(user.role)) {
-      user.role = role === ROLES.BUSINESS_OWNER ? ROLES.BUSINESS_OWNER : ROLES.CUSTOMER;
+      user.role =
+        role === ROLES.BUSINESS_OWNER ? ROLES.BUSINESS_OWNER : ROLES.CUSTOMER;
     }
     if (contactPerson && contactPerson.trim()) user.name = contactPerson.trim();
     if (phone) user.phone = phone.trim();
@@ -1843,14 +2266,21 @@ export const authService = {
     // If role is Business Owner, create or update complete Business document
     if (user.role === ROLES.BUSINESS_OWNER) {
       const existingBiz = await Business.findOne({ owner: user._id });
-      const finalBizName = (businessName && businessName.trim()) || `${user.name}'s Enterprise`;
+      const finalBizName =
+        (businessName && businessName.trim()) || `${user.name}'s Enterprise`;
 
-      const selectedPlanId = String(membershipTier || "").trim().toLowerCase();
+      const selectedPlanId = String(membershipTier || "")
+        .trim()
+        .toLowerCase();
       let selectedPlan = selectedPlanId
-        ? await Plan.findOne({ planId: selectedPlanId, isActive: { $ne: false } }).lean()
+        ? await Plan.findOne({
+            planId: selectedPlanId,
+            isActive: { $ne: false },
+          }).lean()
         : null;
       if (selectedPlanId && !selectedPlan) {
-        const { DEFAULT_MEMBERSHIP_PLANS } = await import("../memberships/membership.service.js");
+        const { DEFAULT_MEMBERSHIP_PLANS } =
+          await import("../memberships/membership.service.js");
         selectedPlan = DEFAULT_MEMBERSHIP_PLANS[selectedPlanId];
       }
       if (selectedPlanId && !selectedPlan && selectedPlanId !== "free") {
@@ -1860,8 +2290,10 @@ export const authService = {
 
       if (existingBiz) {
         existingBiz.name = finalBizName;
-        existingBiz.industry = industry || existingBiz.industry || "Manufacturing";
-        existingBiz.businessType = businessType || existingBiz.businessType || "Proprietorship";
+        existingBiz.industry =
+          industry || existingBiz.industry || "Manufacturing";
+        existingBiz.businessType =
+          businessType || existingBiz.businessType || "Proprietorship";
         if (founded) existingBiz.founded = founded.trim();
         if (employees) existingBiz.employees = employees.trim();
         if (about) existingBiz.about = about.trim();
@@ -1899,7 +2331,8 @@ export const authService = {
           city: user.city || "Mumbai",
           state: state || "Maharashtra",
           chapter: user.chapter || "Mumbai Chapter",
-          chapterId: user.chapterId || (await resolveChapterIdByName("Mumbai Chapter")),
+          chapterId:
+            user.chapterId || (await resolveChapterIdByName("Mumbai Chapter")),
           taxId: taxId ? taxId.trim() : "",
           membership: formattedTier,
           verification: "pending",

@@ -89,7 +89,17 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["central_admin", "secretariat", "state_admin", "chapter_admin", "business_owner", "customer", "buyer", "public"],
+      enum: [
+        "central_admin",
+        "secretariat",
+        "country_admin",
+        "state_admin",
+        "chapter_admin",
+        "business_owner",
+        "customer",
+        "buyer",
+        "public",
+      ],
       default: ROLES.CUSTOMER,
       index: true,
     },
@@ -240,9 +250,8 @@ const userSchema = new mongoose.Schema(
         return ret;
       },
     },
-  }
+  },
 );
 
 export const User = mongoose.model("User", userSchema);
 export default User;
-                                                                                                                                          

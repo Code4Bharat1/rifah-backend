@@ -41,9 +41,14 @@ const chapterSchema = new mongoose.Schema(
       required: [true, "City is required"],
       trim: true,
     },
+    country: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     state: {
       type: String,
-      required: [true, "State is required"],
+      default: "",
       trim: true,
     },
     lead: {
@@ -72,7 +77,7 @@ const chapterSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export const Chapter = mongoose.model("Chapter", chapterSchema);

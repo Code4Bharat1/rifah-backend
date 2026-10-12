@@ -35,15 +35,20 @@ export const categoryService = {
     const cleanName = (name || "").trim();
     if (!cleanName) return null;
 
+    const normalizedName = cleanName.replace(/\s+/g, " ").toLowerCase();
     const slug = generateSlug(cleanName);
     const escapedName = cleanName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    // 1. Try finding by slug OR by case-insensitive name
+    // 1. Try finding by slug OR by case-insensitive / whitespace-normalized name.
     try {
       const existing = await Category.findOne({
         $or: [
           { slug },
           { name: new RegExp(`^${escapedName}$`, "i") },
+          {
+            name: new RegExp(`^${escapedName.replace(/\\s+/g, "\\s+")}$`, "i"),
+          },
+          { slug: generateSlug(normalizedName) },
         ],
       });
       if (existing) return existing;
@@ -54,32 +59,43 @@ export const categoryService = {
         parent: (parent || "").trim(),
       });
     } catch (err) {
-      // 2. Handle race condition or duplicate key on name/slug
+      // 2. Handle race condition or duplicate key on name/slug.
       if (err.code === 11000) {
         try {
           const winner = await Category.findOne({
-            $or: [
-              { slug },
-              { name: new RegExp(`^${escapedName}$`, "i") },
-            ],
+            $or: [{ slug }, { name: new RegExp(`^${escapedName}$`, "i") }],
           });
           if (winner) return winner;
         } catch {}
       }
-      // Never crash caller during auxiliary category creation
+      // Never crash caller during auxiliary category creation.
       return null;
     }
   },
 
   createCategory: async (data) => {
-    const slug = generateSlug(data.name);
-    const existing = await Category.findOne({ slug });
+    const name = String(data.name || "").trim();
+    if (!name) throw new ConflictError("Category name is required");
+
+    const slug = generateSlug(name);
+    const existing = await Category.findOne({
+      $or: [
+        { slug },
+        {
+          name: new RegExp(
+            `^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+            "i",
+          ),
+        },
+      ],
+    });
     if (existing) {
       throw new ConflictError("Category already exists");
     }
 
     const created = await Category.create({
       ...data,
+      name,
       slug,
     });
     memoryCache.invalidate("categories_list");
@@ -88,7 +104,20 @@ export const categoryService = {
 
   updateCategory: async (id, data) => {
     if (data.name) {
-      data.slug = generateSlug(data.name);
+      const name = String(data.name).trim();
+      if (!name) throw new ConflictError("Category name is required");
+      const existing = await Category.findOne({
+        _id: { $ne: id },
+        name: new RegExp(
+          `^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+          "i",
+        ),
+      });
+      if (existing) {
+        throw new ConflictError("Category already exists");
+      }
+      data.name = name;
+      data.slug = generateSlug(name);
     }
     const updated = await Category.findByIdAndUpdate(id, data, { new: true });
     if (!updated) {

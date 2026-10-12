@@ -7,6 +7,10 @@ const categorySchema = new mongoose.Schema(
       required: [true, "Category name is required"],
       trim: true,
       unique: true,
+      index: {
+        unique: true,
+        collation: { locale: "en", strength: 2 },
+      },
     },
     slug: {
       type: String,
@@ -37,7 +41,7 @@ const categorySchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 export const Category = mongoose.model("Category", categorySchema);

@@ -1,29 +1,84 @@
-import { isValidEmail, isValidPhone, isValidName } from "../../shared/validators/common.validation.js";
+import {
+  isValidEmail,
+  isValidPhone,
+  isValidName,
+} from "../../shared/validators/common.validation.js";
 
 export const validateCreateChapter = (data = {}) => {
   const errors = [];
-  if (!data.name || typeof data.name !== "string" || data.name.trim().length < 2) {
+  const country = (data.country ?? "").toString().trim();
+  const state = (data.state ?? "").toString().trim();
+
+  if (
+    !data.name ||
+    typeof data.name !== "string" ||
+    data.name.trim().length < 2
+  ) {
     errors.push({ field: "name", message: "Chapter name is required" });
   }
   if (!data.city || typeof data.city !== "string") {
     errors.push({ field: "city", message: "City is required" });
   }
-  if (!data.state || typeof data.state !== "string") {
-    errors.push({ field: "state", message: "State is required" });
+
+  if (country === "" || country.toLowerCase() === "india") {
+    if (!state) {
+      errors.push({ field: "state", message: "State is required for India" });
+    }
   }
-  if (data.adminName !== undefined && data.adminName !== "" && !isValidName(data.adminName)) {
-    errors.push({ field: "adminName", message: "Admin name must contain only letters" });
+
+  if (
+    country !== "" &&
+    country.toLowerCase() !== "india" &&
+    data.state !== undefined &&
+    data.state !== null &&
+    typeof data.state !== "string"
+  ) {
+    errors.push({ field: "state", message: "State must be a string" });
   }
-  if (data.adminEmail !== undefined && data.adminEmail !== "" && !isValidEmail(data.adminEmail)) {
-    errors.push({ field: "adminEmail", message: "Enter a valid email address" });
+
+  if (
+    data.country !== undefined &&
+    data.country !== "" &&
+    (typeof data.country !== "string" || data.country.trim().length < 2)
+  ) {
+    errors.push({
+      field: "country",
+      message: "Country must be at least 2 characters",
+    });
+  }
+  if (
+    data.adminName !== undefined &&
+    data.adminName !== "" &&
+    !isValidName(data.adminName)
+  ) {
+    errors.push({
+      field: "adminName",
+      message: "Admin name must contain only letters",
+    });
+  }
+  if (
+    data.adminEmail !== undefined &&
+    data.adminEmail !== "" &&
+    !isValidEmail(data.adminEmail)
+  ) {
+    errors.push({
+      field: "adminEmail",
+      message: "Enter a valid email address",
+    });
   }
   return { valid: errors.length === 0, errors };
 };
 
 export const validateUpdateChapter = (data = {}) => {
   const errors = [];
-  if (data.name !== undefined && (typeof data.name !== "string" || data.name.trim().length < 2)) {
-    errors.push({ field: "name", message: "Chapter name must be at least 2 characters" });
+  if (
+    data.name !== undefined &&
+    (typeof data.name !== "string" || data.name.trim().length < 2)
+  ) {
+    errors.push({
+      field: "name",
+      message: "Chapter name must be at least 2 characters",
+    });
   }
   return { valid: errors.length === 0, errors };
 };
@@ -33,7 +88,11 @@ export const validateAssignChapterAdmin = (data = {}) => {
   if (data.name !== undefined && data.name !== "" && !isValidName(data.name)) {
     errors.push({ field: "name", message: "Name must contain only letters" });
   }
-  if (data.email !== undefined && data.email !== "" && !isValidEmail(data.email)) {
+  if (
+    data.email !== undefined &&
+    data.email !== "" &&
+    !isValidEmail(data.email)
+  ) {
     errors.push({ field: "email", message: "Enter a valid email address" });
   }
   return { valid: errors.length === 0, errors };
@@ -41,7 +100,11 @@ export const validateAssignChapterAdmin = (data = {}) => {
 
 export const validateAddUnit = (data = {}) => {
   const errors = [];
-  if (!data.name || typeof data.name !== "string" || data.name.trim().length < 2) {
+  if (
+    !data.name ||
+    typeof data.name !== "string" ||
+    data.name.trim().length < 2
+  ) {
     errors.push({ field: "name", message: "Unit name is required" });
   }
   return { valid: errors.length === 0, errors };

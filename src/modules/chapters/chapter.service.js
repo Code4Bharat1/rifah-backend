@@ -1,12 +1,20 @@
 import { Chapter } from "./chapter.model.js";
 import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
-import { ROLES } from "../../shared/constants/roles.js";
+import { ROLES, isResponsibilityRole } from "../../shared/constants/roles.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
-import { resolveEligibleAdminBusiness, isBusinessVerified } from "../../shared/utils/admin-eligibility.js";
-import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
+import {
+  resolveEligibleAdminBusiness,
+  isBusinessVerified,
+} from "../../shared/utils/admin-eligibility.js";
+import {
+  NotFoundError,
+  ConflictError,
+  ForbiddenError,
+  BadRequestError,
+} from "../../shared/errors/errors.js";
 import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { logger } from "../../infrastructure/logger/logger.js";
 import { memoryCache } from "../../shared/utils/memory-cache.js";
@@ -23,6 +31,11 @@ const normalizeChapterName = (name) =>
     .replace(/\bchapter\b/g, "")
     .replace(/[^a-z0-9]/g, "");
 
+const escapeRegex = (value = "") =>
+  String(value)
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 export const chapterService = {
   listChapters: async (filter = {}, user) => {
     // Scaled for 10k/50k users: In-memory RAM cache for public/general chapter listings (15-min TTL)
@@ -36,7 +49,13 @@ export const chapterService = {
 
     const query = {};
     if (filter.status) query.status = filter.status;
-    
+    if (filter.country) {
+      query.country = new RegExp(`^${escapeRegex(filter.country)}$`, "i");
+    }
+    if (filter.state) {
+      query.state = new RegExp(`^${escapeRegex(filter.state)}$`, "i");
+    }
+
     // RBAC: Chapter Admin & State Admin Scope Enforcement
     if (user && user.role === ROLES.CHAPTER_ADMIN) {
       query._id = user.chapterId || null;
@@ -54,11 +73,14 @@ export const chapterService = {
     const chapters = await Chapter.find(query).sort({ name: 1 });
     const chapterIds = chapters.map((c) => c._id);
     const [chapterAdmins, businessesCounts] = await Promise.all([
-      User.find({ role: ROLES.CHAPTER_ADMIN, chapterId: { $in: chapterIds } }).select("_id name email phone chapterId chapter"),
+      User.find({
+        role: ROLES.CHAPTER_ADMIN,
+        chapterId: { $in: chapterIds },
+      }).select("_id name email phone chapterId chapter"),
       Business.aggregate([
         { $match: { chapterId: { $in: chapterIds } } },
-        { $group: { _id: "$chapterId", count: { $sum: 1 } } }
-      ])
+        { $group: { _id: "$chapterId", count: { $sum: 1 } } },
+      ]),
     ]);
 
     const adminByChapterId = new Map();
@@ -77,7 +99,8 @@ export const chapterService = {
         ...obj,
         chapterAdmin: admin,
         hasAdmin: Boolean(admin),
-        businessesCount: countByChapterId.get(String(ch._id)) || obj.businessesCount || 0,
+        businessesCount:
+          countByChapterId.get(String(ch._id)) || obj.businessesCount || 0,
       };
     });
 
@@ -97,7 +120,11 @@ export const chapterService = {
   },
 
   getChapterDetails: async (id, requester) => {
-    if (requester && requester.role === ROLES.CHAPTER_ADMIN && String(requester.chapterId || "") !== String(id)) {
+    if (
+      requester &&
+      requester.role === ROLES.CHAPTER_ADMIN &&
+      String(requester.chapterId || "") !== String(id)
+    ) {
       throw new NotFoundError("Chapter not found");
     }
 
@@ -109,7 +136,10 @@ export const chapterService = {
     const [businessesCount, customersCount, admin] = await Promise.all([
       Business.countDocuments({ chapterId: chapter._id }),
       User.countDocuments({ chapterId: chapter._id, role: ROLES.CUSTOMER }),
-      User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN }).select("-passwordHash"),
+      User.findOne({
+        chapterId: chapter._id,
+        role: ROLES.CHAPTER_ADMIN,
+      }).select("-passwordHash"),
     ]);
 
     return {
@@ -140,17 +170,20 @@ export const chapterService = {
     }
     const slug = generateSlug(data.name);
     const existing = await Chapter.findOne({
-      $or: [
-        { slug },
-        { name: new RegExp(`^${data.name.trim()}$`, "i") },
-      ],
+      $or: [{ slug }, { name: new RegExp(`^${data.name.trim()}$`, "i") }],
     });
     if (existing) {
       if (!existing.state || existing.state === "Unassigned") {
         // Orphaned chapter from a previously deleted state — safely detach and delete it
         await Promise.all([
-          User.updateMany({ chapterId: existing._id }, { $set: { chapterId: null, chapter: "Unassigned" } }),
-          Business.updateMany({ chapterId: existing._id }, { $set: { chapterId: null, chapter: "Unassigned" } }),
+          User.updateMany(
+            { chapterId: existing._id },
+            { $set: { chapterId: null, chapter: "Unassigned" } },
+          ),
+          Business.updateMany(
+            { chapterId: existing._id },
+            { $set: { chapterId: null, chapter: "Unassigned" } },
+          ),
           Chapter.deleteOne({ _id: existing._id }),
         ]);
       } else {
@@ -163,13 +196,18 @@ export const chapterService = {
     const normalizedName = normalizeChapterName(data.name);
     if (normalizedName) {
       const cityStateQuery = {};
-      if (data.state) cityStateQuery.state = new RegExp(`^${data.state.trim()}$`, "i");
-      if (data.city) cityStateQuery.city = new RegExp(`^${data.city.trim()}$`, "i");
-      const candidates = await Chapter.find(cityStateQuery).select("name city state");
-      const nearDuplicate = candidates.find((c) => normalizeChapterName(c.name) === normalizedName);
+      if (data.state)
+        cityStateQuery.state = new RegExp(`^${data.state.trim()}$`, "i");
+      if (data.city)
+        cityStateQuery.city = new RegExp(`^${data.city.trim()}$`, "i");
+      const candidates =
+        await Chapter.find(cityStateQuery).select("name city state");
+      const nearDuplicate = candidates.find(
+        (c) => normalizeChapterName(c.name) === normalizedName,
+      );
       if (nearDuplicate) {
         throw new ConflictError(
-          `A chapter with an equivalent name already exists for this city/state: "${nearDuplicate.name}". Use a distinct, more specific name to avoid duplicate chapter records.`
+          `A chapter with an equivalent name already exists for this city/state: "${nearDuplicate.name}". Use a distinct, more specific name to avoid duplicate chapter records.`,
         );
       }
     }
@@ -182,6 +220,7 @@ export const chapterService = {
     const chapter = await Chapter.create({
       name: data.name,
       city: data.city,
+      country: data.country || "",
       state: data.state,
       slug,
       status: data.status || "Active",
@@ -196,7 +235,7 @@ export const chapterService = {
           name: data.adminName,
           email: data.adminEmail,
         },
-        user
+        user,
       );
     }
 
@@ -216,8 +255,15 @@ export const chapterService = {
         const userDoc = await User.findById(user.id).select("state");
         requesterState = userDoc?.state;
       }
-      if (requesterState && chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
-        throw new ForbiddenError(`You can only update chapters within ${requesterState}`);
+      if (
+        requesterState &&
+        chapter.state &&
+        chapter.state.trim().toLowerCase() !==
+          requesterState.trim().toLowerCase()
+      ) {
+        throw new ForbiddenError(
+          `You can only update chapters within ${requesterState}`,
+        );
       }
       delete data.state;
     }
@@ -249,15 +295,23 @@ export const chapterService = {
     if (!chapter) {
       throw new NotFoundError("Chapter not found");
     }
-    chapter.units = chapter.units.filter((u) => String(u._id) !== String(unitId));
+    chapter.units = chapter.units.filter(
+      (u) => String(u._id) !== String(unitId),
+    );
     await chapter.save();
     return chapter;
   },
 
   assignAdmin: async (chapterId, { businessId, name, email }, requester) => {
     // RBAC: Central Admin or State Admin can assign Chapter Admins
-    if (!requester || (requester.role !== ROLES.STATE_ADMIN && requester.role !== ROLES.CENTRAL_ADMIN)) {
-      throw new ForbiddenError("Only State Admins within their state or Central Admins can assign Chapter Admins.");
+    if (
+      !requester ||
+      (requester.role !== ROLES.STATE_ADMIN &&
+        requester.role !== ROLES.CENTRAL_ADMIN)
+    ) {
+      throw new ForbiddenError(
+        "Only State Admins within their state or Central Admins can assign Chapter Admins.",
+      );
     }
 
     const chapter = await Chapter.findById(chapterId);
@@ -269,12 +323,16 @@ export const chapterService = {
       // Resolve State Admin's state reliably
       let requesterState = requester.state;
       if (!requesterState && requester.id) {
-        const userDoc = await User.findById(requester.id).select("state chapter chapterId city");
+        const userDoc = await User.findById(requester.id).select(
+          "state chapter chapterId city",
+        );
         requesterState = userDoc?.state;
 
         // If state is not set on userDoc, check user's chapter
         if (!requesterState && userDoc?.chapterId) {
-          const userChapter = await Chapter.findById(userDoc.chapterId).select("state");
+          const userChapter = await Chapter.findById(userDoc.chapterId).select(
+            "state",
+          );
           if (userChapter?.state) {
             requesterState = userChapter.state;
             userDoc.state = requesterState;
@@ -293,12 +351,20 @@ export const chapterService = {
       }
 
       if (!requesterState) {
-        throw new ForbiddenError("Your State Admin account is not associated with any state region.");
+        throw new ForbiddenError(
+          "Your State Admin account is not associated with any state region.",
+        );
       }
 
       // Strict boundary: Only State Admin within their state can assign Chapter Admins
-      if (chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
-        throw new ForbiddenError(`You can only assign Chapter Admins for chapters within ${requesterState}`);
+      if (
+        chapter.state &&
+        chapter.state.trim().toLowerCase() !==
+          requesterState.trim().toLowerCase()
+      ) {
+        throw new ForbiddenError(
+          `You can only assign Chapter Admins for chapters within ${requesterState}`,
+        );
       }
     }
 
@@ -311,13 +377,17 @@ export const chapterService = {
       const nomineeId = business.owner?._id || business.owner;
       nominee = await User.findById(nomineeId);
       if (!nominee && (business.ownerEmail || business.email)) {
-        nominee = await User.findOne({ email: (business.ownerEmail || business.email).toLowerCase().trim() });
+        nominee = await User.findOne({
+          email: (business.ownerEmail || business.email).toLowerCase().trim(),
+        });
       }
       isNewUser = false;
     } else if (email) {
       const cleanEmail = email.toLowerCase().trim();
-      nominee = await User.findOne({ email: cleanEmail }).select("+passwordHash");
-      
+      nominee = await User.findOne({ email: cleanEmail }).select(
+        "+passwordHash",
+      );
+
       let ownedBusiness = null;
       if (nominee) {
         ownedBusiness = await Business.findOne({
@@ -330,39 +400,57 @@ export const chapterService = {
       }
 
       if (!nominee || !ownedBusiness) {
-        throw new BadRequestError("The user must be a registered RIFAH member with an active business profile to be appointed as an Admin.");
+        throw new BadRequestError(
+          "The user must be a registered RIFAH member with an active business profile to be appointed as an Admin.",
+        );
       }
 
       if (!isBusinessVerified(ownedBusiness)) {
         throw new BadRequestError(
           "This business is currently pending verification. It cannot be allocated to a State Admin or Chapter Admin until the verification process is completed.",
           null,
-          ERROR_CODES.BUSINESS_VERIFICATION_PENDING
+          ERROR_CODES.BUSINESS_VERIFICATION_PENDING,
         );
       }
       isNewUser = false;
     } else {
-      throw new BadRequestError("Please select a business owner or provide name and email to appoint a Chapter Admin.");
+      throw new BadRequestError(
+        "Please select a business owner or provide name and email to appoint a Chapter Admin.",
+      );
     }
 
     if (!nominee) {
-      throw new BadRequestError("Could not resolve nominated user account for Chapter Admin appointment.");
+      throw new BadRequestError(
+        "Could not resolve nominated user account for Chapter Admin appointment.",
+      );
     }
 
     // Update name or email if supplied for new/unnamed accounts
-    if (name && name.trim() && (!nominee.name || nominee.name === "Chapter Admin")) {
+    if (
+      name &&
+      name.trim() &&
+      (!nominee.name || nominee.name === "Chapter Admin")
+    ) {
       nominee.name = name.trim();
     }
     if (email && email.trim() && !nominee.email) {
       nominee.email = email.toLowerCase().trim();
     }
 
-    if (nominee.role === ROLES.CENTRAL_ADMIN || nominee.role === ROLES.STATE_ADMIN) {
-      throw new ConflictError("Cannot assign a Central Admin or State Admin as a Chapter Admin");
+    if (
+      isResponsibilityRole(nominee.role) &&
+      nominee.role !== ROLES.CHAPTER_ADMIN
+    ) {
+      throw new ConflictError(
+        "This member already holds another responsibility role. A second non-business responsibility role is not allowed.",
+      );
     }
 
     // Check if an admin already exists for this chapter
-    const oldAdmin = await User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN });
+    const oldAdmin = await User.findOne({
+      chapterId: chapter._id,
+      role: ROLES.CHAPTER_ADMIN,
+    });
     if (oldAdmin && String(oldAdmin._id) !== String(nominee._id)) {
       // Downgrade old admin to their previous role, or customer
       oldAdmin.role = oldAdmin.previousRole || ROLES.CUSTOMER;
@@ -372,9 +460,15 @@ export const chapterService = {
       // Send removal notice
       if (oldAdmin.email) {
         try {
-          await emailService.sendChapterAdminRemovalEmail(oldAdmin.email, oldAdmin.name, chapter.name);
+          await emailService.sendChapterAdminRemovalEmail(
+            oldAdmin.email,
+            oldAdmin.name,
+            chapter.name,
+          );
         } catch (err) {
-          logger.warn(`Failed to send chapter admin removal email to ${oldAdmin.email}: ${err.message}`);
+          logger.warn(
+            `Failed to send chapter admin removal email to ${oldAdmin.email}: ${err.message}`,
+          );
         }
       }
     }
@@ -393,19 +487,37 @@ export const chapterService = {
     // Send email with generated credentials or notification to the assigned chapter admin email
     try {
       if (isNewUser && randomPassword) {
-        await emailService.sendChapterAdminInvite(nominee.email, randomPassword, chapter.name, nominee.name);
-        logger.info(`[CHAPTER ADMIN APPOINTMENT] Password credentials sent to new user ${nominee.email} for chapter ${chapter.name}`);
+        await emailService.sendChapterAdminInvite(
+          nominee.email,
+          randomPassword,
+          chapter.name,
+          nominee.name,
+        );
+        logger.info(
+          `[CHAPTER ADMIN APPOINTMENT] Password credentials sent to new user ${nominee.email} for chapter ${chapter.name}`,
+        );
       } else {
-        await emailService.sendChapterAdminUpgradeEmail(nominee.email, "", chapter.name, nominee.name);
-        logger.info(`[CHAPTER ADMIN APPOINTMENT] Upgrade notification sent to existing user ${nominee.email} for chapter ${chapter.name}`);
+        await emailService.sendChapterAdminUpgradeEmail(
+          nominee.email,
+          "",
+          chapter.name,
+          nominee.name,
+        );
+        logger.info(
+          `[CHAPTER ADMIN APPOINTMENT] Upgrade notification sent to existing user ${nominee.email} for chapter ${chapter.name}`,
+        );
       }
     } catch (mailErr) {
-      logger.error(`[CHAPTER ADMIN APPOINTMENT] Failed to send email to ${nominee.email}:`, mailErr);
+      logger.error(
+        `[CHAPTER ADMIN APPOINTMENT] Failed to send email to ${nominee.email}:`,
+        mailErr,
+      );
     }
 
     // Real-time Copilot Knowledge Base Sync
     try {
-      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      const { syncLiveEntitiesToFile } =
+        await import("../copilot/copilot.sync.js");
       syncLiveEntitiesToFile(true).catch(() => {});
     } catch {}
 
@@ -420,7 +532,7 @@ export const chapterService = {
     const chapter = await Chapter.findByIdAndUpdate(
       id,
       { status },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!chapter) {
@@ -429,7 +541,8 @@ export const chapterService = {
 
     // Real-time Copilot Knowledge Base Sync
     try {
-      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      const { syncLiveEntitiesToFile } =
+        await import("../copilot/copilot.sync.js");
       syncLiveEntitiesToFile(true).catch(() => {});
     } catch {}
 
@@ -437,8 +550,14 @@ export const chapterService = {
   },
 
   removeAdmin: async (chapterId, requester) => {
-    if (!requester || (requester.role !== ROLES.STATE_ADMIN && requester.role !== ROLES.CENTRAL_ADMIN)) {
-      throw new ForbiddenError("Only State Admins or Central Admins can revoke Chapter Admins.");
+    if (
+      !requester ||
+      (requester.role !== ROLES.STATE_ADMIN &&
+        requester.role !== ROLES.CENTRAL_ADMIN)
+    ) {
+      throw new ForbiddenError(
+        "Only State Admins or Central Admins can revoke Chapter Admins.",
+      );
     }
     const chapter = await Chapter.findById(chapterId);
     if (!chapter) {
@@ -450,14 +569,26 @@ export const chapterService = {
         const userDoc = await User.findById(requester.id).select("state");
         requesterState = userDoc?.state;
       }
-      if (requesterState && chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
-        throw new ForbiddenError(`You can only manage chapters within ${requesterState}`);
+      if (
+        requesterState &&
+        chapter.state &&
+        chapter.state.trim().toLowerCase() !==
+          requesterState.trim().toLowerCase()
+      ) {
+        throw new ForbiddenError(
+          `You can only manage chapters within ${requesterState}`,
+        );
       }
     }
 
-    const admin = await User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN });
+    const admin = await User.findOne({
+      chapterId: chapter._id,
+      role: ROLES.CHAPTER_ADMIN,
+    });
     if (!admin) {
-      throw new NotFoundError(`No active Chapter Admin found for ${chapter.name}`);
+      throw new NotFoundError(
+        `No active Chapter Admin found for ${chapter.name}`,
+      );
     }
 
     admin.role = admin.previousRole || ROLES.CUSTOMER;
@@ -467,12 +598,17 @@ export const chapterService = {
     await admin.save();
 
     if (admin.email) {
-      await emailService.sendChapterAdminRemovalEmail(admin.email, admin.name, chapter.name);
+      await emailService.sendChapterAdminRemovalEmail(
+        admin.email,
+        admin.name,
+        chapter.name,
+      );
     }
 
     // Real-time Copilot Knowledge Base Sync
     try {
-      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      const { syncLiveEntitiesToFile } =
+        await import("../copilot/copilot.sync.js");
       syncLiveEntitiesToFile(true).catch(() => {});
     } catch {}
 
@@ -480,8 +616,14 @@ export const chapterService = {
   },
 
   deleteChapter: async (chapterId, requester) => {
-    if (!requester || (requester.role !== ROLES.STATE_ADMIN && requester.role !== ROLES.CENTRAL_ADMIN)) {
-      throw new ForbiddenError("Only State Admins or Central Admins can delete chapters.");
+    if (
+      !requester ||
+      (requester.role !== ROLES.STATE_ADMIN &&
+        requester.role !== ROLES.CENTRAL_ADMIN)
+    ) {
+      throw new ForbiddenError(
+        "Only State Admins or Central Admins can delete chapters.",
+      );
     }
     const chapter = await Chapter.findById(chapterId);
     if (!chapter) {
@@ -493,13 +635,23 @@ export const chapterService = {
         const userDoc = await User.findById(requester.id).select("state");
         requesterState = userDoc?.state;
       }
-      if (requesterState && chapter.state && chapter.state.trim().toLowerCase() !== requesterState.trim().toLowerCase()) {
-        throw new ForbiddenError(`You can only manage chapters within ${requesterState}`);
+      if (
+        requesterState &&
+        chapter.state &&
+        chapter.state.trim().toLowerCase() !==
+          requesterState.trim().toLowerCase()
+      ) {
+        throw new ForbiddenError(
+          `You can only manage chapters within ${requesterState}`,
+        );
       }
     }
 
     // Demote any active Chapter Admin
-    const admin = await User.findOne({ chapterId: chapter._id, role: ROLES.CHAPTER_ADMIN });
+    const admin = await User.findOne({
+      chapterId: chapter._id,
+      role: ROLES.CHAPTER_ADMIN,
+    });
     if (admin) {
       admin.role = admin.previousRole || ROLES.CUSTOMER;
       admin.previousRole = "";
@@ -507,23 +659,37 @@ export const chapterService = {
       admin.chapter = "";
       await admin.save();
       if (admin.email) {
-        await emailService.sendChapterAdminRemovalEmail(admin.email, admin.name, chapter.name);
+        await emailService.sendChapterAdminRemovalEmail(
+          admin.email,
+          admin.name,
+          chapter.name,
+        );
       }
     }
 
     // Safely detach users and businesses to 'Unassigned'
     await Promise.all([
-      User.updateMany({ chapterId: chapter._id }, { $set: { chapterId: null, chapter: "Unassigned" } }),
-      Business.updateMany({ chapterId: chapter._id }, { $set: { chapterId: null, chapter: "Unassigned" } }),
+      User.updateMany(
+        { chapterId: chapter._id },
+        { $set: { chapterId: null, chapter: "Unassigned" } },
+      ),
+      Business.updateMany(
+        { chapterId: chapter._id },
+        { $set: { chapterId: null, chapter: "Unassigned" } },
+      ),
       Chapter.findByIdAndDelete(chapter._id),
     ]);
 
     // Real-time Copilot Knowledge Base Sync
     try {
-      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      const { syncLiveEntitiesToFile } =
+        await import("../copilot/copilot.sync.js");
       syncLiveEntitiesToFile(true).catch(() => {});
     } catch {}
 
-    return { success: true, message: `Chapter ${chapter.name} deleted successfully` };
+    return {
+      success: true,
+      message: `Chapter ${chapter.name} deleted successfully`,
+    };
   },
 };
