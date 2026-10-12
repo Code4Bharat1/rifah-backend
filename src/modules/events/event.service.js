@@ -240,6 +240,79 @@ const buildManageScopeQuery = (id, user) => {
   return { _id: id, $or: conditions };
 };
 
+/**
+ * Resolves an Event and attendee registration by ticket ID or registration _id,
+ * with backward-compatibility for legacy fallback QR codes (RIFAH-EVT-YYYY-XXXX).
+ */
+const resolveEventAndRegistration = async (ticketId, populateFields = "name email phone company businessName chapter state profilePhoto") => {
+  if (!ticketId || typeof ticketId !== "string") {
+    return { event: null, reg: null, cleanTicketId: "" };
+  }
+
+  let cleanTicketId = ticketId.trim();
+  // Strip URL prefix if scanner sent full URL
+  if (cleanTicketId.includes("/verify/ticket/")) {
+    const parts = cleanTicketId.split("/verify/ticket/");
+    if (parts.length > 1) {
+      cleanTicketId = parts[1].split("?")[0].replace(/\//g, "").trim();
+    }
+  }
+
+  // 1. Direct match by ticketId or registration _id
+  let query = Event.findOne({
+    $or: [
+      { "registeredUsers.ticketId": { $regex: new RegExp(`^${cleanTicketId}$`, "i") } },
+      ...(cleanTicketId.match(/^[0-9a-fA-F]{24}$/) ? [{ "registeredUsers._id": cleanTicketId }] : []),
+    ],
+  });
+
+  if (populateFields) {
+    query = query.populate("registeredUsers.user", populateFields);
+  }
+
+  let event = await query;
+  let reg = event
+    ? (event.registeredUsers || []).find(
+        (r) =>
+          (r.ticketId && r.ticketId.toLowerCase() === cleanTicketId.toLowerCase()) ||
+          String(r._id) === cleanTicketId
+      )
+    : null;
+
+  // 2. Backward compatibility for legacy fallback QR codes: RIFAH-EVT-YYYY-XXXX (where XXXX is last 4 chars of event _id)
+  if (!reg) {
+    const legacyMatch = cleanTicketId.match(/^RIFAH-EVT-\d{4}-([0-9a-fA-F]{4})$/i);
+    if (legacyMatch) {
+      const eventSuffix = legacyMatch[1].toLowerCase();
+      let candidateQuery = Event.find({}).sort({ createdAt: -1 });
+      if (populateFields) {
+        candidateQuery = candidateQuery.populate("registeredUsers.user", populateFields);
+      }
+      const candidateEvents = await candidateQuery;
+      const matchedEvent = candidateEvents.find((e) =>
+        String(e._id).toLowerCase().endsWith(eventSuffix)
+      );
+
+      if (matchedEvent && matchedEvent.registeredUsers && matchedEvent.registeredUsers.length > 0) {
+        event = matchedEvent;
+        // Prefer un-checked-in registration, or the most recent registration
+        const uncheckedReg = [...matchedEvent.registeredUsers]
+          .reverse()
+          .find((r) => !r.checkedIn && r.attendanceStatus !== "Present");
+
+        reg = uncheckedReg || matchedEvent.registeredUsers[matchedEvent.registeredUsers.length - 1];
+
+        if (reg) {
+          reg.ticketId = cleanTicketId;
+          await matchedEvent.save();
+        }
+      }
+    }
+  }
+
+  return { event, reg, cleanTicketId };
+};
+
 export const eventService = {
   /**
    * Browse events — creator-scope RBAC:
@@ -367,7 +440,7 @@ export const eventService = {
     const isObjectId = identifier.match(/^[0-9a-fA-F]{24}$/);
     const query = isObjectId ? { _id: identifier } : { slug: identifier };
 
-    const event = await Event.findOne(query);
+    const event = await Event.findOne(query).populate("registeredUsers.user", "name email phone businessName company");
     if (!event) throw new NotFoundError("Event not found");
 
     // ── Access check ────────────────────────────────────────────────────────
@@ -734,6 +807,7 @@ export const eventService = {
             transactionId: paymentData?.transactionId || null,
             chapter: updatedEvent.chapter || "",
             meetingLink: updatedEvent.meetingLink || "",
+            isGuest: attendeeRole === "guest" || user?.role === "guest",
           });
         }
 
@@ -764,7 +838,16 @@ export const eventService = {
       }
     });
 
-    return updatedEvent;
+    const eventObj = updatedEvent.toObject ? updatedEvent.toObject() : updatedEvent;
+    return {
+      ...eventObj,
+      ticket: {
+        ticketId,
+        ticketType,
+        verificationToken,
+        verificationUrl,
+      },
+    };
   },
 
   /**
@@ -1770,31 +1853,12 @@ export const eventService = {
       };
     }
 
-    const cleanTicketId = ticketId.trim();
-
-    // Find the event containing this ticketId or registration _id
-    const event = await Event.findOne({
-      $or: [
-        { "registeredUsers.ticketId": { $regex: new RegExp(`^${cleanTicketId}$`, "i") } },
-        ...(cleanTicketId.match(/^[0-9a-fA-F]{24}$/) ? [{ "registeredUsers._id": cleanTicketId }] : []),
-      ],
-    }).populate("registeredUsers.user", "name email phone company businessName chapter state profilePhoto");
-
-    if (!event) {
-      return {
-        verified: false,
-        error: "TICKET_NOT_FOUND",
-        message: "This QR code does not correspond to a valid RIFAH event ticket.",
-      };
-    }
-
-    const reg = (event.registeredUsers || []).find(
-      (r) =>
-        (r.ticketId && r.ticketId.toLowerCase() === cleanTicketId.toLowerCase()) ||
-        String(r._id) === cleanTicketId
+    const { event, reg, cleanTicketId } = await resolveEventAndRegistration(
+      ticketId,
+      "name email phone company businessName chapter state profilePhoto"
     );
 
-    if (!reg) {
+    if (!event || !reg) {
       return {
         verified: false,
         error: "TICKET_NOT_FOUND",
@@ -1914,27 +1978,13 @@ export const eventService = {
       throw new BadRequestError("Ticket ID is required.");
     }
 
-    const cleanTicketId = ticketId.trim();
-
-    const event = await Event.findOne({
-      $or: [
-        { "registeredUsers.ticketId": { $regex: new RegExp(`^${cleanTicketId}$`, "i") } },
-        ...(cleanTicketId.match(/^[0-9a-fA-F]{24}$/) ? [{ "registeredUsers._id": cleanTicketId }] : []),
-      ],
-    }).populate("registeredUsers.user", "name email phone company businessName chapter state");
-
-    if (!event) {
-      throw new NotFoundError("Ticket not found.");
-    }
-
-    const reg = (event.registeredUsers || []).find(
-      (r) =>
-        (r.ticketId && r.ticketId.toLowerCase() === cleanTicketId.toLowerCase()) ||
-        String(r._id) === cleanTicketId
+    const { event, reg, cleanTicketId } = await resolveEventAndRegistration(
+      ticketId,
+      "name email phone company businessName chapter state"
     );
 
-    if (!reg) {
-      throw new NotFoundError("Registration not found for this ticket.");
+    if (!event || !reg) {
+      throw new NotFoundError("Ticket not found.");
     }
 
     if (reg.ticketStatus === "Cancelled" || reg.status === "Cancelled") {
@@ -2015,24 +2065,10 @@ export const eventService = {
    */
   updateTicketStatus: async (ticketId, newStatus, reason = "", adminUserId = null) => {
     if (!ticketId) throw new BadRequestError("Ticket ID is required.");
-    const cleanTicketId = ticketId.trim();
 
-    const event = await Event.findOne({
-      $or: [
-        { "registeredUsers.ticketId": { $regex: new RegExp(`^${cleanTicketId}$`, "i") } },
-        ...(cleanTicketId.match(/^[0-9a-fA-F]{24}$/) ? [{ "registeredUsers._id": cleanTicketId }] : []),
-      ],
-    });
+    const { event, reg } = await resolveEventAndRegistration(ticketId, "");
 
-    if (!event) throw new NotFoundError("Ticket not found.");
-
-    const reg = (event.registeredUsers || []).find(
-      (r) =>
-        (r.ticketId && r.ticketId.toLowerCase() === cleanTicketId.toLowerCase()) ||
-        String(r._id) === cleanTicketId
-    );
-
-    if (!reg) throw new NotFoundError("Registration not found for this ticket.");
+    if (!event || !reg) throw new NotFoundError("Ticket not found.");
 
     reg.ticketStatus = newStatus;
     if (newStatus === "Cancelled") {

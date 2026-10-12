@@ -1245,15 +1245,92 @@ RIFAH Chamber of Commerce & Industry
   /**
    * Sends Event Registration / RSVP confirmation email
    */
-  sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType, ticketId, verificationUrl, isPaid, ticketPrice, paymentId, transactionId, invoiceNumber, chapter, meetingLink }) => {
-    const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
+  sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType, ticketId, verificationUrl, isPaid, ticketPrice, paymentId, transactionId, invoiceNumber, chapter, meetingLink, isGuest = false }) => {
+    let logoPath = "c:/nexcore/Rifah/rifah-frontend/public/rifah1-logo.png";
+    if (!fs.existsSync(logoPath)) {
+      logoPath = "c:/nexcore/Rifah/rifah-frontend/public/rifah-logo.png";
+    }
     const hasLogo = fs.existsSync(logoPath);
-    const subject = isPaid
-      ? `🎟️ Payment & Registration Confirmed: ${eventTitle}`
-      : `🎟️ Event Registration Confirmed: ${eventTitle}`;
+    const attachments = hasLogo ? [{ filename: "rifah-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
 
     const frontendBaseUrl = env.FRONTEND_URL || "https://rifah.nexcorealliance.com";
     const passUrl = verificationUrl || (ticketId ? `${frontendBaseUrl}/verify/ticket/${ticketId}` : `${frontendBaseUrl}/events`);
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(passUrl)}`;
+
+    // GUEST CONFIRMATION EMAIL (Clean, QR Code pass, strict single-entry confidentiality warning)
+    if (isGuest) {
+      const guestSubject = `🎟️ Entry Pass Confirmed: ${eventTitle}`;
+      const guestHtml = `
+      <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
+        <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
+        <div style="padding: 32px 24px; text-align: center;">
+          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 16px;" />` : `<h1 style="color: #0b192c; font-size: 20px; margin: 0 0 16px 0;">RIFAH CHAMBER</h1>`}
+          
+          <div style="display: inline-block; background-color: #dcfce7; color: #166534; font-size: 11px; font-weight: 700; padding: 4px 14px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            ✓ REGISTRATION CONFIRMED
+          </div>
+          
+          <h2 style="color: #0f172a; font-size: 20px; font-weight: 800; margin: 0 0 8px 0; line-height: 1.3;">${eventTitle}</h2>
+          <p style="color: #475569; font-size: 14px; margin: 0 0 20px 0;">Dear <strong>${userName || "Guest"}</strong>, your registration has been successfully confirmed.</p>
+
+          <!-- QR Pass Box -->
+          <div style="background-color: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 14px; padding: 22px; margin: 0 auto 20px auto; max-width: 380px;">
+            <p style="margin: 0 0 12px 0; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 1px;">Official Entry QR Pass</p>
+            
+            <div style="background-color: #ffffff; padding: 12px; border-radius: 12px; display: inline-block; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <img src="${qrCodeUrl}" alt="Event Entry QR Code" style="width: 180px; height: 180px; display: block;" />
+            </div>
+
+            ${ticketId ? `
+            <div style="margin-top: 14px;">
+              <span style="font-size: 10px; color: #64748b; text-transform: uppercase; font-weight: 600;">Ticket ID</span><br/>
+              <span style="font-family: monospace; font-size: 15px; font-weight: 800; color: #0284c7; letter-spacing: 1px;">${ticketId}</span>
+            </div>` : ""}
+
+            <p style="margin: 10px 0 0 0; font-size: 11px; color: #64748b;">Please present this QR code at the entrance gate for check-in</p>
+          </div>
+
+          <!-- Confidential Warning -->
+          <div style="background-color: #fef2f2; border: 1.5px solid #f87171; border-radius: 10px; padding: 14px 18px; margin: 0 auto 20px auto; max-width: 440px;">
+            <p style="margin: 0; color: #dc2626; font-size: 13px; font-weight: 800; letter-spacing: 0.3px;">
+              ⚠️ CONFIDENTIAL: DO NOT SHARE WITH ANYONE
+            </p>
+            <p style="margin: 6px 0 0 0; color: #991b1b; font-size: 12px; line-height: 1.4;">
+              This QR code is uniquely registered to your name and valid for single entry only. Please do not forward or share this ticket with anyone.
+            </p>
+          </div>
+
+          <!-- Event Details -->
+          <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; text-align: left; margin: 0 auto 20px auto; max-width: 440px; font-size: 13px; color: #334155;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 5px 0; color: #64748b; font-weight: 600; width: 32%;">Date & Time:</td>
+                <td style="padding: 5px 0; font-weight: 700; color: #0f172a; text-align: right;">${eventDate || "Upcoming Event"}</td>
+              </tr>
+              <tr>
+                <td style="padding: 5px 0; color: #64748b; font-weight: 600;">Venue:</td>
+                <td style="padding: 5px 0; color: #0f172a; text-align: right;">${location || "Chamber Main Hall"}</td>
+              </tr>
+              ${chapter ? `
+              <tr>
+                <td style="padding: 5px 0; color: #64748b; font-weight: 600;">Chapter:</td>
+                <td style="padding: 5px 0; color: #0f172a; text-align: right;">${chapter}</td>
+              </tr>` : ""}
+            </table>
+          </div>
+
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px 0;" />
+          <p style="color: #94a3b8; font-size: 11px; margin: 0;">RIFAH Chamber of Commerce & Industry · Events Desk</p>
+        </div>
+      </div>
+      `;
+
+      return emailService.sendEmail({ to: email, subject: guestSubject, html: guestHtml, attachments });
+    }
+
+    const subject = isPaid
+      ? `🎟️ Payment & Registration Confirmed: ${eventTitle}`
+      : `🎟️ Event Registration Confirmed: ${eventTitle}`;
 
     const paymentSection = isPaid ? `
           <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; margin: 20px 0;">
@@ -1308,6 +1385,23 @@ RIFAH Chamber of Commerce & Industry
             </table>
           </div>
 
+          <!-- Official Entry QR Pass Card -->
+          <div style="background-color: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 14px; padding: 20px; margin: 20px 0; text-align: center;">
+            <p style="margin: 0 0 10px 0; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 1px;">Official Entry QR Pass</p>
+            <div style="background-color: #ffffff; padding: 10px; border-radius: 12px; display: inline-block; box-shadow: 0 2px 6px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
+              <img src="${qrCodeUrl}" alt="Event Entry QR Code" style="width: 170px; height: 170px; display: block; margin: 0 auto;" />
+            </div>
+            ${ticketId ? `<div style="margin-top: 10px;"><span style="font-family: monospace; font-size: 14px; font-weight: 800; color: #0284c7;">${ticketId}</span></div>` : ""}
+            <p style="margin: 8px 0 0 0; font-size: 11px; color: #64748b;">Scan this code at the gate on arrival</p>
+          </div>
+
+          <!-- Confidential Warning -->
+          <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 12px 16px; margin: 16px 0; text-align: center;">
+            <p style="margin: 0; color: #dc2626; font-size: 12px; font-weight: 700;">
+              ⚠️ Confidential: Do not share with anyone (Single Entry Only)
+            </p>
+          </div>
+
           ${paymentSection}
           
           ${meetingLink ? `
@@ -1327,7 +1421,6 @@ RIFAH Chamber of Commerce & Industry
       </div>
     `;
 
-    const attachments = hasLogo ? [{ filename: "rifah1-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
     return emailService.sendEmail({ to: email, subject, html, attachments });
   },
 
