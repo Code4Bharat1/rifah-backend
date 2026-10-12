@@ -10,6 +10,7 @@ import { announcementService } from "./modules/announcements/announcement.servic
 import { membershipService } from "./modules/memberships/membership.service.js";
 import { seedInitialCategories } from "./modules/categories/categories.data.js";
 import { Chapter } from "./modules/chapters/chapter.model.js";
+import { migrateExistingFormats } from "./shared/utils/migrate-formats.js";
 import dns from "dns";
 import cluster from "node:cluster";
 import os from "node:os";
@@ -125,6 +126,9 @@ const startServer = async () => {
 
     // 1.2 Ensure test chapters across multiple states exist
     await ensureChapters();
+
+    // 1.3 Ensure businesses and payments use latest RIFAH-{CODE}-0001 and RCCI/{FY}/0001 formats
+    await migrateExistingFormats();
 
     // BUG-057: demo/fixture data for the Anniversary feature — not required for the
     // server to function, so (like ensureChapters above) a failure here must only be

@@ -10,6 +10,7 @@ import { Plan } from "../memberships/plan.model.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { generateReferenceId, generateSlug } from "../../shared/utils/generate-id.js";
+import { getNextInvoiceNumber } from "../../shared/utils/sequence-generator.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
@@ -70,10 +71,7 @@ export const paymentService = {
    * Create Razorpay Order
    */
   createRazorpayOrder: async ({ planId, amount, currency = "INR", eventId, courseId, itemType }, user) => {
-    let invoiceNumber = generateReferenceId("INV", 4);
-    while (await Payment.findOne({ invoiceNumber })) {
-      invoiceNumber = generateReferenceId("INV", 4);
-    }
+    let invoiceNumber = await getNextInvoiceNumber({ chapter: user?.chapter });
 
     const selectedCurrency = (currency || "INR").toUpperCase();
     const isInternational = selectedCurrency === "USD";
@@ -181,11 +179,6 @@ export const paymentService = {
       throw new BadRequestError("Invalid payment signature");
     }
 
-    let invoiceNumber = generateReferenceId("INV", 4);
-    while (await Payment.findOne({ invoiceNumber })) {
-      invoiceNumber = generateReferenceId("INV", 4);
-    }
-
     const userDoc = await User.findById(user.id);
     if (!userDoc) {
       throw new NotFoundError("User not found");
@@ -203,6 +196,13 @@ export const paymentService = {
       if (businessDoc) {
         finalBusinessId = businessDoc._id;
       }
+    }
+
+    let invoiceNumber = (payload.invoiceNumber || "").trim().toUpperCase();
+    if (!invoiceNumber || (await Payment.findOne({ invoiceNumber }))) {
+      invoiceNumber = await getNextInvoiceNumber({
+        chapter: businessDoc?.chapter || userDoc?.chapter,
+      });
     }
 
     const isMembership = itemType === "Membership" || Boolean(planId);
@@ -607,11 +607,6 @@ export const paymentService = {
    * Process / Record a payment transaction
    */
   createPayment: async (data, user) => {
-    let invoiceNumber = generateReferenceId("INV", 4);
-    while (await Payment.findOne({ invoiceNumber })) {
-      invoiceNumber = generateReferenceId("INV", 4);
-    }
-
     const userDoc = await User.findById(user.id);
     let finalBusinessId = data.business;
     let businessDoc = null;
@@ -622,6 +617,13 @@ export const paymentService = {
     if (!businessDoc) {
       businessDoc = await Business.findOne({ owner: user.id });
       if (businessDoc) finalBusinessId = businessDoc._id;
+    }
+
+    let invoiceNumber = (data.invoiceNumber || "").trim().toUpperCase();
+    if (!invoiceNumber || (await Payment.findOne({ invoiceNumber }))) {
+      invoiceNumber = await getNextInvoiceNumber({
+        chapter: data.chapter || data.collectingChapter || businessDoc?.chapter || userDoc?.chapter,
+      });
     }
 
     const isMembership = data.itemType === "Membership" || Boolean(data.planId);
@@ -1072,21 +1074,7 @@ export const paymentService = {
    * Create a custom invoice issued by Central Admin
    */
   createAdminInvoice: async (data, adminUser) => {
-    // 1. Generate or validate invoiceNumber
-    let invoiceNumber = (data.invoiceNumber || "").trim().toUpperCase();
-    if (!invoiceNumber) {
-      invoiceNumber = generateReferenceId("INV", 4);
-      while (await Payment.findOne({ invoiceNumber })) {
-        invoiceNumber = generateReferenceId("INV", 4);
-      }
-    } else {
-      const existing = await Payment.findOne({ invoiceNumber });
-      if (existing) {
-        throw new BadRequestError(`Invoice number #${invoiceNumber} is already taken`);
-      }
-    }
-
-    // 2. Identify / resolve payer & business
+    // 1. Identify / resolve payer & business
     let payerId = null;
     let businessId = null;
     let payerDoc = null;
@@ -1129,6 +1117,19 @@ export const paymentService = {
     if (!payerId) {
       // Default to creating admin user to fulfill schema required check
       payerId = adminUser.id || adminUser._id;
+    }
+
+    // 2. Generate or validate invoiceNumber
+    let invoiceNumber = (data.invoiceNumber || "").trim().toUpperCase();
+    if (!invoiceNumber) {
+      invoiceNumber = await getNextInvoiceNumber({
+        chapter: data.chapter || businessDoc?.chapter || payerDoc?.chapter,
+      });
+    } else {
+      const existing = await Payment.findOne({ invoiceNumber });
+      if (existing) {
+        throw new BadRequestError(`Invoice number #${invoiceNumber} is already taken`);
+      }
     }
 
     // 3. Amounts & Tax Calculations

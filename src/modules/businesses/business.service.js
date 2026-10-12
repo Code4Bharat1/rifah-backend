@@ -8,6 +8,7 @@ import { NotFoundError, ForbiddenError, ConflictError } from "../../shared/error
 import { ROLES } from "../../shared/constants/roles.js";
 import { Payment } from "../payments/payment.model.js";
 import { generateReferenceId } from "../../shared/utils/generate-id.js";
+import { getNextInvoiceNumber, getNextMembershipId, getChapterCode } from "../../shared/utils/sequence-generator.js";
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 import { getChapterFilter, resolveChapterIdByName, resolveChapterIdForLocation } from "../../shared/utils/chapter-scope.js";
 import { User } from "../users/user.model.js";
@@ -613,7 +614,8 @@ export const businessService = {
 
       // Ensure membership ID
       if (!doc.membershipId && doc._id) {
-        doc.membershipId = `RIFAH-MEM-${doc._id.toString().slice(-6).toUpperCase()}`;
+        const code = getChapterCode(doc.chapter);
+        doc.membershipId = `RIFAH-${code}-${doc._id.toString().slice(-4).toUpperCase()}`;
         Business.updateOne(
           { _id: doc._id },
           { $set: { membershipId: doc.membershipId } }
@@ -868,8 +870,14 @@ export const businessService = {
       slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
+    let membershipId = data.membershipId || sanitizedData.membershipId;
+    if (!membershipId) {
+      membershipId = await getNextMembershipId({ chapter: sanitizedData.chapter });
+    }
+
     const createdBusiness = await Business.create({
       ...sanitizedData,
+      membershipId,
       slug,
       owner: ownerId,
       status: initialStatus,
@@ -1118,8 +1126,14 @@ export const businessService = {
     const categories = await ensureCategoriesExist(data.industry, data.subCategory);
     const cleanRole = (data.roleInBusiness || data.designation || "Founder / Owner").trim();
 
+    let membershipId = data.membershipId;
+    if (!membershipId) {
+      membershipId = await getNextMembershipId({ chapter: chapter || finalChapter });
+    }
+
     const business = await Business.create({
       name: data.businessName.trim(),
+      membershipId,
       slug,
       owner: user._id,
       industry: data.industry || "General",
@@ -1157,17 +1171,16 @@ export const businessService = {
     // If it's a paid tier, create a cash payment record
     const amountCollected = parseFloat(data.amountCollected) || 0;
     if (amountCollected > 0 || (data.membershipTier && data.membershipTier !== "Free")) {
-      let invoiceNumber = generateReferenceId("INV", 4);
-      while (await Payment.findOne({ invoiceNumber })) {
-        invoiceNumber = generateReferenceId("INV", 4);
-      }
+      const collectingChapter = (data.collectingChapter || data.chapter || finalChapter || business.chapter || "").trim();
+      const collectingState = (data.collectingState || data.state || business.state || "").trim();
+
+      let invoiceNumber = await getNextInvoiceNumber({
+        chapter: collectingChapter || business.chapter,
+      });
 
       const rawPlan = (data.planName || data.membershipTier || business.membership || "Membership").trim();
       const cleanPlan = rawPlan.replace(/\bplan\b/gi, "").trim();
       const planTitle = cleanPlan ? `${cleanPlan} Plan` : "Membership Plan";
-
-      const collectingChapter = (data.collectingChapter || data.chapter || finalChapter || business.chapter || "").trim();
-      const collectingState = (data.collectingState || data.state || business.state || "").trim();
 
       await Payment.create({
         invoiceNumber,

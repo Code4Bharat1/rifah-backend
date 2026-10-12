@@ -6,6 +6,7 @@ import { generateInvoicePdfBuffer } from "../../shared/utils/pdf-generator.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
 import { revenueShareService } from "../revenue-sharing/revenueShare.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
+import { getChapterCode } from "../../shared/utils/sequence-generator.js";
 
 export const invoiceService = {
   /**
@@ -22,8 +23,12 @@ export const invoiceService = {
     }
 
     const cleanInvoiceNumber = invoiceNumber.trim();
+    const escaped = cleanInvoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const payment = await Payment.findOne({
-      invoiceNumber: { $regex: new RegExp(`^${cleanInvoiceNumber}$`, "i") },
+      $or: [
+        { invoiceNumber: cleanInvoiceNumber },
+        { invoiceNumber: { $regex: new RegExp(`^${escaped}$`, "i") } },
+      ],
     })
       .populate("payer", "name email phone chapter state membershipId subscriberTier businessName")
       .populate("business", "name slug chapter state city membershipId email contactPerson");
@@ -91,10 +96,12 @@ export const invoiceService = {
       payment.payer?.name ||
       "RIFAH Member";
 
+    const chapterName = payment.chapter || payment.business?.chapter || payment.payer?.chapter || "Chamber";
+    const chapterCode = getChapterCode(chapterName);
     const membershipId =
       payment.business?.membershipId ||
       payment.payer?.membershipId ||
-      `RIFAH-MBR-${String(payment.payer?._id || payment._id).slice(-4).toUpperCase()}`;
+      `RIFAH-${chapterCode}-${String(payment.payer?._id || payment._id).slice(-4).toUpperCase()}`;
 
     // Calculate Validity Window
     const paymentDateObj = new Date(payment.paidAt || payment.createdAt || Date.now());
@@ -149,8 +156,12 @@ export const invoiceService = {
    */
   getInvoicePdf: async (invoiceNumber, token = null) => {
     const cleanInvoiceNumber = invoiceNumber.trim();
+    const escaped = cleanInvoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const payment = await Payment.findOne({
-      invoiceNumber: { $regex: new RegExp(`^${cleanInvoiceNumber}$`, "i") },
+      $or: [
+        { invoiceNumber: cleanInvoiceNumber },
+        { invoiceNumber: { $regex: new RegExp(`^${escaped}$`, "i") } },
+      ],
     })
       .populate("payer", "name email phone chapter state membershipId subscriberTier businessName")
       .populate("business", "name slug chapter state city membershipId email contactPerson");
@@ -179,9 +190,10 @@ export const invoiceService = {
       paymentMethod: payment.method || "Online Razorpay",
     });
 
+    const safeFilenameNum = (payment.invoiceNumber || "document").replace(/[\/\\?%*:|"<>]/g, "_");
     return {
       buffer: pdfBuffer,
-      filename: `RIFAH_Invoice_${payment.invoiceNumber}.pdf`,
+      filename: `RIFAH_Invoice_${safeFilenameNum}.pdf`,
     };
   },
 
@@ -189,8 +201,13 @@ export const invoiceService = {
    * Admin Revocation of an Invoice
    */
   revokeInvoice: async (invoiceNumber, reason, revokedByUserId) => {
+    const cleanInvoiceNumber = (invoiceNumber || "").trim();
+    const escaped = cleanInvoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const payment = await Payment.findOne({
-      invoiceNumber: { $regex: new RegExp(`^${invoiceNumber.trim()}$`, "i") },
+      $or: [
+        { invoiceNumber: cleanInvoiceNumber },
+        { invoiceNumber: { $regex: new RegExp(`^${escaped}$`, "i") } },
+      ],
     });
 
     if (!payment) {

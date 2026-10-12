@@ -628,12 +628,9 @@ export const eventService = {
       if (paymentData && userInstallments.length > 0) {
         const inst1 = userInstallments[0];
         const { Payment } = await import("../payments/payment.model.js");
-        const { generateReferenceId } = await import("../../shared/utils/generate-id.js");
+        const { getNextInvoiceNumber } = await import("../../shared/utils/sequence-generator.js");
 
-        let invoiceNumber = generateReferenceId("INV", 4);
-        while (await Payment.findOne({ invoiceNumber })) {
-          invoiceNumber = generateReferenceId("INV", 4);
-        }
+        const invoiceNumber = await getNextInvoiceNumber({ chapter: event.chapter });
 
         const paymentDoc = await Payment.create({
           invoiceNumber,
@@ -2049,12 +2046,9 @@ export const eventService = {
     const totalAmount = Math.round((baseAmount + gstAmount + tcsAmount) * 100) / 100;
 
     const { Payment } = await import("../payments/payment.model.js");
-    const { generateReferenceId } = await import("../../shared/utils/generate-id.js");
+    const { getNextInvoiceNumber } = await import("../../shared/utils/sequence-generator.js");
 
-    let invoiceNumber = generateReferenceId("INV", 4);
-    while (await Payment.findOne({ invoiceNumber })) {
-      invoiceNumber = generateReferenceId("INV", 4);
-    }
+    const invoiceNumber = await getNextInvoiceNumber({ chapter: event.chapter });
 
     const attendeeUser = await User.findById(userId);
 

@@ -447,9 +447,16 @@ businessSchema.index({ state: 1, status: 1 });
 businessSchema.index({ "gstGroupInvites.token": 1 });
 businessSchema.index({ "gstGroupMembers.user": 1 });
 
-businessSchema.pre("save", function (next) {
-  if (!this.membershipId && this._id) {
-    this.membershipId = `RIFAH-MEM-${this._id.toString().slice(-6).toUpperCase()}`;
+businessSchema.pre("save", async function (next) {
+  if (!this.membershipId) {
+    try {
+      const { getNextMembershipId } = await import("../../shared/utils/sequence-generator.js");
+      this.membershipId = await getNextMembershipId({ chapter: this.chapter });
+    } catch {
+      const { getChapterCode } = await import("../../shared/utils/sequence-generator.js");
+      const code = getChapterCode(this.chapter);
+      this.membershipId = `RIFAH-${code}-${this._id ? this._id.toString().slice(-4).toUpperCase() : "0001"}`;
+    }
   }
   if (!this.lastActionDate) {
     this.lastActionDate = this.updatedAt || new Date();

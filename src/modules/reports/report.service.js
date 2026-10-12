@@ -9,6 +9,7 @@ import { Catalogue } from "../catalogue/catalogue.model.js";
 import { Review } from "../reviews/review.model.js";
 import { Event } from "../events/event.model.js";
 import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
+import { getChapterCode } from "../../shared/utils/sequence-generator.js";
 
 export const reportService = {
   /**
@@ -417,7 +418,7 @@ export const reportService = {
 
     const rows = businesses.map((b, i) => [
       i + 1,
-      b.membershipId || (b._id ? `RIFAH-MEM-${b._id.toString().slice(-6).toUpperCase()}` : ""),
+      b.membershipId || (b._id ? `RIFAH-${getChapterCode(b.chapter)}-${b._id.toString().slice(-4).toUpperCase()}` : ""),
       b.name || b.businessName || "",
       b.owner?.name || b.ownerName || "",
       b.owner?.email || b.email || "",
