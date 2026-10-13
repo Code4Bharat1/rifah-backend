@@ -12,26 +12,18 @@ import { notificationService } from "../notifications/notification.service.js";
  */
 export const canManageCourse = (user, course) => {
   if (!user) return false;
-  if (user.role === ROLES.CENTRAL_ADMIN) return true;
-  if (user.role === ROLES.BUSINESS_OWNER && course) {
-    const creatorId = String(course.createdBy?._id || course.createdBy || "");
-    const userId = String(user.id || user._id || "");
-    return Boolean(creatorId && userId && creatorId === userId);
-  }
-  return false;
+  return user.role === ROLES.CENTRAL_ADMIN;
 };
 
 /**
  * Creates a new course
- * Central Admin: Creates official courses (scope: 'centre', can be paid, published directly)
- * Business Owner: Creates community courses (scope: 'business', free, submitted for Central Admin approval)
+ * Central Admin exclusive: Creates official courses (scope: 'centre')
  */
 export const createCourse = async (courseData, user) => {
   const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
-  const isBusinessOwner = user.role === ROLES.BUSINESS_OWNER;
 
-  if (!isCentralAdmin && !isBusinessOwner) {
-    throw new ForbiddenError("Only Central Admin and Business Owners can create courses");
+  if (!isCentralAdmin) {
+    throw new ForbiddenError("Only Central Admin can create courses");
   }
 
   if (!courseData.title || !String(courseData.title).trim()) {
@@ -62,42 +54,22 @@ export const createCourse = async (courseData, user) => {
     throw new BadRequestError("Cannot publish an empty course. Please attach at least 1 video or PDF lesson.");
   }
 
-  let scope = 'centre';
-  let businessId = null;
-  let isPaid = false;
+  const isPaid = Boolean(courseData.isPaid);
   let price = 0;
-  let approvalStatus = 'not_required';
-  let isActive = false;
-  let approvedBy = null;
-  let approvedAt = null;
-
-  if (isCentralAdmin) {
-    scope = 'centre';
-    businessId = null;
-    isPaid = Boolean(courseData.isPaid);
-    if (isPaid) {
-      const parsedPrice = Number(courseData.price);
-      if (isNaN(parsedPrice) || parsedPrice <= 0) {
-        throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
-      }
-      price = Math.round(parsedPrice);
+  if (isPaid) {
+    const parsedPrice = Number(courseData.price);
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
     }
-    approvalStatus = 'not_required';
-    approvedBy = user.id || user._id;
-    approvedAt = new Date();
-    isActive = Boolean(courseData.isActive === true || courseData.status === "published");
-  } else if (isBusinessOwner) {
-    let business = user.business;
-    if (!business && (user.businessId || user.id || user._id)) {
-      business = await Business.findOne(user.businessId ? { _id: user.businessId } : { owner: user.id || user._id });
-    }
-    businessId = business?._id || user.businessId || null;
-    scope = 'business';
-    isPaid = false;
-    price = 0;
-    approvalStatus = 'pending';
-    isActive = false; // Business courses require Central Admin approval to go live
+    price = Math.round(parsedPrice);
   }
+
+  const scope = 'centre';
+  const businessId = null;
+  const approvalStatus = 'not_required';
+  const approvedBy = user.id || user._id;
+  const approvedAt = new Date();
+  const isActive = Boolean(courseData.isActive === true || courseData.status === "published");
 
   const course = new Course({
     ...courseData,

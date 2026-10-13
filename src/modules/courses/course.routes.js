@@ -9,28 +9,28 @@ const router = Router();
 
 router.use(authMiddleware);
 
-// Course Management: Central Admin (Sole Official Publisher) & Business Owner (Community Creator Studio)
+// Course Management: Central Admin Exclusive
 router.post(
   "/",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN),
   courseController.createCourse
 );
 
 router.put(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN),
   courseController.updateCourse
 );
 
 router.delete(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN),
   courseController.deleteCourse
 );
 
 router.post(
   "/upload",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN),
   upload.single("file"),
   courseController.uploadContent
 );
