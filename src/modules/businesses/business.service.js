@@ -643,6 +643,14 @@ export const businessService = {
         ).catch(() => {});
       }
 
+      // Ensure owner name is reflected in contactPerson if missing or dummy
+      const ownerName = doc.owner?.name;
+      const currentContact = (doc.contactPerson || "").trim();
+      const isDummyOrEmpty = !currentContact || /^raj\s*sharma$/i.test(currentContact);
+      if (ownerName && isDummyOrEmpty) {
+        doc.contactPerson = ownerName;
+      }
+
       // Stagger dates if they are all identical from batch seeding
       if (allDatesSame) {
         const daysBack = Math.round((businesses.length - 1 - idx) * 2.5) + 1;
@@ -715,6 +723,16 @@ export const businessService = {
       }
     }
 
+    // Ensure owner name is reflected in contactPerson if missing or dummy
+    if (business) {
+      const ownerName = business.owner?.name;
+      const currentContact = (business.contactPerson || "").trim();
+      const isDummyOrEmpty = !currentContact || /^raj\s*sharma$/i.test(currentContact);
+      if (ownerName && isDummyOrEmpty) {
+        business.contactPerson = ownerName;
+      }
+    }
+
     // Scaled for 10k/50k users: In-memory view buffering (zero database write locks)
     bufferProfileView(business._id);
 
@@ -725,7 +743,7 @@ export const businessService = {
    * Get business owned by a specific user
    */
   getBusinessByOwnerId: async (ownerId) => {
-    let business = await Business.findOne({ owner: ownerId });
+    let business = await Business.findOne({ owner: ownerId }).populate("owner", "name email phone avatar designation roleInBusiness");
     if (!business) {
       const user = await User.findById(ownerId);
       // Only business accounts may own/auto-provision a business. Admins and customers used to get
@@ -838,6 +856,18 @@ export const businessService = {
             ...(resolvedChapterId ? { chapterId: resolvedChapterId } : {}),
           });
         }
+      }
+
+      // Ensure owner is populated and contactPerson is populated with real owner's name
+      if (!business.populated || !business.populated("owner")) {
+        await business.populate("owner", "name email phone avatar designation roleInBusiness");
+      }
+      const ownerName = business.owner?.name;
+      const currentContact = (business.contactPerson || "").trim();
+      const isDummyOrEmpty = !currentContact || /^raj\s*sharma$/i.test(currentContact);
+      if (ownerName && isDummyOrEmpty) {
+        business.contactPerson = ownerName;
+        await Business.findByIdAndUpdate(business._id, { contactPerson: ownerName }).catch(() => {});
       }
     }
     return business;

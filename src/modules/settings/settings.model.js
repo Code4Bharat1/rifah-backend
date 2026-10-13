@@ -103,7 +103,7 @@ const settingsSchema = new mongoose.Schema(
           gold: {
             badgeName: "GOLD",
             accentColor: "#8b1d1d",
-            templateUrl: "/certificate-gold.jpg",
+            templateUrl: "/certificate-gold-perfect.jpg",
           },
           platinum: {
             badgeName: "PLATINUM",
