@@ -127,7 +127,7 @@ const startServer = async () => {
     // 1.2 Ensure test chapters across multiple states exist
     await ensureChapters();
 
-    // 1.3 Ensure businesses and payments use latest RIFAH-{CODE}-0001 and RCCI/{FY}/0001 formats
+    // 1.3 Ensure businesses and payments use latest RCCI/{STATE}/0001 and RCCI/{FY}/0001 formats
     await migrateExistingFormats();
 
     // BUG-057: demo/fixture data for the Anniversary feature — not required for the

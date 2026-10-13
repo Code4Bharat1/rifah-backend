@@ -8,8 +8,7 @@ import { parsePagination, buildPaginationMeta } from "../../shared/utils/paginat
 import { NotFoundError, ForbiddenError, ConflictError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { Payment } from "../payments/payment.model.js";
-import { generateReferenceId } from "../../shared/utils/generate-id.js";
-import { getNextInvoiceNumber, getNextMembershipId, getChapterCode } from "../../shared/utils/sequence-generator.js";
+import { getNextInvoiceNumber, getNextMembershipId, getChapterCode, getStateCode } from "../../shared/utils/sequence-generator.js";
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 import { getChapterFilter, resolveChapterIdByName, resolveChapterIdForLocation } from "../../shared/utils/chapter-scope.js";
 import { User } from "../users/user.model.js";
@@ -636,8 +635,8 @@ export const businessService = {
 
       // Ensure membership ID
       if (!doc.membershipId && doc._id) {
-        const code = getChapterCode(doc.chapter);
-        doc.membershipId = `RIFAH-${code}-${doc._id.toString().slice(-4).toUpperCase()}`;
+        const code = getStateCode(doc.state, doc.chapter, doc.city);
+        doc.membershipId = `RCCI/${code}/${doc._id.toString().slice(-4).toUpperCase()}`;
         Business.updateOne(
           { _id: doc._id },
           { $set: { membershipId: doc.membershipId } }
@@ -894,7 +893,7 @@ export const businessService = {
 
     let membershipId = data.membershipId || sanitizedData.membershipId;
     if (!membershipId) {
-      membershipId = await getNextMembershipId({ chapter: sanitizedData.chapter });
+      membershipId = await getNextMembershipId({ state: sanitizedData.state, chapter: sanitizedData.chapter, city: sanitizedData.city });
     }
 
     const createdBusiness = await Business.create({
@@ -1200,7 +1199,7 @@ export const businessService = {
 
     let membershipId = data.membershipId;
     if (!membershipId) {
-      membershipId = await getNextMembershipId({ chapter: chapter || finalChapter });
+      membershipId = await getNextMembershipId({ state: data.state, chapter: chapter || finalChapter, city: data.city });
     }
 
     const business = await Business.create({

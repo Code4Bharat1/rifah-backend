@@ -3,4 +3,4 @@ export { parsePagination, buildPaginationMeta } from "./pagination.js";
 export { ApiResponse } from "./response.js";
 export { generateReferenceId, generateSlug, generateRandomToken } from "./generate-id.js";
 export { formatDate, addDays, isExpired } from "./date.js";
-export { getFinancialYear, getChapterCode, getChapterKey, getNextInvoiceNumber, getNextMembershipId } from "./sequence-generator.js";
+export { getFinancialYear, getChapterCode, getChapterKey, getStateCode, getNextInvoiceNumber, getNextMembershipId } from "./sequence-generator.js";

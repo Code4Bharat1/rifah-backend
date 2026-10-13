@@ -406,7 +406,7 @@ const run = async () => {
   for (const b of businesses) {
     if (tierPrice[b.tier] === 0) continue;
     await Payment.create({
-      invoiceNumber: `INV-${1000 + paymentCount}`,
+      invoiceNumber: `RCCI/25-26/${String(1000 + paymentCount).padStart(4, "0")}`,
       payer: b.user._id,
       business: b.doc._id,
       itemType: "Membership",

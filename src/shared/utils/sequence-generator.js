@@ -54,6 +54,200 @@ const CHAPTER_CODE_MAP = {
 };
 
 /**
+ * 2-Letter Indian State & UT Codes Directory (ISO 3166-2:IN / GST standard)
+ */
+export const STATE_CODE_MAP = {
+  maharashtra: "MH",
+  delhi: "DL",
+  "new delhi": "DL",
+  karnataka: "KA",
+  telangana: "TS",
+  "tamil nadu": "TN",
+  tamilnadu: "TN",
+  gujarat: "GJ",
+  "uttar pradesh": "UP",
+  uttarpradesh: "UP",
+  "west bengal": "WB",
+  westbengal: "WB",
+  kerala: "KL",
+  "andhra pradesh": "AP",
+  andhrapradesh: "AP",
+  rajasthan: "RJ",
+  "madhya pradesh": "MP",
+  madhyapradesh: "MP",
+  bihar: "BR",
+  punjab: "PB",
+  haryana: "HR",
+  goa: "GA",
+  odisha: "OD",
+  orissa: "OD",
+  assam: "AS",
+  jharkhand: "JH",
+  chhattisgarh: "CG",
+  chattisgarh: "CG",
+  uttarakhand: "UK",
+  uttaranchal: "UK",
+  "himachal pradesh": "HP",
+  himachalpradesh: "HP",
+  "jammu and kashmir": "JK",
+  "jammu & kashmir": "JK",
+  chandigarh: "CH",
+  puducherry: "PY",
+  pondicherry: "PY",
+  sikkim: "SK",
+  tripura: "TR",
+  meghalaya: "ML",
+  manipur: "MN",
+  nagaland: "NL",
+  mizoram: "MZ",
+  "arunachal pradesh": "AR",
+  ladakh: "LA",
+  
+  // Chapter / City names mapped directly to State short code
+  mumbai: "MH",
+  pune: "MH",
+  nagpur: "MH",
+  thane: "MH",
+  nashik: "MH",
+  aurangabad: "MH",
+  sambhajinagar: "MH",
+  solapur: "MH",
+  kolhapur: "MH",
+  "navi mumbai": "MH",
+  nanded: "MH",
+  amravati: "MH",
+  jalgaon: "MH",
+  akola: "MH",
+  latur: "MH",
+  dhule: "MH",
+  ahmednagar: "MH",
+  raigad: "MH",
+  satara: "MH",
+  sangli: "MH",
+  ratnagiri: "MH",
+  sindhudurg: "MH",
+  bhiwandi: "MH",
+  malegaon: "MH",
+  panvel: "MH",
+  kalyan: "MH",
+  
+  surat: "GJ",
+  ahmedabad: "GJ",
+  vadodara: "GJ",
+  rajkot: "GJ",
+  
+  bengaluru: "KA",
+  bangalore: "KA",
+  mysuru: "KA",
+  mysore: "KA",
+  mangalore: "KA",
+  mangaluru: "KA",
+  
+  hyderabad: "TS",
+  secunderabad: "TS",
+  warangal: "TS",
+  
+  chennai: "TN",
+  coimbatore: "TN",
+  madurai: "TN",
+  
+  lucknow: "UP",
+  kanpur: "UP",
+  noida: "UP",
+  ghaziabad: "UP",
+  agra: "UP",
+  varanasi: "UP",
+  
+  kolkata: "WB",
+  howrah: "WB",
+  
+  jaipur: "RJ",
+  jodhpur: "RJ",
+  kota: "RJ",
+  udaipur: "RJ",
+  
+  indore: "MP",
+  bhopal: "MP",
+  gwalior: "MP",
+  
+  patna: "BR",
+  gaya: "BR",
+  
+  gurugram: "HR",
+  gurgaon: "HR",
+  faridabad: "HR",
+  
+  kochi: "KL",
+  calicut: "KL",
+  trivandrum: "KL",
+  thiruvananthapuram: "KL",
+  
+  visakhapatnam: "AP",
+  vijayawada: "AP",
+  
+  guwahati: "AS",
+  ranchi: "JH",
+  raipur: "CG",
+  dehradun: "UK",
+  shimla: "HP",
+  srinagar: "JK",
+  jammu: "JK",
+  bhubaneswar: "OD",
+};
+
+/**
+ * Resolves 2-letter uppercase State short code (e.g. Maharashtra -> MH, Delhi -> DL)
+ */
+export function getStateCode(state = "", chapter = "", city = "") {
+  const normalize = (val) =>
+    (val || "")
+      .toString()
+      .toLowerCase()
+      .replace(/\b(state|chapter|chamber|branch|zone|city)\b/gi, "")
+      .trim();
+
+  // If already a valid 2-letter uppercase state code
+  if (state && typeof state === "string") {
+    const trimmed = state.trim().toUpperCase();
+    if (trimmed.length === 2 && /^[A-Z]{2}$/.test(trimmed)) {
+      return trimmed;
+    }
+  }
+
+  const cleanState = normalize(state);
+  if (cleanState && STATE_CODE_MAP[cleanState]) {
+    return STATE_CODE_MAP[cleanState];
+  }
+
+  // Check state partial matches
+  for (const [mapKey, code] of Object.entries(STATE_CODE_MAP)) {
+    if (cleanState && (cleanState.includes(mapKey) || mapKey.includes(cleanState))) {
+      return code;
+    }
+  }
+
+  // Try chapter
+  const cleanChapter = normalize(chapter);
+  if (cleanChapter && STATE_CODE_MAP[cleanChapter]) {
+    return STATE_CODE_MAP[cleanChapter];
+  }
+  for (const [mapKey, code] of Object.entries(STATE_CODE_MAP)) {
+    if (cleanChapter && (cleanChapter.includes(mapKey) || mapKey.includes(cleanChapter))) {
+      return code;
+    }
+  }
+
+  // Try city
+  const cleanCity = normalize(city);
+  if (cleanCity && STATE_CODE_MAP[cleanCity]) {
+    return STATE_CODE_MAP[cleanCity];
+  }
+
+  // Default to Maharashtra ("MH") as headquarters of RIFAH
+  return "MH";
+}
+
+/**
  * Calculates Indian Financial Year (1st April - 31st March)
  * Example:
  * 1st April 2025 – 31st March 2026 => "25-26"
@@ -150,13 +344,16 @@ export async function getNextInvoiceNumber({ chapter = "", date = new Date() } =
 
 /**
  * Generates the next sequential Membership ID in format:
- * RIFAH-{CHAPTER_CODE}-0001 (e.g. RIFAH-PUN-0001, RIFAH-MUM-0001)
- * Scoped per chapter. First business in chapter gets 0001, next 0002, etc.
+ * RCCI/{STATE_CODE}/0001 (e.g. RCCI/MH/0001, RCCI/DL/0001)
+ * Scoped per State. First business in state gets 0001, next 0002, etc.
+ * Where:
+ * - RCCI: RIFAH Chambers of Commerce & Industry
+ * - {STATE_CODE}: 2-letter state short code (e.g. MH, DL, KA)
+ * - 0001: Sequential 4-digit zero-padded ID
  */
-export async function getNextMembershipId({ chapter = "" } = {}) {
-  const chapterCode = getChapterCode(chapter);
-  const chapterKey = getChapterKey(chapter);
-  const counterKey = `membership_seq_${chapterKey}`;
+export async function getNextMembershipId({ state = "", chapter = "", city = "" } = {}) {
+  const stateCode = getStateCode(state, chapter, city);
+  const counterKey = `membership_seq_${stateCode.toLowerCase()}`;
 
   let membershipId = "";
   let isUnique = false;
@@ -169,7 +366,7 @@ export async function getNextMembershipId({ chapter = "" } = {}) {
     );
 
     const seqNumber = String(counterDoc.seq).padStart(4, "0");
-    membershipId = `RIFAH-${chapterCode}-${seqNumber}`;
+    membershipId = `RCCI/${stateCode}/${seqNumber}`;
 
     // Verify uniqueness against existing business documents
     const existing = await Business.findOne({ membershipId });
@@ -180,3 +377,4 @@ export async function getNextMembershipId({ chapter = "" } = {}) {
 
   return membershipId;
 }
+

@@ -463,11 +463,11 @@ businessSchema.pre("save", async function (next) {
   if (!this.membershipId) {
     try {
       const { getNextMembershipId } = await import("../../shared/utils/sequence-generator.js");
-      this.membershipId = await getNextMembershipId({ chapter: this.chapter });
+      this.membershipId = await getNextMembershipId({ chapter: this.chapter, state: this.state, city: this.city });
     } catch {
-      const { getChapterCode } = await import("../../shared/utils/sequence-generator.js");
-      const code = getChapterCode(this.chapter);
-      this.membershipId = `RIFAH-${code}-${this._id ? this._id.toString().slice(-4).toUpperCase() : "0001"}`;
+      const { getStateCode } = await import("../../shared/utils/sequence-generator.js");
+      const code = getStateCode(this.state, this.chapter, this.city);
+      this.membershipId = `RCCI/${code}/${this._id ? this._id.toString().slice(-4).toUpperCase() : "0001"}`;
     }
   }
   if (!this.lastActionDate) {

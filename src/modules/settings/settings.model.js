@@ -74,6 +74,50 @@ const settingsSchema = new mongoose.Schema(
       type: Number,
       default: 5,
     },
+    certificateSettings: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({
+        signatory1: {
+          name: "S AMEENUL HASAN",
+          title: "(Chairman)",
+          signatureUrl: "",
+        },
+        signatory2: {
+          name: "MIRZA AFZAL BAIG",
+          title: "(General Secretary)",
+          signatureUrl: "",
+        },
+        admissionText:
+          "Has been duly admitted as a Member of the Rifah Chamber of Commerce and Industry. The authorized representative of the organization, as stated in the membership application, is:",
+        registeredOffice:
+          "Flat No. 4 C & D, 1st Floor, Plot No. 96, 77C, Hamid Building, Mominpura, Jacob Circle, Byculla West, Mumbai – 400011, Maharashtra",
+        contactPhone: "+91-8097781851",
+        contactEmail: "office@rifah.org",
+        website: "www.rifah.org",
+        tiers: {
+          silver: {
+            badgeName: "SILVER",
+            accentColor: "#c01e1e",
+            templateUrl: "/certificate-silver.jpg",
+          },
+          gold: {
+            badgeName: "GOLD",
+            accentColor: "#8b1d1d",
+            templateUrl: "/certificate-gold.jpg",
+          },
+          platinum: {
+            badgeName: "PLATINUM",
+            accentColor: "#102a45",
+            templateUrl: "/certificate-platinum.jpg",
+          },
+          diamond: {
+            badgeName: "DIAMOND",
+            accentColor: "#004b87",
+            templateUrl: "/certificate-diamond.png",
+          },
+        },
+      }),
+    },
   },
   { timestamps: true }
 );

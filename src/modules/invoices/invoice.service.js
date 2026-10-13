@@ -6,7 +6,7 @@ import { generateInvoicePdfBuffer } from "../../shared/utils/pdf-generator.js";
 import { NotFoundError, BadRequestError } from "../../shared/errors/errors.js";
 import { revenueShareService } from "../revenue-sharing/revenueShare.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
-import { getChapterCode } from "../../shared/utils/sequence-generator.js";
+import { getChapterCode, getStateCode } from "../../shared/utils/sequence-generator.js";
 
 export const invoiceService = {
   /**
@@ -97,11 +97,13 @@ export const invoiceService = {
       "RIFAH Member";
 
     const chapterName = payment.chapter || payment.business?.chapter || payment.payer?.chapter || "Chamber";
-    const chapterCode = getChapterCode(chapterName);
+    const stateName = payment.business?.state || payment.payer?.state || "";
+    const stateCode = getStateCode(stateName, chapterName);
+    const rawMem = payment.business?.membershipId || payment.payer?.membershipId;
     const membershipId =
-      payment.business?.membershipId ||
-      payment.payer?.membershipId ||
-      `RIFAH-${chapterCode}-${String(payment.payer?._id || payment._id).slice(-4).toUpperCase()}`;
+      rawMem && rawMem.startsWith("RCCI/")
+        ? rawMem
+        : `RCCI/${stateCode}/${String(payment.payer?._id || payment._id).slice(-4).toUpperCase()}`;
 
     // Calculate Validity Window
     const paymentDateObj = new Date(payment.paidAt || payment.createdAt || Date.now());
