@@ -1,4 +1,5 @@
 import { User } from "./user.model.js";
+import { Business } from "../businesses/business.model.js";
 import { NotFoundError, BadRequestError, UnauthorizedError, ForbiddenError } from "../../shared/errors/errors.js";
 import { comparePassword } from "../../infrastructure/auth/password.js";
 import { ERROR_CODES } from "../../shared/errors/error-codes.js";
@@ -54,6 +55,24 @@ export const userService = {
 
     if (!updatedUser) {
       throw new NotFoundError("User not found");
+    }
+
+    // Keep business subscriberTier in sync with user
+    if (filteredUpdates.subscriberTier || filteredUpdates.membershipPlan) {
+      const targetTier = filteredUpdates.subscriberTier || filteredUpdates.membershipPlan;
+      try {
+        await Business.updateMany(
+          { owner: userId },
+          {
+            $set: {
+              subscriberTier: targetTier,
+              membership: targetTier,
+            },
+          }
+        );
+      } catch (err) {
+        console.error("[USER SERVICE] Failed to sync business subscriberTier:", err);
+      }
     }
 
     return updatedUser;
