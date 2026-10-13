@@ -24,6 +24,18 @@ const announcementSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    country: {
+      type: String,
+      default: "India",
+      trim: true,
+      index: true,
+    },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
+      default: null,
+      index: true,
+    },
     author: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -44,6 +56,9 @@ const announcementSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+announcementSchema.index({ countryId: 1, status: 1, createdAt: -1 });
+announcementSchema.index({ country: 1, status: 1, createdAt: -1 });
 
 export const Announcement = mongoose.model("Announcement", announcementSchema);
 export default Announcement;

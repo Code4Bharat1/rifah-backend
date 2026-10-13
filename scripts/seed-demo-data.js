@@ -298,6 +298,7 @@ async function seed() {
 
   // 6.1 Central Admin
   const centralAdmin = await User.create({
+    _id: new mongoose.Types.ObjectId("650000000000000000000001"),
     name: "RIFAH Central Admin",
     email: "admin@gmail.com",
     passwordHash,
@@ -314,6 +315,7 @@ async function seed() {
 
   // 6.2 Country Admins (For USA & Japan in Country Module)
   const usaCountryAdmin = await User.create({
+    _id: new mongoose.Types.ObjectId("650000000000000000000002"),
     name: "USA Country Director",
     email: "usa@gmail.com",
     passwordHash,
@@ -328,6 +330,7 @@ async function seed() {
   });
 
   const japanCountryAdmin = await User.create({
+    _id: new mongoose.Types.ObjectId("650000000000000000000003"),
     name: "Japan Country Director",
     email: "japan@gmail.com",
     passwordHash,
@@ -349,6 +352,7 @@ async function seed() {
   // 6.3 State Admins
   const stateAdmins = await User.insertMany([
     {
+      _id: new mongoose.Types.ObjectId("650000000000000000000004"),
       name: "Maharashtra State President",
       email: "maharashtra@gmail.com",
       passwordHash,
@@ -363,6 +367,7 @@ async function seed() {
       isProfileComplete: true,
     },
     {
+      _id: new mongoose.Types.ObjectId("650000000000000000000005"),
       name: "Delhi State President",
       email: "delhi@gmail.com",
       passwordHash,

@@ -38,21 +38,28 @@ export const authMiddleware = async (req, res, next) => {
   try {
     // The token is only a claim of identity: the account must still exist, be usable, and the
     // session must not have been revoked (logout / password change) since the token was issued.
-    const userDoc = await User.findById(decoded.id).select("status state tokensValidAfter").lean();
+    const userDoc = await User.findById(decoded.id).select("status state country countryId tokensValidAfter").lean();
     if (!userDoc) {
       return next(new UnauthorizedError("Please log in to continue", ERROR_CODES.TOKEN_INVALID));
     }
     if (userDoc.status === "Suspended" || userDoc.status === "Deactivated") {
       return next(new ForbiddenError("This account is not active. Please contact support."));
     }
-    if (userDoc.tokensValidAfter && decoded.iat < Math.floor(new Date(userDoc.tokensValidAfter).getTime() / 1000)) {
+    const validAfterSec = Math.floor(new Date(userDoc.tokensValidAfter).getTime() / 1000) - 2;
+    if (userDoc.tokensValidAfter && decoded.iat < validAfterSec) {
       return next(new UnauthorizedError("Your session has ended. Please log in again", ERROR_CODES.TOKEN_INVALID));
     }
 
-    req.user = decoded; // { id, email, role, chapterId, businessId, state }
-    // Ensure state is populated on req.user (even if token was generated prior to state inclusion)
+    req.user = decoded; // { id, email, role, chapterId, businessId, state, country, countryId }
+    // Ensure state, country, and countryId are populated on req.user
     if (!decoded.state && userDoc.state) {
       req.user.state = userDoc.state;
+    }
+    if (!decoded.country && userDoc.country) {
+      req.user.country = userDoc.country;
+    }
+    if (!decoded.countryId && userDoc.countryId) {
+      req.user.countryId = userDoc.countryId;
     }
     next();
   } catch (error) {

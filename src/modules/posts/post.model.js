@@ -22,6 +22,7 @@ const postSchema = new mongoose.Schema(
       enum: [
         "central_admin",
         "secretariat",
+        "country_admin",
         "state_admin",
         "chapter_admin",
         "business_owner",

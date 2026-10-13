@@ -75,6 +75,22 @@ const eventSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    country: {
+      type: String,
+      default: "India",
+      trim: true,
+      index: true,
+    },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
+      default: null,
+      index: true,
+    },
+    targetCountries: {
+      type: [String],
+      default: ["All"],
+    },
     chapter: {
       type: String,
       required: true,
@@ -376,7 +392,7 @@ const eventSchema = new mongoose.Schema(
     //   'chapter' → created by chapter_admin → that chapter's members can see
     visibilityScope: {
       type: String,
-      enum: ["global", "state", "chapter"],
+      enum: ["global", "country", "state", "chapter"],
       default: "global",
       index: true,
     },
@@ -624,6 +640,9 @@ eventSchema.pre("save", function (next) {
   }
   next();
 });
+
+eventSchema.index({ countryId: 1, status: 1, createdAt: -1 });
+eventSchema.index({ country: 1, status: 1, createdAt: -1 });
 
 export const Event = mongoose.model("Event", eventSchema);
 export default Event;

@@ -63,15 +63,24 @@ export const chapterService = {
 
     // RBAC: Country Admin, State Admin, and Chapter Admin Scope Enforcement
     if (user && user.role === ROLES.COUNTRY_ADMIN) {
-      if (user.countryId) {
+      let countryId = user.countryId;
+      let country = user.country;
+      if (!countryId && !country && (user.id || user._id)) {
+        const userDoc = await User.findById(user.id || user._id).select("country countryId").lean();
+        countryId = userDoc?.countryId;
+        country = userDoc?.country;
+      }
+      if (countryId) {
         query.$or = [
-          { countryId: user.countryId },
-          ...(user.country
-            ? [{ country: new RegExp(`^${escapeRegex(user.country)}$`, "i") }]
+          { countryId: countryId },
+          ...(country
+            ? [{ country: new RegExp(`^${escapeRegex(country)}$`, "i") }]
             : []),
         ];
-      } else if (user.country) {
-        query.country = new RegExp(`^${escapeRegex(user.country)}$`, "i");
+      } else if (country) {
+        query.country = new RegExp(`^${escapeRegex(country)}$`, "i");
+      } else {
+        query._id = null; // Guard against unscoped access
       }
     } else if (user && user.role === ROLES.CHAPTER_ADMIN) {
       query._id = user.chapterId || null;

@@ -41,8 +41,19 @@ export const notificationService = {
   /**
    * Broadcast a notification to all active users or members of a chapter
    */
-  broadcastNotification: async ({ type, title, body, state, chapter, link, targetRole }) => {
+  broadcastNotification: async ({ type, title, body, state, chapter, link, targetRole, country, countryId }) => {
     const query = { status: "Active" };
+
+    // Handle country filtering (tenant boundary)
+    if (countryId) {
+      query.countryId = countryId;
+    } else if (country && country !== "all") {
+      if (Array.isArray(country) && country.length > 0) {
+        query.country = { $in: country };
+      } else if (typeof country === "string") {
+        query.country = new RegExp(`^${country.trim()}$`, "i");
+      }
+    }
     
     // Handle state filtering
     if (state && state !== "all") {

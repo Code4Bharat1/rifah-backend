@@ -4,7 +4,6 @@ import path from "path";
 import { env } from "../../config/env.js";
 import { logger } from "../logger/logger.js";
 import { generateInvoicePdfBuffer } from "../../shared/utils/pdf-generator.js";
-import QRCode from "qrcode";
 
 const getTransporter = () => {
   const user = String(env.EMAIL?.USER || process.env.SMTP_USER || "").trim();

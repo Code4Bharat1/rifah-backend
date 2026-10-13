@@ -93,40 +93,54 @@ export const userService = {
    */
   listUsers: async (queryParams = {}, requester = null) => {
     const { page, limit, skip, sort } = parsePagination(queryParams);
-    const filter = {};
-
-    // RBAC: Chapter Admin Scope Enforcement
+    
+    // RBAC: Chapter/Country Admin Scope Enforcement
     const chapterScope = await getChapterFilter(requester, 'direct_id');
-    Object.assign(filter, chapterScope);
-
-    if (queryParams.chapter && !chapterScope.chapterId) {
-      filter.chapter = queryParams.chapter;
+    const andConditions = [];
+    if (Object.keys(chapterScope).length > 0) {
+      andConditions.push(chapterScope);
     }
 
-    if (queryParams.country && !filter.country && !filter.$or) {
-      filter.country = { $regex: new RegExp(`^${queryParams.country.trim()}$`, "i") };
+    const simpleFilters = {};
+
+    if (queryParams.chapter && !chapterScope.chapterId) {
+      simpleFilters.chapter = queryParams.chapter;
+    }
+
+    if (queryParams.country && !chapterScope.country && !chapterScope.countryId) {
+      simpleFilters.country = { $regex: new RegExp(`^${queryParams.country.trim()}$`, "i") };
     }
 
     if (queryParams.state) {
-      filter.state = { $regex: new RegExp(`^${queryParams.state.trim()}$`, "i") };
+      simpleFilters.state = { $regex: new RegExp(`^${queryParams.state.trim()}$`, "i") };
     }
 
     if (queryParams.role) {
       if (queryParams.role.includes(",")) {
-        filter.role = { $in: queryParams.role.split(",") };
+        simpleFilters.role = { $in: queryParams.role.split(",") };
       } else {
-        filter.role = queryParams.role;
+        simpleFilters.role = queryParams.role;
       }
     }
     if (queryParams.status) {
-      filter.status = queryParams.status;
+      simpleFilters.status = queryParams.status;
     }
+
+    if (Object.keys(simpleFilters).length > 0) {
+      andConditions.push(simpleFilters);
+    }
+
     if (queryParams.search) {
-      filter.$or = [
-        { name: { $regex: queryParams.search, $options: "i" } },
-        { email: { $regex: queryParams.search, $options: "i" } },
-      ];
+      andConditions.push({
+        $or: [
+          { name: { $regex: queryParams.search, $options: "i" } },
+          { email: { $regex: queryParams.search, $options: "i" } },
+          { phone: { $regex: queryParams.search, $options: "i" } },
+        ]
+      });
     }
+
+    const filter = andConditions.length > 0 ? (andConditions.length === 1 ? andConditions[0] : { $and: andConditions }) : {};
 
     const [users, total] = await Promise.all([
       User.find(filter).sort(sort).skip(skip).limit(limit),

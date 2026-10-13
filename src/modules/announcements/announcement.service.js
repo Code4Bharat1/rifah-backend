@@ -16,6 +16,8 @@ export const announcementService = {
         title: announcement.title,
         body: announcement.message,
         chapter: announcement.chapter,
+        country: announcement.country,
+        countryId: announcement.countryId,
         link: "/biz/notifications",
         targetRole: "members",
       });
@@ -83,6 +85,8 @@ export const announcementService = {
         title: announcement.title,
         body: announcement.message,
         chapter: announcement.chapter,
+        country: announcement.country,
+        countryId: announcement.countryId,
         link: "/biz/notifications", // Business workspace notifications
         targetRole: "members",
       });
@@ -135,6 +139,8 @@ export const announcementService = {
             title: ann.title,
             body: ann.message,
             chapter: ann.chapter,
+            country: ann.country,
+            countryId: ann.countryId,
             link: "/biz/notifications",
             targetRole: "members",
           });

@@ -26,12 +26,22 @@ export const getChapterFilter = async (user, entityType = "direct") => {
 
   // Handle Country Admin scope (strictly isolated to their country)
   if (user.role === ROLES.COUNTRY_ADMIN) {
-    if (!user.countryId && !user.country) return { _id: null };
-    const countryName = (user.country || "").trim();
+    let countryId = user.countryId;
+    let country = user.country;
+    if (!countryId && !country && (user.id || user._id)) {
+      const { User } = await import("../../modules/users/user.model.js");
+      const uDoc = await User.findById(user.id || user._id).select("country countryId").lean();
+      if (uDoc) {
+        countryId = uDoc.countryId;
+        country = uDoc.country;
+      }
+    }
+    if (!countryId && !country) return { _id: null };
+    const countryName = (country || "").trim();
     const countryRegex = countryName ? new RegExp(`^${countryName}$`, "i") : null;
 
     const countryChaptersQuery = [];
-    if (user.countryId) countryChaptersQuery.push({ countryId: user.countryId });
+    if (countryId) countryChaptersQuery.push({ countryId: countryId });
     if (countryRegex) countryChaptersQuery.push({ country: countryRegex });
 
     const countryChapters = countryChaptersQuery.length > 0
@@ -42,7 +52,7 @@ export const getChapterFilter = async (user, entityType = "direct") => {
 
     if (entityType === "direct_id") {
       const orList = [];
-      if (user.countryId) orList.push({ countryId: user.countryId });
+      if (countryId) orList.push({ countryId: countryId });
       if (countryRegex) orList.push({ country: countryRegex });
       if (chapterIds.length > 0) orList.push({ chapterId: { $in: chapterIds } });
       if (chapterNames.length > 0) orList.push({ chapter: { $in: chapterNames } });
@@ -51,7 +61,7 @@ export const getChapterFilter = async (user, entityType = "direct") => {
 
     if (entityType === "business_ref") {
       const bizQuery = [];
-      if (user.countryId) bizQuery.push({ countryId: user.countryId });
+      if (countryId) bizQuery.push({ countryId: countryId });
       if (countryRegex) bizQuery.push({ country: countryRegex });
       if (chapterIds.length > 0) bizQuery.push({ chapterId: { $in: chapterIds } });
 
@@ -60,7 +70,7 @@ export const getChapterFilter = async (user, entityType = "direct") => {
     }
 
     const orConditions = [];
-    if (user.countryId) orConditions.push({ countryId: user.countryId });
+    if (countryId) orConditions.push({ countryId: countryId });
     if (countryRegex) orConditions.push({ country: countryRegex });
     if (chapterNames.length > 0) orConditions.push({ chapter: { $in: chapterNames } });
     if (user._id || user.id) orConditions.push({ author: user._id || user.id });

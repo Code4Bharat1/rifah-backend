@@ -267,8 +267,10 @@ const userSchema = new mongoose.Schema(
         return ret;
       },
     },
-  },
+  }
 );
+userSchema.index({ countryId: 1, status: 1, createdAt: -1 });
+userSchema.index({ country: 1, status: 1, createdAt: -1 });
 
 export const User = mongoose.model("User", userSchema);
 export default User;

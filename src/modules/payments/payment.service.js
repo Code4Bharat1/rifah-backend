@@ -539,10 +539,29 @@ export const paymentService = {
           }
         }
 
-        // 2. Notify Central Admins
-        const centralAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
+        // 2. Notify Assigned Country Admin (for Japan/USA/non-India) or Central Admin (India/fallback)
+        const bizCountry = (businessDoc?.country || payload.country || userDoc?.country || "").trim();
+        const bizCountryId = businessDoc?.countryId || userDoc?.countryId;
+        const isNonIndia = bizCountry && bizCountry.toLowerCase() !== "india";
+
+        let targetAdmins = [];
+        if (isNonIndia) {
+          const cAdminQuery = [];
+          if (bizCountryId) cAdminQuery.push({ countryId: bizCountryId });
+          cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+          targetAdmins = await User.find({
+            role: ROLES.COUNTRY_ADMIN,
+            status: "Active",
+            $or: cAdminQuery,
+          }).select("_id email name");
+        }
+
+        if (targetAdmins.length === 0) {
+          targetAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
+        }
+
         const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
-        const adminEmails = [...new Set([adminFallbackEmail, ...centralAdmins.map((a) => a.email)].filter(Boolean))];
+        const adminEmails = [...new Set([adminFallbackEmail, ...targetAdmins.map((a) => a.email)].filter(Boolean))];
 
         for (const adminMail of adminEmails) {
           emailService.sendAdminPaymentReceiptAlert({
@@ -561,13 +580,14 @@ export const paymentService = {
           }).catch(() => {});
         }
 
-        for (const admin of centralAdmins) {
+        const currSymbol = payment.currency === "USD" ? "$" : (payment.currency === "JPY" ? "¥" : "₹");
+        for (const admin of targetAdmins) {
           notificationService.createNotification({
             recipientId: admin._id,
             type: "Payment",
             title: "New Payment Receipt for Verification",
-            body: `Receipt #${payment.invoiceNumber} of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} from ${businessDoc?.name || payload.businessName || "Member"} received for verification.`,
-            link: "/admin/payments",
+            body: `Receipt #${payment.invoiceNumber} of ${currSymbol}${payment.amount} from ${businessDoc?.name || payload.businessName || "Member"} received for verification.`,
+            link: isNonIndia ? "/admin/verification" : "/admin/payments",
           }).catch(() => {});
         }
       } catch (bgErr) {
@@ -838,11 +858,30 @@ export const paymentService = {
         }
       }
 
-      // 2. Send official payment receipt to Central Admin for verification
+      // 2. Send official payment receipt to Country Admin (for Japan/USA/non-India) or Central Admin (India/fallback)
       try {
-        const centralAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
+        const bizCountry = (businessDoc?.country || data.country || userDoc?.country || "").trim();
+        const bizCountryId = businessDoc?.countryId || userDoc?.countryId;
+        const isNonIndia = bizCountry && bizCountry.toLowerCase() !== "india";
+
+        let targetAdmins = [];
+        if (isNonIndia) {
+          const cAdminQuery = [];
+          if (bizCountryId) cAdminQuery.push({ countryId: bizCountryId });
+          cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+          targetAdmins = await User.find({
+            role: ROLES.COUNTRY_ADMIN,
+            status: "Active",
+            $or: cAdminQuery,
+          }).select("_id email name");
+        }
+
+        if (targetAdmins.length === 0) {
+          targetAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
+        }
+
         const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
-        const adminEmails = [...new Set([adminFallbackEmail, ...centralAdmins.map((a) => a.email)].filter(Boolean))];
+        const adminEmails = [...new Set([adminFallbackEmail, ...targetAdmins.map((a) => a.email)].filter(Boolean))];
 
         for (const adminMail of adminEmails) {
           await emailService.sendAdminPaymentReceiptAlert({
@@ -861,13 +900,14 @@ export const paymentService = {
           });
         }
 
-        for (const admin of centralAdmins) {
+        const currSymbol = payment.currency === "USD" ? "$" : (payment.currency === "JPY" ? "¥" : "₹");
+        for (const admin of targetAdmins) {
           await notificationService.createNotification({
             recipientId: admin._id,
             type: "Payment",
             title: "New Payment Receipt for Verification",
-            body: `Receipt #${payment.invoiceNumber} of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} from ${businessDoc?.name || data.businessName || "Member"} received for verification.`,
-            link: "/admin/payments",
+            body: `Receipt #${payment.invoiceNumber} of ${currSymbol}${payment.amount} from ${businessDoc?.name || data.businessName || "Member"} received for verification.`,
+            link: isNonIndia ? "/admin/verification" : "/admin/payments",
           });
         }
       } catch (adminErr) {
@@ -929,7 +969,18 @@ export const paymentService = {
     const { page, limit, skip, sort } = parsePagination(queryParams);
     const filter = {};
 
-    if (user && user.role === ROLES.CHAPTER_ADMIN && user.chapter) {
+    if (user && user.role === ROLES.COUNTRY_ADMIN) {
+      const countryScope = await getChapterFilter(user, "business_ref");
+      const countryUsersFilter = await getChapterFilter(user, "direct_id");
+      const usersInCountry = await User.find(countryUsersFilter).select("_id");
+      const userIds = usersInCountry.map(u => u._id);
+
+      const orConditions = [];
+      if (countryScope.business) orConditions.push(countryScope);
+      if (userIds.length > 0) orConditions.push({ payer: { $in: userIds } });
+
+      filter.$or = orConditions.length > 0 ? orConditions : [{ _id: null }];
+    } else if (user && user.role === ROLES.CHAPTER_ADMIN && user.chapter) {
       const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
       const usersInChapter = await User.find({ chapter: chapterRegex }).select("_id");
       const businessesInChapter = await Business.find({ chapter: chapterRegex }).select("_id");
@@ -985,7 +1036,24 @@ export const paymentService = {
       await payment.save();
     }
 
-    if (user && user.role === ROLES.CHAPTER_ADMIN && user.chapter) {
+    if (user && user.role === ROLES.COUNTRY_ADMIN) {
+      const userCountry = (user.country || "").trim().toLowerCase();
+      let payerCountry = payment.payer?.country;
+      let bizCountry = payment.business?.country;
+      if (!payerCountry && payment.payer) {
+        const u = await User.findById(payment.payer._id || payment.payer).select("country").lean();
+        payerCountry = u?.country;
+      }
+      if (!bizCountry && payment.business) {
+        const b = await Business.findById(payment.business._id || payment.business).select("country").lean();
+        bizCountry = b?.country;
+      }
+      const matchesPayer = payerCountry && payerCountry.toLowerCase() === userCountry;
+      const matchesBiz = bizCountry && bizCountry.toLowerCase() === userCountry;
+      if (!matchesPayer && !matchesBiz) {
+        throw new ForbiddenError("Access denied: Payment does not belong to your country");
+      }
+    } else if (user && user.role === ROLES.CHAPTER_ADMIN && user.chapter) {
       const chapterRegex = new RegExp(`^${user.chapter.trim()}$`, "i");
       const payerChapter = payment.payer?.chapter;
       const businessChapter = payment.business?.chapter;

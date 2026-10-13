@@ -614,6 +614,45 @@ export const enquiryService = {
       }
 
       conditions.push({ $or: orConditions });
+    } else if (requester && requester.role === ROLES.COUNTRY_ADMIN) {
+      let countryName = requester.country;
+      let countryId = requester.countryId;
+      if (!countryName && !countryId && (requester.id || requester._id)) {
+        const userDoc = await User.findById(requester.id || requester._id).select("country countryId").lean();
+        countryName = userDoc?.country;
+        countryId = userDoc?.countryId;
+      }
+
+      if (!countryName && !countryId) {
+        conditions.push({ _id: null });
+      } else {
+        const countryRegex = countryName ? new RegExp(`^${countryName.trim()}$`, "i") : null;
+        const countryChaptersQuery = [];
+        if (countryId) countryChaptersQuery.push({ countryId });
+        if (countryRegex) countryChaptersQuery.push({ country: countryRegex });
+
+        const countryChapters = countryChaptersQuery.length > 0
+          ? await Chapter.find({ $or: countryChaptersQuery }).select("_id name")
+          : [];
+        const chapterIds = countryChapters.map((c) => c._id);
+        const chapterNames = countryChapters.map((c) => c.name);
+
+        const bizQuery = [];
+        if (countryId) bizQuery.push({ countryId });
+        if (countryRegex) bizQuery.push({ country: countryRegex });
+        if (chapterIds.length > 0) bizQuery.push({ chapterId: { $in: chapterIds } });
+
+        const businesses = await Business.find(bizQuery.length > 0 ? { $or: bizQuery } : { _id: null }).select("_id");
+        const businessIds = businesses.map((b) => b._id);
+
+        const orConditions = [];
+        if (chapterIds.length > 0) orConditions.push({ chapterId: { $in: chapterIds } });
+        if (chapterNames.length > 0) orConditions.push({ chapter: { $in: chapterNames } });
+        if (businessIds.length > 0) orConditions.push({ targetBusiness: { $in: businessIds } });
+        if (countryRegex) orConditions.push({ location: countryRegex });
+
+        conditions.push(orConditions.length > 0 ? { $or: orConditions } : { _id: null });
+      }
     }
 
     if (queryParams.status && queryParams.status.toLowerCase() !== "all") {

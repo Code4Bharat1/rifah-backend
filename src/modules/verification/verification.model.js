@@ -69,5 +69,8 @@ const verificationSchema = new mongoose.Schema(
   }
 );
 
+verificationSchema.index({ business: 1, status: 1 });
+verificationSchema.index({ status: 1, createdAt: -1 });
+
 export const Verification = mongoose.model("Verification", verificationSchema);
 export default Verification;

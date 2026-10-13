@@ -70,12 +70,24 @@ const courseSchema = new mongoose.Schema(
     },
     scope: {
       type: String,
-      enum: ["centre", "state", "chapter", "business"],
+      enum: ["centre", "state", "chapter", "business", "country"],
       required: true,
     },
     businessId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Business",
+      default: null,
+      index: true,
+    },
+    country: {
+      type: String,
+      trim: true,
+      default: null,
+      index: true,
+    },
+    countryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Country",
       default: null,
       index: true,
     },
