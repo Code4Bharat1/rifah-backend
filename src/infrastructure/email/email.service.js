@@ -4,6 +4,7 @@ import path from "path";
 import { env } from "../../config/env.js";
 import { logger } from "../logger/logger.js";
 import { generateInvoicePdfBuffer } from "../../shared/utils/pdf-generator.js";
+import QRCode from "qrcode";
 
 const getTransporter = () => {
   const user = String(env.EMAIL?.USER || process.env.SMTP_USER || "").trim();
@@ -1246,16 +1247,11 @@ RIFAH Chamber of Commerce & Industry
    * Sends Event Registration / RSVP confirmation email
    */
   sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType, ticketId, verificationUrl, isPaid, ticketPrice, paymentId, transactionId, invoiceNumber, chapter, meetingLink, isGuest = false }) => {
-    let logoPath = "c:/nexcore/Rifah/rifah-frontend/public/rifah1-logo.png";
-    if (!fs.existsSync(logoPath)) {
-      logoPath = "c:/nexcore/Rifah/rifah-frontend/public/rifah-logo.png";
-    }
-    const hasLogo = fs.existsSync(logoPath);
-    const attachments = hasLogo ? [{ filename: "rifah-logo.png", path: logoPath, cid: "rifahlogo" }] : [];
-
     const frontendBaseUrl = env.FRONTEND_URL || "https://rifah.nexcorealliance.com";
     const passUrl = verificationUrl || (ticketId ? `${frontendBaseUrl}/verify/ticket/${ticketId}` : `${frontendBaseUrl}/events`);
-    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(passUrl)}`;
+
+    // Standard high-reliability HTTPS QR image URL (loads 100% reliably in Gmail, Outlook, Apple Mail without file attachments)
+    const qrImgSrc = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=2&data=${encodeURIComponent(passUrl)}`;
 
     // GUEST CONFIRMATION EMAIL (Clean, QR Code pass, strict single-entry confidentiality warning)
     if (isGuest) {
@@ -1264,7 +1260,10 @@ RIFAH Chamber of Commerce & Industry
       <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 520px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
         <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
         <div style="padding: 32px 24px; text-align: center;">
-          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 16px;" />` : `<h1 style="color: #0b192c; font-size: 20px; margin: 0 0 16px 0;">RIFAH CHAMBER</h1>`}
+          <div style="text-align: center; margin-bottom: 18px;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 800; color: #071328; letter-spacing: -0.5px;">RIFAH CHAMBER</h1>
+            <p style="margin: 3px 0 0 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #0284c7;">Chamber of Commerce & Industry</p>
+          </div>
           
           <div style="display: inline-block; background-color: #dcfce7; color: #166534; font-size: 11px; font-weight: 700; padding: 4px 14px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
             ✓ REGISTRATION CONFIRMED
@@ -1278,7 +1277,7 @@ RIFAH Chamber of Commerce & Industry
             <p style="margin: 0 0 12px 0; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 1px;">Official Entry QR Pass</p>
             
             <div style="background-color: #ffffff; padding: 12px; border-radius: 12px; display: inline-block; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
-              <img src="${qrCodeUrl}" alt="Event Entry QR Code" style="width: 180px; height: 180px; display: block;" />
+              <img src="${qrImgSrc}" alt="Event Entry QR Code" width="180" height="180" style="width: 180px; height: 180px; display: block; margin: 0 auto; border: 0;" />
             </div>
 
             ${ticketId ? `
@@ -1325,7 +1324,7 @@ RIFAH Chamber of Commerce & Industry
       </div>
       `;
 
-      return emailService.sendEmail({ to: email, subject: guestSubject, html: guestHtml, attachments });
+      return emailService.sendEmail({ to: email, subject: guestSubject, html: guestHtml });
     }
 
     const subject = isPaid
@@ -1366,7 +1365,10 @@ RIFAH Chamber of Commerce & Industry
       <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
         <div style="height: 6px; background: linear-gradient(90deg, #dc2626 0%, #2563eb 100%);"></div>
         <div style="padding: 32px;">
-          ${hasLogo ? `<img src="cid:rifahlogo" alt="RIFAH" style="height: 44px; width: auto; margin-bottom: 20px;" />` : `<h1 style="color: #0b192c; font-size: 22px;">RIFAH CONNECT</h1>`}
+          <div style="margin-bottom: 20px;">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 800; color: #071328; letter-spacing: -0.5px;">RIFAH CHAMBER</h1>
+            <p style="margin: 3px 0 0 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #0284c7;">Chamber of Commerce & Industry</p>
+          </div>
           <span style="background-color: #dcfce7; color: #166534; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase;">${isPaid ? "PAID & CONFIRMED" : "RSVP CONFIRMED"}</span>
           <h2 style="color: #0f172a; font-size: 18px; margin-top: 10px;">${isPaid ? "Event Pass & Payment Receipt" : "Event Ticket Confirmed"}</h2>
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">Dear <strong>${userName || "Member"}</strong>,</p>
@@ -1389,7 +1391,7 @@ RIFAH Chamber of Commerce & Industry
           <div style="background-color: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 14px; padding: 20px; margin: 20px 0; text-align: center;">
             <p style="margin: 0 0 10px 0; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 1px;">Official Entry QR Pass</p>
             <div style="background-color: #ffffff; padding: 10px; border-radius: 12px; display: inline-block; box-shadow: 0 2px 6px rgba(0,0,0,0.06); border: 1px solid #e2e8f0;">
-              <img src="${qrCodeUrl}" alt="Event Entry QR Code" style="width: 170px; height: 170px; display: block; margin: 0 auto;" />
+              <img src="${qrImgSrc}" alt="Event Entry QR Code" width="170" height="170" style="width: 170px; height: 170px; display: block; margin: 0 auto; border: 0;" />
             </div>
             ${ticketId ? `<div style="margin-top: 10px;"><span style="font-family: monospace; font-size: 14px; font-weight: 800; color: #0284c7;">${ticketId}</span></div>` : ""}
             <p style="margin: 8px 0 0 0; font-size: 11px; color: #64748b;">Scan this code at the gate on arrival</p>
@@ -1411,9 +1413,8 @@ RIFAH Chamber of Commerce & Industry
           </div>
           ` : ""}
 
-          <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
-            <a href="${passUrl}" style="background-color: #059669; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Digital Entry Pass →</a>
-            <a href="${frontendBaseUrl}/events" style="background-color: #0284c7; color: #ffffff; padding: 12px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Event Details</a>
+          <div style="margin-top: 24px; text-align: center;">
+            <a href="${frontendBaseUrl}/events" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Event Details</a>
           </div>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
           <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Events Desk</p>
@@ -1421,7 +1422,7 @@ RIFAH Chamber of Commerce & Industry
       </div>
     `;
 
-    return emailService.sendEmail({ to: email, subject, html, attachments });
+    return emailService.sendEmail({ to: email, subject, html });
   },
 
   /**
