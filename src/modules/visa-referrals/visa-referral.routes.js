@@ -25,7 +25,7 @@ router.get("/my", authMiddleware, visaReferralController.listUser);
 // 5. CENTRAL ADMIN ONLY ROUTES - STRICTLY NO STATE OR CHAPTER ADMIN ACCESS
 // --------------------------------------------------------------------------
 router.use(authMiddleware);
-router.use(requireRole(ROLES.CENTRAL_ADMIN));
+router.use(requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN));
 
 router.get("/stats", visaReferralController.getStats);
 router.get("/", visaReferralController.listAdmin);

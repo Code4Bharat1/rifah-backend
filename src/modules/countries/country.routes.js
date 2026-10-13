@@ -42,7 +42,7 @@ router.post(
 router.put(
   "/:countryName",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   validateRequest(validateUpdateCountry),
   countryController.updateCountryByName,
 );
@@ -50,7 +50,7 @@ router.put(
 router.patch(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   validateRequest(validateUpdateCountry),
   countryController.updateCountry,
 );

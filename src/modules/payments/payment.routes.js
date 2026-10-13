@@ -47,21 +47,21 @@ router.get(
 router.post(
   "/admin/create-invoice",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   paymentController.createAdminInvoice
 );
 
 router.post(
   "/:id/refund",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   paymentController.processRefund
 );
 
 router.post(
   "/:id/verify-by-admin",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   paymentController.verifyPaymentByAdmin
 );
 

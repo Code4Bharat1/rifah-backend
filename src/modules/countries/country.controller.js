@@ -46,7 +46,11 @@ export const countryController = {
   }),
 
   updateCountry: asyncHandler(async (req, res) => {
-    const updated = await countryService.updateCountry(req.params.id, req.body);
+    const updated = await countryService.updateCountry(
+      req.params.id,
+      req.body,
+      req.user,
+    );
     return ApiResponse.success(res, updated, "Country updated successfully");
   }),
 
@@ -54,6 +58,7 @@ export const countryController = {
     const updated = await countryService.updateCountryByName(
       req.params.countryName,
       req.body,
+      req.user,
     );
     return ApiResponse.success(res, updated, "Country updated successfully");
   }),

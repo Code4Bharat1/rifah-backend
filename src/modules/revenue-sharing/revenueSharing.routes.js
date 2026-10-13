@@ -7,7 +7,12 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
-const ANY_ADMIN = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN];
+const ANY_ADMIN = [
+  ROLES.CENTRAL_ADMIN,
+  ROLES.COUNTRY_ADMIN,
+  ROLES.STATE_ADMIN,
+  ROLES.CHAPTER_ADMIN,
+];
 
 router.use(authMiddleware);
 
@@ -30,9 +35,9 @@ router.patch(
   validateObjectIdParam("id"),
   revenueSharingController.submitClaim
 );
-router.patch("/claims/:id/review", requireRole(ROLES.CENTRAL_ADMIN), validateObjectIdParam("id"), revenueSharingController.reviewClaim);
-router.patch("/claims/:id/approve", requireRole(ROLES.CENTRAL_ADMIN), validateObjectIdParam("id"), revenueSharingController.approveClaim);
-router.patch("/claims/:id/reject", requireRole(ROLES.CENTRAL_ADMIN), validateObjectIdParam("id"), revenueSharingController.rejectClaim);
+router.patch("/claims/:id/review", requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN), validateObjectIdParam("id"), revenueSharingController.reviewClaim);
+router.patch("/claims/:id/approve", requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN), validateObjectIdParam("id"), revenueSharingController.approveClaim);
+router.patch("/claims/:id/reject", requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN), validateObjectIdParam("id"), revenueSharingController.rejectClaim);
 router.patch(
   "/claims/:id/cancel",
   requireRole(...ANY_ADMIN),
@@ -40,17 +45,17 @@ router.patch(
   revenueSharingController.cancelClaim
 );
 
-// Settlements — Central Admin only; the only operation that reduces outstanding balance.
+// Settlements — Central Admin & Country Admin; reduces outstanding balance.
 router.post(
   "/claims/:id/settlements",
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   validateObjectIdParam("id"),
   revenueSharingController.recordSettlement
 );
 
-// Rule configuration — Central Admin only, versioned/effective-dated.
+// Rule configuration — Central Admin & Country Admin.
 router.get("/rules", requireRole(...ANY_ADMIN), revenueSharingController.listRules);
-router.post("/rules", requireRole(ROLES.CENTRAL_ADMIN), revenueSharingController.createRuleVersion);
+router.post("/rules", requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN), revenueSharingController.createRuleVersion);
 
 export { router as revenueSharingRoutes };
 export default router;

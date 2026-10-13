@@ -8,6 +8,7 @@ import { ROLES, isResponsibilityRole } from "../../shared/constants/roles.js";
 import {
   BadRequestError,
   ConflictError,
+  ForbiddenError,
   NotFoundError,
 } from "../../shared/errors/errors.js";
 
@@ -25,6 +26,20 @@ const slugify = (value = "") =>
 
 export const countryService = {
   listCountries: async (filters = {}) => {
+    const existingCount = await Country.countDocuments();
+    if (existingCount === 0) {
+      try {
+        await Country.create({
+          name: "India",
+          code: "IND",
+          slug: "india",
+          status: "Active",
+        });
+      } catch {
+        // ignore duplicate race condition
+      }
+    }
+
     const query = {};
     if (filters.status) query.status = filters.status;
     if (filters.search) {
@@ -268,9 +283,25 @@ export const countryService = {
     return admin;
   },
 
-  updateCountry: async (id, data = {}) => {
+  updateCountry: async (id, data = {}, requester = null) => {
     const country = await Country.findById(id);
     if (!country) throw new NotFoundError("Country not found");
+
+    if (requester && requester.role === ROLES.COUNTRY_ADMIN) {
+      const userCountryName = (requester.country || "").trim().toLowerCase();
+      const userCountryId = requester.countryId ? String(requester.countryId) : "";
+      const matchesCountry =
+        (userCountryId && userCountryId === String(country._id)) ||
+        (userCountryName && userCountryName === country.name.toLowerCase());
+      if (!matchesCountry) {
+        throw new ForbiddenError(
+          "Country Admins can only manage their own assigned country.",
+        );
+      }
+      // Country Admin cannot rename the country or change the country code
+      delete data.name;
+      delete data.code;
+    }
 
     const nextName =
       data.name !== undefined ? String(data.name).trim() : country.name;
@@ -308,9 +339,9 @@ export const countryService = {
     return updated;
   },
 
-  updateCountryByName: async (countryName, data = {}) => {
+  updateCountryByName: async (countryName, data = {}, requester = null) => {
     const country = await countryService.getCountryByName(countryName);
-    return countryService.updateCountry(country._id, data);
+    return countryService.updateCountry(country._id, data, requester);
   },
 
   deleteCountry: async (identifier) => {

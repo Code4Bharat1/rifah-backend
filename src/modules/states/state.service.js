@@ -97,8 +97,8 @@ export const stateService = {
           : {}
       : {};
 
-    // Discover all distinct states from State Admins and Chapters dynamically
-    const [adminStates, chapterStates] = await Promise.all([
+    // Discover all distinct states from State Admins, Chapters, and registered State Profiles
+    const [adminStates, chapterStates, profileStates] = await Promise.all([
       User.distinct("state", {
         role: ROLES.STATE_ADMIN,
         state: { $nin: ["", null] },
@@ -108,11 +108,15 @@ export const stateService = {
         state: { $nin: ["", null] },
         ...chapterCountryQuery,
       }),
+      StateProfile.distinct("name", {
+        name: { $nin: ["", null] },
+        ...profileCountryQuery,
+      }),
     ]);
 
     // Consolidate unique states (case-insensitive deduplication)
     const uniqueStateMap = new Map();
-    [...adminStates, ...chapterStates].forEach((st) => {
+    [...adminStates, ...chapterStates, ...profileStates].forEach((st) => {
       if (st && typeof st === "string" && st.trim()) {
         const clean = st.trim();
         const key = clean.toLowerCase();
@@ -180,10 +184,20 @@ export const stateService = {
         0,
       );
 
+      const isStateCity = Boolean(
+        profile?.entityType === "city" ||
+        profile?.entityType === "state_city" ||
+        (profile?.countryName && profile.countryName.toLowerCase() !== "india")
+      );
+
       return {
         state: stateName,
         admin,
         profile,
+        countryName: profile?.countryName || (chapters[0]?.country || "India"),
+        countryId: profile?.countryId || chapters[0]?.countryId || null,
+        entityType: profile?.entityType || (isStateCity ? "state_city" : "state"),
+        isStateCity,
         chaptersCount: chapters.length,
         activeChaptersCount,
         totalBusinesses,
@@ -262,17 +276,22 @@ export const stateService = {
    * itself is derived from the business, not free-typed, so it can't drift.
    * Upserts the StateProfile with image and address.
    */
-  assignStateAdmin: async ({
-    businessId,
-    image,
-    address,
-    explicitStateName,
-    contactEmail,
-    contactPhone,
-    name,
-    email,
-    phone,
-  }) => {
+  assignStateAdmin: async (
+    {
+      businessId,
+      image,
+      address,
+      explicitStateName,
+      contactEmail,
+      contactPhone,
+      name,
+      email,
+      phone,
+      countryId,
+      countryName,
+    },
+    requester = null,
+  ) => {
     let nominee;
     let cleanState = explicitStateName;
     let isNewUser = false;
@@ -357,16 +376,30 @@ export const stateService = {
       await currentAdmin.save();
     }
 
+    let targetCountryId = countryId || null;
+    let targetCountryName = (countryName || "").trim();
+
+    if (requester && requester.role === ROLES.COUNTRY_ADMIN) {
+      targetCountryId = requester.countryId || targetCountryId;
+      targetCountryName = requester.country || targetCountryName;
+    } else if (!targetCountryId || !targetCountryName) {
+      const existingProfile = await StateProfile.findOne({ name: stateRegex });
+      if (existingProfile) {
+        targetCountryId = targetCountryId || existingProfile.countryId;
+        targetCountryName = targetCountryName || existingProfile.countryName;
+      }
+    }
+
     const upsertStateProfile = async () => {
-      const countryMatch = requester?.countryId
-        ? { countryId: requester.countryId }
+      const countryMatch = targetCountryId
+        ? { countryId: targetCountryId }
         : {};
       await StateProfile.findOneAndUpdate(
         { name: cleanState, ...countryMatch },
         {
           name: cleanState,
-          ...(requester?.countryId && { countryId: requester.countryId }),
-          ...(requester?.country && { countryName: requester.country }),
+          ...(targetCountryId && { countryId: targetCountryId }),
+          ...(targetCountryName && { countryName: targetCountryName }),
           ...(image && { image }),
           ...(address && { address }),
           email: contactEmail !== undefined ? contactEmail : nominee.email,
@@ -377,16 +410,18 @@ export const stateService = {
       );
     };
 
+    await upsertStateProfile();
+
     if (nominee.role !== ROLES.STATE_ADMIN) {
       nominee.previousRole = nominee.role;
     }
     nominee.role = ROLES.STATE_ADMIN;
     nominee.state = cleanState;
-    if (requester?.countryId) {
-      nominee.countryId = requester.countryId;
+    if (targetCountryId) {
+      nominee.countryId = targetCountryId;
     }
-    if (requester?.country) {
-      nominee.country = requester.country;
+    if (targetCountryName) {
+      nominee.country = targetCountryName;
     }
     await nominee.save();
 
@@ -431,11 +466,12 @@ export const stateService = {
       name,
       countryId,
       countryName,
-      businessId,
+      entityType,
       image,
       address,
       contactEmail,
       contactPhone,
+      businessId,
       adminName,
       adminEmail,
       adminPhone,
@@ -443,7 +479,7 @@ export const stateService = {
     requester = null,
   ) => {
     if (!name || typeof name !== "string" || !name.trim()) {
-      throw new BadRequestError("State name is required");
+      throw new BadRequestError("State / City name is required");
     }
     const cleanState = name.trim();
 
@@ -454,6 +490,12 @@ export const stateService = {
       targetCountryId = requester.countryId || null;
       targetCountryName = requester.country || "";
     }
+
+    const resolvedEntityType =
+      entityType ||
+      (targetCountryName && targetCountryName.toLowerCase() !== "india"
+        ? "state_city"
+        : "state");
 
     // Atomic guard: If businessId provided, enforce verification check BEFORE modifying database
     if (businessId) {
@@ -470,6 +512,7 @@ export const stateService = {
       stateMatchQuery,
       {
         name: cleanState,
+        entityType: resolvedEntityType,
         ...(targetCountryId && { countryId: targetCountryId }),
         ...(targetCountryName && { countryName: targetCountryName }),
         ...(image && { image }),

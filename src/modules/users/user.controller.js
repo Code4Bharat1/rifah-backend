@@ -50,6 +50,12 @@ export const userController = {
     return ApiResponse.success(res, updated, "User status updated successfully");
   }),
 
+  assignAdminRole: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updated = await userService.assignAdminRole(id, req.body, req.user);
+    return ApiResponse.success(res, updated, "Admin role assigned successfully");
+  }),
+
   inviteUser: asyncHandler(async (req, res) => {
     const { email } = req.body;
     const result = await userService.inviteUser(email, req.user);

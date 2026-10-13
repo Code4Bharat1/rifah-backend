@@ -4,7 +4,7 @@ import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { upload } from "../../middleware/upload.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateRequest } from "../../middleware/validation.middleware.js";
-import { validateUpdateProfile, validateUpdateStatus, validateInvite } from "./user.validation.js";
+import { validateUpdateProfile, validateUpdateStatus, validateInvite, validateAssignAdminRole } from "./user.validation.js";
 import { validateObjectIdParam } from "../../shared/validators/object-id.validation.js";
 import { ROLES } from "../../shared/constants/roles.js";
 
@@ -45,14 +45,14 @@ router.get(
 router.get(
   "/",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   userController.listUsers
 );
 
 router.post(
   "/invite",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateRequest(validateInvite),
   userController.inviteUser
 );
@@ -60,10 +60,20 @@ router.post(
 router.patch(
   "/:id/status",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateUpdateStatus),
   userController.updateUserStatus
+);
+
+// Dedicated admin role assignment — enforces hierarchy rules in the service layer
+router.patch(
+  "/:id/admin-role",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN),
+  validateObjectIdParam("id"),
+  validateRequest(validateAssignAdminRole),
+  userController.assignAdminRole
 );
 
 export { router as userRoutes };

@@ -16,12 +16,15 @@ export const requireRole = (...allowedRoles) => {
     const userRole = req.user.role === ROLES.SECRETARIAT ? ROLES.CENTRAL_ADMIN : req.user.role;
 
     const effectiveRoles = [userRole];
+    if (userRole === ROLES.COUNTRY_ADMIN) {
+      effectiveRoles.push(ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN);
+    }
     if (req.user.orgPanelType === "chapter-admin") {
       effectiveRoles.push(ROLES.CHAPTER_ADMIN);
     } else if (req.user.orgPanelType === "state-admin") {
       effectiveRoles.push(ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN);
     } else if (req.user.orgPanelType === "central-admin") {
-      effectiveRoles.push(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN);
+      effectiveRoles.push(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN);
     }
 
     if (roles.some((r) => effectiveRoles.includes(r))) {

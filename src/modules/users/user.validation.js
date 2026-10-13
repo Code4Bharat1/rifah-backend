@@ -49,3 +49,14 @@ export const validateInvite = (data = {}) => {
   }
   return { valid: errors.length === 0, errors };
 };
+
+export const validateAssignAdminRole = (data = {}) => {
+  const errors = [];
+  const adminRoles = ["chapter_admin", "state_admin", "country_admin", "central_admin"];
+  if (!data.role) {
+    errors.push({ field: "role", message: "Role is required" });
+  } else if (!adminRoles.includes(data.role)) {
+    errors.push({ field: "role", message: `Role must be one of: ${adminRoles.join(", ")}` });
+  }
+  return { valid: errors.length === 0, errors };
+};

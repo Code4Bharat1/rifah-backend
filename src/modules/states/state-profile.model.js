@@ -35,6 +35,11 @@ const stateProfileSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    entityType: {
+      type: String,
+      enum: ["state", "city", "state_city"],
+      default: "state",
+    },
   },
   {
     timestamps: true,

@@ -21,7 +21,7 @@ router.get("/slug/:slug", optionalAuthMiddleware, chapterController.getChapterBy
 router.get(
   "/:id/details",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   chapterController.getChapterDetails
 );

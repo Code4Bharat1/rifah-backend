@@ -16,7 +16,7 @@ router.get("/public", settingsController.getSettings);
 router.patch(
   "/",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   settingsController.updateSettings
 );
 

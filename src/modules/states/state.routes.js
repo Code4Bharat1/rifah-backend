@@ -13,7 +13,7 @@ const router = Router();
 router.post(
   "/upload",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   upload.single("image"),
   stateController.uploadImage
 );
