@@ -103,7 +103,7 @@ export const businessService = {
 
     // For public users (non-admins), strictly show verified businesses,
     // EXCEPT when used for MemberPicker / Networking collaboration between chamber members.
-    if (!user || ![ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user.role)) {
+    if (!user || ![ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user.role)) {
       if (isNetworkingOrMemberPicker) {
         // In networking member picker, fellow members can select any registered business in their chapter/state
         // as long as it's not explicitly rejected or suspended.

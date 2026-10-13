@@ -14,8 +14,13 @@ export const announcementController = {
       ...req.body,
       author: req.user.id,
     };
-    if (!["central_admin", "state_admin"].includes(req.user.role) && req.user.chapter) {
+    if (!["central_admin", "state_admin", "country_admin"].includes(req.user.role) && req.user.chapter) {
       announcementData.chapter = req.user.chapter;
+    }
+
+    if (req.user.role === "country_admin") {
+      announcementData.country = req.user.country;
+      announcementData.countryId = req.user.countryId;
     }
 
     if (!announcementData.chapter) {

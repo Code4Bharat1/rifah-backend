@@ -9,54 +9,54 @@ const router = Router();
 
 router.use(authMiddleware);
 
-// Course Management: Central Admin (Sole Official Publisher) & Business Owner (Community Creator Studio)
+// Course Management: Central Admin & Country Admin
 router.post(
   "/",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   courseController.createCourse
 );
 
 router.put(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   courseController.updateCourse
 );
 
 router.delete(
   "/:id",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   courseController.deleteCourse
 );
 
 router.post(
   "/upload",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.BUSINESS_OWNER),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   upload.single("file"),
   courseController.uploadContent
 );
 
-// Central Admin Course Moderation / Approval & Enrollment Routes
+// Course Moderation / Approval & Enrollment Routes
 router.post(
   "/:id/approve",
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   courseController.approveCourse
 );
 
 router.post(
   "/:id/reject",
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   courseController.rejectCourse
 );
 
 router.get(
   "/:id/enrollments",
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   courseController.getCourseEnrollments
 );
 
 router.post(
   "/:id/manual-enroll",
-  requireRole(ROLES.CENTRAL_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
   courseController.manualEnrollUser
 );
 

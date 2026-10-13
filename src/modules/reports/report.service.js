@@ -196,7 +196,21 @@ export const reportService = {
     ]);
     let chaptersDistribution = chaptersAgg.map(c => ({ name: c._id, members: c.members }));
 
-    if (requester && requester.role === "state_admin" && requester.state) {
+    if (requester && requester.role === "country_admin") {
+      let cId = requester.countryId;
+      let cName = requester.country;
+      const cQuery = [];
+      if (cId) cQuery.push({ countryId: cId });
+      if (cName) cQuery.push({ country: new RegExp(`^${cName.trim()}$`, "i") });
+      if (cQuery.length > 0) {
+        const countryChapters = await Chapter.find({ $or: cQuery }).sort({ name: 1 });
+        const countsMap = new Map(chaptersDistribution.map(c => [c.name?.toLowerCase(), c.members]));
+        chaptersDistribution = countryChapters.map(ch => ({
+          name: ch.name,
+          members: countsMap.get(ch.name?.toLowerCase()) ?? (ch.businessesCount || ch.membersCount || 0),
+        })).sort((a, b) => b.members - a.members).slice(0, 6);
+      }
+    } else if (requester && requester.role === "state_admin" && requester.state) {
       const stateRegex = new RegExp(`^${requester.state.trim()}$`, "i");
       const stateChapters = await Chapter.find({ state: stateRegex }).sort({ name: 1 });
       const countsMap = new Map(chaptersDistribution.map(c => [c.name?.toLowerCase(), c.members]));
@@ -289,10 +303,11 @@ export const reportService = {
     }
 
     // 3. RBAC Scoping
-    if (requester && requester.role === "chapter_admin" && requester.chapterId) {
-      const businesses = await Business.find({ chapterId: requester.chapterId }).select("_id");
-      const bIds = businesses.map(b => b._id);
-      query.business = { $in: bIds };
+    if (requester && requester.role !== "central_admin" && requester.role !== "super_admin" && requester.role !== "admin" && requester.role !== "secretariat") {
+      const bFilter = await getChapterFilter(requester, "business_ref");
+      if (bFilter && Object.keys(bFilter).length > 0) {
+        Object.assign(query, bFilter);
+      }
     }
 
     // 4. Query payments populated with payer and business
@@ -390,7 +405,7 @@ export const reportService = {
       conditions.push({ createdAt: dateFilter });
     }
 
-    if (requester && requester.role === "chapter_admin") {
+    if (requester && requester.role !== "central_admin" && requester.role !== "super_admin" && requester.role !== "admin" && requester.role !== "secretariat") {
       const filter = await getChapterFilter(requester, "direct_id");
       if (Object.keys(filter).length > 0) conditions.push(filter);
     }
@@ -561,7 +576,7 @@ export const reportService = {
       conditions.push({ createdAt: dateFilter });
     }
 
-    if (requester && requester.role === "chapter_admin") {
+    if (requester && requester.role !== "central_admin" && requester.role !== "super_admin" && requester.role !== "admin" && requester.role !== "secretariat") {
       const filterScope = await getChapterFilter(requester, "direct_id");
       if (Object.keys(filterScope).length > 0) conditions.push(filterScope);
     }
@@ -605,7 +620,24 @@ export const reportService = {
       conditions.push({ createdAt: dateFilter });
     }
 
-    if (requester && requester.role === "chapter_admin") {
+    if (requester && requester.role === "country_admin") {
+      const countryQuery = [];
+      if (requester.countryId) countryQuery.push({ countryId: requester.countryId });
+      if (requester.country) countryQuery.push({ country: new RegExp(`^${requester.country.trim()}$`, "i") });
+      const countryChapters = countryQuery.length > 0
+        ? await Chapter.find({ $or: countryQuery }).select("_id name")
+        : [];
+      const countryChapterIds = countryChapters.map((c) => c._id);
+      const countryBusinesses = await Business.find(countryQuery.length > 0 ? { $or: countryQuery } : { _id: null }).select("_id");
+      const countryBusinessIds = countryBusinesses.map((b) => b._id);
+      conditions.push({
+        $or: [
+          ...(countryChapterIds.length > 0 ? [{ chapterId: { $in: countryChapterIds } }] : []),
+          ...(countryBusinessIds.length > 0 ? [{ targetBusiness: { $in: countryBusinessIds } }] : []),
+          ...(requester.country ? [{ location: new RegExp(requester.country.trim(), "i") }] : []),
+        ].concat(countryChapterIds.length === 0 && countryBusinessIds.length === 0 ? [{ _id: null }] : []),
+      });
+    } else if (requester && requester.role === "chapter_admin") {
       if (!requester.chapterId) {
         conditions.push({ _id: null }); // Deny access
       } else {
@@ -661,7 +693,18 @@ export const reportService = {
     const filter = {};
     
     // Admin RBAC constraints
-    if (user.role === "state_admin") {
+    if (user.role === "country_admin") {
+      const cQuery = [];
+      if (user.countryId) cQuery.push({ countryId: user.countryId });
+      if (user.country) cQuery.push({ country: new RegExp(`^${user.country.trim()}$`, "i") });
+      const cChapters = cQuery.length > 0 ? await Chapter.find({ $or: cQuery }).select("name") : [];
+      const cNames = cChapters.map(c => c.name);
+      filter.$or = [
+        ...(user.country ? [{ country: new RegExp(`^${user.country.trim()}$`, "i") }] : []),
+        ...(cNames.length > 0 ? [{ chapter: { $in: cNames } }, { targetChapters: { $in: cNames } }] : []),
+        { createdBy: user._id || user.id },
+      ];
+    } else if (user.role === "state_admin") {
       filter.$or = [
         { targetStates: user.state },
         { targetStates: "All" },

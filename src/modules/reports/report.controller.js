@@ -43,7 +43,7 @@ export const reportController = {
   }),
 
   exportAdminCsv: asyncHandler(async (req, res) => {
-    const stats = await reportService.getAdminOverview();
+    const stats = await reportService.getAdminOverview(req.user);
     const headers = ["Metric", "Value"];
     const rows = [
       ["Total Businesses", stats.kpi.totalBusinesses],

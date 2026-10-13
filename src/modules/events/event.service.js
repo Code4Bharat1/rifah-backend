@@ -172,7 +172,14 @@ const broadcastEventToAudience = (event) => {
 
       if (rolesToTarget.length === 0) return;
 
-      const users = await User.find({ role: { $in: rolesToTarget }, status: STATUSES.USER.ACTIVE });
+      const userFilter = { role: { $in: rolesToTarget }, status: STATUSES.USER.ACTIVE };
+      if (event.countryId) {
+        userFilter.countryId = event.countryId;
+      } else if (event.country) {
+        userFilter.country = new RegExp(`^${event.country}$`, "i");
+      }
+
+      const users = await User.find(userFilter);
 
       // Send notifications and emails concurrently for instant delivery
       await Promise.allSettled(
@@ -226,9 +233,18 @@ const broadcastEventToAudience = (event) => {
 const buildManageScopeQuery = (id, user) => {
   if (!user || user.role === ROLES.CENTRAL_ADMIN) return { _id: id };
   const conditions = [{ createdBy: user.id || user._id }];
+  const userCountry = (user.country || "").trim();
+  const userCountryId = user.countryId;
   const userState = (user.state || "").trim();
   const userChapter = (user.chapter || "").trim();
-  if (user.role === ROLES.STATE_ADMIN && userState) {
+
+  if (user.role === ROLES.COUNTRY_ADMIN) {
+    if (userCountryId) conditions.push({ countryId: userCountryId });
+    if (userCountry) {
+      conditions.push({ country: new RegExp(`^${userCountry}$`, "i") });
+      conditions.push({ targetCountries: new RegExp(`^${userCountry}$`, "i") });
+    }
+  } else if (user.role === ROLES.STATE_ADMIN && userState) {
     conditions.push({ creatorState: new RegExp(`^${userState}$`, "i") });
     conditions.push({ state: new RegExp(`^${userState}$`, "i") });
     conditions.push({ targetStates: new RegExp(`^${userState}$`, "i") });
@@ -340,6 +356,16 @@ export const eventService = {
         // Central admin sees ALL events
         visibilityConditions.push({});
 
+      } else if (userRole === ROLES.COUNTRY_ADMIN) {
+        // Country Admin: strictly isolated to events within their country tenant
+        const userCountry = (user.country || "").trim();
+        const userCountryId = user.countryId;
+        if (userCountryId) visibilityConditions.push({ countryId: userCountryId });
+        if (userCountry) {
+          visibilityConditions.push({ country: new RegExp(`^${userCountry}$`, "i") });
+          visibilityConditions.push({ targetCountries: new RegExp(`^${userCountry}$`, "i") });
+        }
+
       } else if (userRole === ROLES.STATE_ADMIN) {
         if (queryParams.strictAdminScope === "true" || queryParams.strictAdminScope === true) {
           // Admin Dashboard: only see state events or chapter events within state
@@ -381,6 +407,21 @@ export const eventService = {
     }
 
     // ── Additional query filters ──────────────────────────────────────────────
+    if (queryParams.country) {
+      const cRegex = new RegExp(`^${queryParams.country.trim()}$`, "i");
+      const cFilter = {
+        $or: [
+          { country: cRegex },
+          { targetCountries: cRegex }
+        ]
+      };
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, cFilter];
+        delete filter.$or;
+      } else {
+        filter.$or = cFilter.$or;
+      }
+    }
     if (queryParams.chapter) {
       filter.chapter = new RegExp(`^${queryParams.chapter.trim()}$`, "i");
     }
@@ -484,8 +525,17 @@ export const eventService = {
       data.creatorRole   = user.role || ROLES.CENTRAL_ADMIN;
       data.creatorChapter = (user.chapter || "").trim();
       data.creatorState   = (user.state   || "").trim();
+      data.country        = (user.country || data.country || "").trim();
+      data.countryId      = user.countryId || data.countryId;
 
-      if (user.role === ROLES.CHAPTER_ADMIN) {
+      if (user.role === ROLES.COUNTRY_ADMIN) {
+        data.visibilityScope = "country";
+        data.country = (user.country || data.country || "").trim();
+        data.countryId = user.countryId || data.countryId;
+        if (data.country) {
+          data.targetCountries = [data.country];
+        }
+      } else if (user.role === ROLES.CHAPTER_ADMIN) {
         // Chapter admin events: visible only within their chapter
         data.visibilityScope = "chapter";
         data.chapter         = (user.chapter || data.chapter || "").trim();
@@ -973,9 +1023,13 @@ export const eventService = {
     delete updateData.visibilityScope; // Cannot elevate scope post-creation
     delete updateData.createdBy;
 
-    // RBAC: Chapter Admin Scope Enforcement
+    // RBAC: Country/Chapter Admin Scope Enforcement
     if (user) {
-      if (user.role === ROLES.CHAPTER_ADMIN) {
+      if (user.role === ROLES.COUNTRY_ADMIN) {
+        delete updateData.country;
+        delete updateData.countryId;
+        delete updateData.targetCountries;
+      } else if (user.role === ROLES.CHAPTER_ADMIN) {
         delete updateData.chapter;        // Cannot move event to another chapter
         delete updateData.targetChapters;
         delete updateData.targetStates;

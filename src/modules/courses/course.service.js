@@ -13,25 +13,33 @@ import { notificationService } from "../notifications/notification.service.js";
 export const canManageCourse = (user, course) => {
   if (!user) return false;
   if (user.role === ROLES.CENTRAL_ADMIN) return true;
-  if (user.role === ROLES.BUSINESS_OWNER && course) {
-    const creatorId = String(course.createdBy?._id || course.createdBy || "");
-    const userId = String(user.id || user._id || "");
-    return Boolean(creatorId && userId && creatorId === userId);
+  if (user.role === ROLES.COUNTRY_ADMIN) {
+    if (course.scope === 'country') {
+      if (user.countryId && course.countryId) {
+        return String(user.countryId) === String(course.countryId);
+      }
+      if (user.country && course.country) {
+        return user.country.trim().toLowerCase() === course.country.trim().toLowerCase();
+      }
+      return true;
+    }
+    return String(course.createdBy) === String(user.id || user._id);
   }
   return false;
 };
 
 /**
  * Creates a new course
- * Central Admin: Creates official courses (scope: 'centre', can be paid, published directly)
- * Business Owner: Creates community courses (scope: 'business', free, submitted for Central Admin approval)
+ * Central Admin: Creates official national courses (scope: 'centre')
+ * Country Admin: Creates official country courses (scope: 'country')
  */
 export const createCourse = async (courseData, user) => {
   const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+  const isCountryAdmin = user.role === ROLES.COUNTRY_ADMIN;
   const isBusinessOwner = user.role === ROLES.BUSINESS_OWNER;
 
-  if (!isCentralAdmin && !isBusinessOwner) {
-    throw new ForbiddenError("Only Central Admin and Business Owners can create courses");
+  if (!isCentralAdmin && !isCountryAdmin) {
+    throw new ForbiddenError("Only Central Admin and Country Admin can create official courses");
   }
 
   if (!courseData.title || !String(courseData.title).trim()) {
@@ -62,42 +70,24 @@ export const createCourse = async (courseData, user) => {
     throw new BadRequestError("Cannot publish an empty course. Please attach at least 1 video or PDF lesson.");
   }
 
-  let scope = 'centre';
-  let businessId = null;
-  let isPaid = false;
+  const isPaid = Boolean(courseData.isPaid);
   let price = 0;
-  let approvalStatus = 'not_required';
-  let isActive = false;
-  let approvedBy = null;
-  let approvedAt = null;
-
-  if (isCentralAdmin) {
-    scope = 'centre';
-    businessId = null;
-    isPaid = Boolean(courseData.isPaid);
-    if (isPaid) {
-      const parsedPrice = Number(courseData.price);
-      if (isNaN(parsedPrice) || parsedPrice <= 0) {
-        throw new BadRequestError("Paid courses must have a valid price greater than ₹0");
-      }
-      price = Math.round(parsedPrice);
+  if (isPaid) {
+    const parsedPrice = Number(courseData.price);
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      throw new BadRequestError("Paid courses must have a valid price greater than 0");
     }
-    approvalStatus = 'not_required';
-    approvedBy = user.id || user._id;
-    approvedAt = new Date();
-    isActive = Boolean(courseData.isActive === true || courseData.status === "published");
-  } else if (isBusinessOwner) {
-    let business = user.business;
-    if (!business && (user.businessId || user.id || user._id)) {
-      business = await Business.findOne(user.businessId ? { _id: user.businessId } : { owner: user.id || user._id });
-    }
-    businessId = business?._id || user.businessId || null;
-    scope = 'business';
-    isPaid = false;
-    price = 0;
-    approvalStatus = 'pending';
-    isActive = false; // Business courses require Central Admin approval to go live
+    price = Math.round(parsedPrice);
   }
+
+  const scope = isCountryAdmin ? 'country' : (courseData.scope || 'centre');
+  const country = isCountryAdmin ? user.country : (courseData.country || null);
+  const countryId = isCountryAdmin ? user.countryId : (courseData.countryId || null);
+  const businessId = null;
+  const approvalStatus = 'not_required';
+  const approvedBy = user.id || user._id;
+  const approvedAt = new Date();
+  const isActive = Boolean(courseData.isActive === true || courseData.status === "published");
 
   const course = new Course({
     ...courseData,
@@ -107,6 +97,8 @@ export const createCourse = async (courseData, user) => {
     subcategory: normalizedSubcategory,
     createdBy: user.id || user._id,
     businessId,
+    country,
+    countryId,
     scope,
     state: null,
     chapterId: null,
@@ -233,15 +225,21 @@ export const updateCourse = async (courseId, courseData, user) => {
 };
 
 /**
- * Approves a course (Central Admin only)
+ * Approves a course (Central Admin or Country Admin)
  */
 export const approveCourse = async (courseId, user) => {
-  if (user.role !== ROLES.CENTRAL_ADMIN) {
-    throw new ForbiddenError("Only Central Admin can approve courses");
+  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+  const isCountryAdmin = user.role === ROLES.COUNTRY_ADMIN;
+  if (!isCentralAdmin && !isCountryAdmin) {
+    throw new ForbiddenError("Only Central Admin and Country Admin can approve courses");
   }
 
   const course = await Course.findById(courseId);
   if (!course) throw new NotFoundError("Course not found");
+
+  if (isCountryAdmin && !canManageCourse(user, course)) {
+    throw new ForbiddenError("You can only approve courses within your country");
+  }
 
   course.approvalStatus = "approved";
   course.approvedBy = user.id || user._id;
@@ -258,12 +256,13 @@ export const approveCourse = async (courseId, user) => {
         let link = "/biz/lms";
         if (creatorUser?.role === ROLES.CHAPTER_ADMIN) link = "/chapter-admin/lms";
         else if (creatorUser?.role === ROLES.STATE_ADMIN) link = "/state-admin/lms";
+        else if (creatorUser?.role === ROLES.COUNTRY_ADMIN) link = "/admin/lms";
 
         await notificationService.createNotification({
           recipientId: course.createdBy,
           type: "System",
           title: "Course Approved & Published",
-          body: `Your course "${course.title}" has been approved by Central Admin and is now live!`,
+          body: `Your course "${course.title}" has been approved and is now live!`,
           link,
         });
       } catch (e) {}
@@ -274,15 +273,21 @@ export const approveCourse = async (courseId, user) => {
 };
 
 /**
- * Rejects a course (Central Admin only)
+ * Rejects a course (Central Admin or Country Admin)
  */
 export const rejectCourse = async (courseId, remark, user) => {
-  if (user.role !== ROLES.CENTRAL_ADMIN) {
-    throw new ForbiddenError("Only Central Admin can reject courses");
+  const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
+  const isCountryAdmin = user.role === ROLES.COUNTRY_ADMIN;
+  if (!isCentralAdmin && !isCountryAdmin) {
+    throw new ForbiddenError("Only Central Admin and Country Admin can reject courses");
   }
 
   const course = await Course.findById(courseId);
   if (!course) throw new NotFoundError("Course not found");
+
+  if (isCountryAdmin && !canManageCourse(user, course)) {
+    throw new ForbiddenError("You can only reject courses within your country");
+  }
 
   course.approvalStatus = "rejected";
   course.approvalRemark = String(remark || "").trim() || "Course did not meet quality guidelines.";
@@ -297,6 +302,7 @@ export const rejectCourse = async (courseId, remark, user) => {
         let link = "/biz/lms";
         if (creatorUser?.role === ROLES.CHAPTER_ADMIN) link = "/chapter-admin/lms";
         else if (creatorUser?.role === ROLES.STATE_ADMIN) link = "/state-admin/lms";
+        else if (creatorUser?.role === ROLES.COUNTRY_ADMIN) link = "/admin/lms";
 
         await notificationService.createNotification({
           recipientId: course.createdBy,
@@ -311,6 +317,8 @@ export const rejectCourse = async (courseId, remark, user) => {
 
   return saved;
 };
+
+
 
 /**
  * Deletes a course
@@ -390,6 +398,21 @@ export const getCourses = async (user, query = {}) => {
     if (query.approvalStatus && query.approvalStatus !== 'all') {
       filter.approvalStatus = query.approvalStatus;
     }
+  } else if (user.role === ROLES.COUNTRY_ADMIN) {
+    // Country Admin manages courses for their country and universal centre courses
+    const countryName = (user.country || "").trim();
+    const countryId = user.countryId;
+    const countryRegex = countryName ? new RegExp(`^${countryName}$`, "i") : null;
+
+    const countryOr = [{ scope: 'centre' }, { scope: 'country' }];
+    if (countryId) countryOr.push({ countryId: countryId });
+    if (countryRegex) countryOr.push({ country: countryRegex });
+    countryOr.push({ createdBy: user.id || user._id });
+
+    filter.$or = countryOr;
+    if (query.approvalStatus && query.approvalStatus !== 'all') {
+      filter.approvalStatus = query.approvalStatus;
+    }
   } else if (user.role === ROLES.BUSINESS_OWNER || user.role === ROLES.CUSTOMER || user.role === ROLES.BUYER) {
     // Business owners and members see active approved courses targeted at them
     filter.isActive = true;
@@ -402,11 +425,15 @@ export const getCourses = async (user, query = {}) => {
 
     const state = business?.state || user.state || user.stateId;
     const chapterId = business?.chapterId || user.chapterId || user.chapter;
+    const userCountry = business?.country || user.country;
+    const userCountryId = business?.countryId || user.countryId;
 
     const orConditions = [
       { scope: 'centre' },
       { scope: 'business' }
     ];
+    if (userCountryId) orConditions.push({ scope: 'country', countryId: userCountryId });
+    else if (userCountry) orConditions.push({ scope: 'country', country: new RegExp(`^${userCountry.trim()}$`, "i") });
     if (state) orConditions.push({ scope: 'state', state });
     if (chapterId) orConditions.push({ scope: 'chapter', chapterId });
     filter.$or = orConditions;

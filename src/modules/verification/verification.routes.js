@@ -42,18 +42,18 @@ router.get(
   verificationController.downloadDocument
 );
 
-// Admin Verification Queue (Super Admin, State Admin, Chapter Admin)
+// Admin Verification Queue (Super Admin, Country Admin, State Admin, Chapter Admin)
 router.get(
   "/queue",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   verificationController.listVerifications
 );
 
 router.patch(
   "/:id/status",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateReviewVerification),
   verificationController.reviewVerification
@@ -62,7 +62,7 @@ router.patch(
 router.patch(
   "/:id/remarks",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   verificationController.updateRemarks
 );

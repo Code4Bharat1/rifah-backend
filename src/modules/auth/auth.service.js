@@ -271,6 +271,15 @@ export const authService = {
       }
     }
     if (!resolvedCountry) resolvedCountry = "India";
+    if (!resolvedCountryId) {
+      const defaultCDoc = await Country.findOne({
+        name: new RegExp(`^${resolvedCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+      }).select("_id name");
+      if (defaultCDoc) {
+        resolvedCountryId = defaultCDoc._id;
+        resolvedCountry = defaultCDoc.name;
+      }
+    }
 
     const user = await User.create({
       name: name.trim(),
@@ -877,6 +886,15 @@ export const authService = {
     if (!resolvedCountry) {
       resolvedCountry = "India";
     }
+    if (!resolvedCountryId) {
+      const defaultCDoc = await Country.findOne({
+        name: new RegExp(`^${resolvedCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+      }).select("_id name");
+      if (defaultCDoc) {
+        resolvedCountryId = defaultCDoc._id;
+        resolvedCountry = defaultCDoc.name;
+      }
+    }
 
     const isIntlCountry = resolvedCountry.toLowerCase() !== "india";
     const resolvedRegion = region === "international" || isIntlCountry ? "international" : "national";
@@ -1111,6 +1129,37 @@ export const authService = {
                 adminMailErr?.message || adminMailErr,
               ),
             );
+        }
+      }
+
+      // 1.5. If international business, notify assigned Country Admin for verification
+      const targetCountry = (resolvedCountry || country || "").trim();
+      const targetCountryId = countryId;
+      if (targetCountry && targetCountry.toLowerCase() !== "india") {
+        try {
+          const cAdminQuery = [];
+          if (targetCountryId) cAdminQuery.push({ countryId: targetCountryId });
+          cAdminQuery.push({ country: new RegExp(`^${targetCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+          const countryAdmins = await User.find({
+            role: ROLES.COUNTRY_ADMIN,
+            status: "Active",
+            $or: cAdminQuery,
+          });
+
+          for (const cAdmin of countryAdmins) {
+            notificationService
+              .createNotification({
+                recipientId: cAdmin._id,
+                type: "Verification",
+                title: `📋 New Business Registration: ${business.name}`,
+                body: `New business "${business.name}" from ${targetCountry} has registered and submitted for verification.`,
+                entityId: verification._id,
+                link: `/admin/verification`,
+              })
+              .catch(() => {});
+          }
+        } catch (cAdminErr) {
+          logger.warn("[AUTH] Failed to notify country admin on registration:", cAdminErr?.message || cAdminErr);
         }
       }
 
@@ -1407,6 +1456,8 @@ export const authService = {
       chapter: user.chapter,
       chapterId: user.chapterId,
       state: user.state || "",
+      country: user.country || "",
+      countryId: user.countryId || null,
       forcePasswordChange: user.forcePasswordChange,
     };
 
@@ -1557,6 +1608,8 @@ export const authService = {
         chapter: user.chapter,
         chapterId: user.chapterId,
         state: user.state || "",
+        country: user.country || decoded.country || "",
+        countryId: user.countryId || decoded.countryId || null,
       };
 
       if (decoded.orgWorkspaceId) {
@@ -1647,6 +1700,8 @@ export const authService = {
         chapter: user.chapter,
         chapterId: user.chapterId,
         state: user.state || "",
+        country: user.country || "",
+        countryId: user.countryId || null,
         forcePasswordChange: user.forcePasswordChange,
       };
 
@@ -1758,6 +1813,8 @@ export const authService = {
       chapter: user.chapter,
       chapterId: user.chapterId,
       state: user.state || "",
+      country: user.country || "",
+      countryId: user.countryId || null,
       forcePasswordChange: user.forcePasswordChange,
     };
 

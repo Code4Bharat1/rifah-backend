@@ -456,6 +456,8 @@ businessSchema.index({ ownerEmail: 1 });
 businessSchema.index({ email: 1 });
 businessSchema.index({ chapter: 1, status: 1 });
 businessSchema.index({ state: 1, status: 1 });
+businessSchema.index({ countryId: 1, status: 1, createdAt: -1 });
+businessSchema.index({ country: 1, status: 1, createdAt: -1 });
 businessSchema.index({ "gstGroupInvites.token": 1 });
 businessSchema.index({ "gstGroupMembers.user": 1 });
 

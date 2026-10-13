@@ -19,19 +19,19 @@ const router = Router();
 router.get("/tickets/verify/:ticketId", verificationRateLimitMiddleware, eventController.verifyTicket);
 router.post("/tickets/check-in/:ticketId", optionalAuthMiddleware, eventController.checkInTicket);
 router.get("/tickets/:ticketId/pass", eventController.getTicketPass);
-router.patch("/tickets/:ticketId/status", authMiddleware, requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN), eventController.updateTicketStatus);
+router.patch("/tickets/:ticketId/status", authMiddleware, requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN), eventController.updateTicketStatus);
 
 // Google Meet Integration routes (Must be declared before /:identifier)
 router.post(
   "/generate-meet",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   eventController.generateMeetLink
 );
 router.get(
   "/google/auth-url",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   eventController.getGoogleMeetAuthUrl
 );
 router.get("/google/oauth-callback", eventController.handleGoogleMeetCallback);
@@ -82,7 +82,7 @@ router.post(
 router.post(
   "/",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateRequest(validateCreateEvent),
   eventController.createEvent
 );
@@ -90,7 +90,7 @@ router.post(
 router.get(
   "/:id/registrations",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.getEventRegistrations
 );
@@ -98,7 +98,7 @@ router.get(
 router.get(
   "/:id/participants/pdf",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.downloadParticipantsPdf
 );
@@ -106,7 +106,7 @@ router.get(
 router.patch(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateUpdateEvent),
   eventController.updateEvent
@@ -114,7 +114,7 @@ router.patch(
 router.put(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   validateRequest(validateUpdateEvent),
   eventController.updateEvent
@@ -123,7 +123,7 @@ router.put(
 router.post(
   "/:id/cover",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   upload.single("cover"),
   eventController.uploadCover
@@ -132,7 +132,7 @@ router.post(
 router.post(
   "/:id/poster",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   upload.single("poster"),
   eventController.uploadPoster
@@ -143,7 +143,7 @@ router.post(
 router.post(
   "/:id/signatory-image",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   upload.single("image"),
   eventController.uploadSignatoryImage
@@ -154,7 +154,7 @@ router.post(
 router.post(
   "/:id/keynote-poster",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   upload.single("poster"),
   eventController.uploadKeynotePoster
@@ -163,7 +163,7 @@ router.post(
 router.delete(
   "/:id",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.deleteEvent
 );
@@ -172,7 +172,7 @@ router.delete(
 router.get(
   "/:id/operations",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.getOperations
 );
@@ -180,7 +180,7 @@ router.get(
 router.patch(
   "/:id/operations",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
   validateObjectIdParam("id"),
   eventController.updateOperations
 );

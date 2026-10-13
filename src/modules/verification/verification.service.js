@@ -72,26 +72,47 @@ export const verificationService = {
     }
     await business.save();
 
-    // Send in-app notification to Central Admins
+    // Send in-app notification to the assigned Country Admin (or Central Admin if unassigned / India)
     try {
       const targetChapter = (business.chapter || "").trim();
       const targetState = (business.state || "").trim();
-      const centralAdmins = await User.find({
-        role: { $in: [ROLES.CENTRAL_ADMIN, "central_admin", "admin", "super_admin"] },
-      });
+      const targetCountry = (business.country || "").trim();
+      const targetCountryId = business.countryId;
 
-      for (const admin of centralAdmins) {
+      let targetAdmins = [];
+
+      // 1. If country is specified, find Country Admin for this country
+      if (targetCountry && targetCountry.toLowerCase() !== "india") {
+        const cAdminQuery = [];
+        if (targetCountryId) cAdminQuery.push({ countryId: targetCountryId });
+        cAdminQuery.push({ country: new RegExp(`^${targetCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+        targetAdmins = await User.find({
+          role: ROLES.COUNTRY_ADMIN,
+          status: "Active",
+          $or: cAdminQuery,
+        });
+      }
+
+      // 2. If no Country Admin found (or India/unassigned), notify Central Admins
+      if (targetAdmins.length === 0) {
+        targetAdmins = await User.find({
+          role: { $in: [ROLES.CENTRAL_ADMIN, "central_admin", "admin", "super_admin"] },
+          status: "Active",
+        });
+      }
+
+      for (const admin of targetAdmins) {
         await notificationService.createNotification({
           recipientId: admin._id,
           type: "Verification",
           title: "New Verification Submission",
-          body: `Business "${business.name}" (${targetState ? `${targetState} / ` : ""}${targetChapter || "National"}) has submitted verification documents for approval.`,
+          body: `Business "${business.name}" (${targetCountry || targetState || targetChapter || "National"}) has submitted verification documents for approval.`,
           entityId: verification._id,
           link: "/admin/verification",
         });
       }
     } catch (notifErr) {
-      console.error("Failed to notify central admins on verification submission:", notifErr);
+      console.error("Failed to notify admin on verification submission:", notifErr);
     }
 
     return verification;
@@ -102,7 +123,7 @@ export const verificationService = {
    */
   getVerificationByBusinessId: async (businessId, requester = null) => {
     const verification = await Verification.findOne({ business: businessId })
-      .populate("business", "name slug chapter verification verificationReviewReason verificationRemarks verificationHistory")
+      .populate("business", "name slug chapter country countryId verification verificationReviewReason verificationRemarks verificationHistory")
       .populate("submittedBy", "name email");
 
     if (!verification) return null;
@@ -128,13 +149,17 @@ export const verificationService = {
     const chapterScope = await getChapterFilter(requester, 'business_ref');
     Object.assign(filter, chapterScope);
 
-    // State, Chapter, and Search filtering
+    // State, Chapter, Country, and Search filtering
+    const hasCountryFilter = queryParams.country && queryParams.country.toLowerCase() !== "all";
     const hasStateFilter = queryParams.state && queryParams.state.toLowerCase() !== "all";
     const hasChapterFilter = queryParams.chapter && queryParams.chapter.toLowerCase() !== "all";
     const hasSearchFilter = queryParams.search && queryParams.search.trim();
 
-    if (!chapterScope.business && (hasStateFilter || hasChapterFilter || hasSearchFilter)) {
+    if (hasCountryFilter || hasStateFilter || hasChapterFilter || hasSearchFilter) {
       const bizQuery = {};
+      if (hasCountryFilter) {
+        bizQuery.country = new RegExp(`^${queryParams.country.trim()}$`, "i");
+      }
       if (hasStateFilter) {
         bizQuery.state = new RegExp(`^${queryParams.state.trim()}$`, "i");
       }
@@ -150,10 +175,13 @@ export const verificationService = {
           { email: sRegex },
         ];
       }
+      if (chapterScope.business?.$in) {
+        bizQuery._id = { $in: chapterScope.business.$in };
+      }
       const matchedBusinesses = await Business.find(bizQuery).select('_id');
       const businessIds = matchedBusinesses.map(b => b._id);
 
-      if (hasSearchFilter && !hasStateFilter && !hasChapterFilter) {
+      if (hasSearchFilter && !hasCountryFilter && !hasStateFilter && !hasChapterFilter && !chapterScope.business) {
         // Also search submittedBy users when performing global text search
         const matchedUsers = await User.find({
           $or: [
@@ -178,7 +206,7 @@ export const verificationService = {
 
     const [verificationsRaw, total] = await Promise.all([
       Verification.find(filter)
-        .populate("business", "name slug city state chapter membership paymentStatus isPaid verification verificationReviewReason")
+        .populate("business", "name slug city state chapter country countryId membership paymentStatus isPaid verification verificationReviewReason")
         .populate("submittedBy", "name email phone")
         .populate("reviewedBy", "name chapter role")
         .sort(sort)
@@ -258,8 +286,22 @@ export const verificationService = {
     const business = await Business.findById(verification.business);
     
     // RBAC: Geographic Scope Enforcement
-    if (!reviewer || ![ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(reviewer.role)) {
+    if (!reviewer || ![ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(reviewer.role)) {
       throw new ForbiddenError("You are not authorized to verify businesses.");
+    }
+
+    if (reviewer.role === ROLES.COUNTRY_ADMIN) {
+      const reviewerCountry = (reviewer.country || "").trim().toLowerCase();
+      const reviewerCountryId = reviewer.countryId ? String(reviewer.countryId) : null;
+      const bizCountry = (business?.country || "").trim().toLowerCase();
+      const bizCountryId = business?.countryId ? String(business.countryId) : null;
+
+      const idMatch = Boolean(reviewerCountryId && bizCountryId && reviewerCountryId === bizCountryId);
+      const nameMatch = Boolean(reviewerCountry && bizCountry && reviewerCountry === bizCountry);
+
+      if (!idMatch && !nameMatch) {
+        throw new ForbiddenError("You are not authorized to review verifications outside your country.");
+      }
     }
 
     if (reviewer.role === ROLES.STATE_ADMIN && reviewer.state) {
@@ -394,8 +436,22 @@ export const verificationService = {
 
     const business = await Business.findById(verification.business);
 
-    if (!reviewer || ![ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(reviewer.role)) {
+    if (!reviewer || ![ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(reviewer.role)) {
       throw new ForbiddenError("You are not authorized to review verifications.");
+    }
+
+    if (reviewer.role === ROLES.COUNTRY_ADMIN) {
+      const reviewerCountry = (reviewer.country || "").trim().toLowerCase();
+      const reviewerCountryId = reviewer.countryId ? String(reviewer.countryId) : null;
+      const bizCountry = (business?.country || "").trim().toLowerCase();
+      const bizCountryId = business?.countryId ? String(business.countryId) : null;
+
+      const idMatch = Boolean(reviewerCountryId && bizCountryId && reviewerCountryId === bizCountryId);
+      const nameMatch = Boolean(reviewerCountry && bizCountry && reviewerCountry === bizCountry);
+
+      if (!idMatch && !nameMatch) {
+        throw new ForbiddenError("You are not authorized to update verifications outside your country.");
+      }
     }
 
     if (reviewer.role === ROLES.STATE_ADMIN && reviewer.state) {

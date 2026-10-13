@@ -9,8 +9,8 @@ const router = Router();
 // Protect all announcement routes
 router.use(authMiddleware);
 
-// Only allow Chapter Admin, Secretariat, and Super Admin to manage announcements
-router.use(requireRole(ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN));
+// Only allow Chapter Admin, State Admin, Country Admin, and Central Admin to manage announcements
+router.use(requireRole(ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.CENTRAL_ADMIN));
 
 router.route("/")
   .get(announcementController.list)
