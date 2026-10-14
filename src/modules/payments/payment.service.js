@@ -29,7 +29,7 @@ const BUILTIN_MEMBERSHIP_PLANS = {
   tier_1: { planId: "tier_1", name: "Tier I (Free)", price: 0, priceUsd: 0, durationYears: 1, gstRate: 0 },
   tier_2: { planId: "tier_2", name: "Tier II (Starter)", price: 50, priceUsd: 1, durationYears: 1, gstRate: 0 },
   tier_3: { planId: "tier_3", name: "Tier III (Growth)", price: 100, priceUsd: 2, durationYears: 1, gstRate: 0 },
-  tier_4: { planId: "tier_4", name: "Tier IV (Enterprise)", price: 200, priceUsd: 4, durationYears: 1, gstRate: 0 },
+  tier_4: { planId: "tier_4", name: "Tier IV (Enterprise)", price: 200, priceUsd: 3, durationYears: 1, gstRate: 0 },
 };
 
 async function getActivePlan(planId) {

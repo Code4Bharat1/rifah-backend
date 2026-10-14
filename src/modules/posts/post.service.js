@@ -314,7 +314,7 @@ export const postService = {
       } else if (norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
         maxPosts = 20;
       } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
-        maxPosts = 10;
+        maxPosts = 15;
       } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
         maxPosts = 5;
       }

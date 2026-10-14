@@ -321,7 +321,7 @@ export const leadService = {
       if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
         maxQuotes = Infinity;
       } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
-        maxQuotes = 20;
+        maxQuotes = 10;
       } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
         maxQuotes = 5;
       }

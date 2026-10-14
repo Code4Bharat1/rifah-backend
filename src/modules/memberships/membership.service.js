@@ -139,7 +139,7 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     displayOrder: 7,
     isRecommended: true,
     summary: "Most popular monthly plan for active business lead generation and 30 chats.",
-    features: ["0 Users", "10 Feed posts/month", "30 Direct chats", "30 Inquiries/month", "15 Lead unlocks/month", "10 Catalogue products", "Featured business visibility", "WhatsApp Integration"],
+    features: ["0 Users", "15 Feed posts/month", "30 Direct chats", "30 Inquiries/month", "15 Lead unlocks/month", "10 Catalogue products", "Featured business visibility", "WhatsApp Integration"],
     missingFeatures: [],
   },
   tier_4: {
