@@ -263,14 +263,17 @@ export const userService = {
       throw new NotFoundError("User not found or outside your administrative scope");
     }
 
-    if (role === ROLES.COUNTRY_ADMIN) {
-      const targetCountry = (userToUpdate.country || "india").trim().toLowerCase();
-      if (!targetCountry || targetCountry === "india") {
-        throw new BadRequestError(
-          "Cannot assign Country Admin to an India-based user. Central Admin already manages India."
-        );
-      }
-    }
+    // ==========================================
+    // [COUNTRY_MODULE_DISABLED]
+    // if (role === ROLES.COUNTRY_ADMIN) {
+    //   const targetCountry = (userToUpdate.country || "india").trim().toLowerCase();
+    //   if (!targetCountry || targetCountry === "india") {
+    //     throw new BadRequestError(
+    //       "Cannot assign Country Admin to an India-based user. Central Admin already manages India."
+    //     );
+    //   }
+    // }
+    // ==========================================
 
     // Prevent demoting higher-ranked admins (e.g. Country Admin cannot re-assign a Central Admin)
     const roleRank = { customer: 0, business_owner: 0, chapter_admin: 1, state_admin: 2, country_admin: 3, central_admin: 4 };

@@ -81,17 +81,19 @@ export const verificationService = {
 
       let targetAdmins = [];
 
-      // 1. If country is specified, find Country Admin for this country
-      if (targetCountry && targetCountry.toLowerCase() !== "india") {
-        const cAdminQuery = [];
-        if (targetCountryId) cAdminQuery.push({ countryId: targetCountryId });
-        cAdminQuery.push({ country: new RegExp(`^${targetCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
-        targetAdmins = await User.find({
-          role: ROLES.COUNTRY_ADMIN,
-          status: "Active",
-          $or: cAdminQuery,
-        });
-      }
+      // ==========================================
+      // [COUNTRY_MODULE_DISABLED] Country Admin Alert Routing
+      // if (targetCountry && targetCountry.toLowerCase() !== "india") {
+      //   const cAdminQuery = [];
+      //   if (targetCountryId) cAdminQuery.push({ countryId: targetCountryId });
+      //   cAdminQuery.push({ country: new RegExp(`^${targetCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+      //   targetAdmins = await User.find({
+      //     role: ROLES.COUNTRY_ADMIN,
+      //     status: "Active",
+      //     $or: cAdminQuery,
+      //   });
+      // }
+      // ==========================================
 
       // 2. If no Country Admin found (or India/unassigned), notify Central Admins
       if (targetAdmins.length === 0) {

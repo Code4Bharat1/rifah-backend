@@ -544,17 +544,19 @@ export const paymentService = {
         const bizCountryId = businessDoc?.countryId || userDoc?.countryId;
         const isNonIndia = bizCountry && bizCountry.toLowerCase() !== "india";
 
-        let targetAdmins = [];
-        if (isNonIndia) {
-          const cAdminQuery = [];
-          if (bizCountryId) cAdminQuery.push({ countryId: bizCountryId });
-          cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
-          targetAdmins = await User.find({
-            role: ROLES.COUNTRY_ADMIN,
-            status: "Active",
-            $or: cAdminQuery,
-          }).select("_id email name");
-        }
+        // ==========================================
+        // [COUNTRY_MODULE_DISABLED] Country Admin Payment Alert
+        // if (isNonIndia) {
+        //   const cAdminQuery = [];
+        //   if (bizCountryId) cAdminQuery.push({ countryId: bizCountryId });
+        //   cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+        //   targetAdmins = await User.find({
+        //     role: ROLES.COUNTRY_ADMIN,
+        //     status: "Active",
+        //     $or: cAdminQuery,
+        //   }).select("_id email name");
+        // }
+        // ==========================================
 
         if (targetAdmins.length === 0) {
           targetAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
@@ -864,17 +866,19 @@ export const paymentService = {
         const bizCountryId = businessDoc?.countryId || userDoc?.countryId;
         const isNonIndia = bizCountry && bizCountry.toLowerCase() !== "india";
 
-        let targetAdmins = [];
-        if (isNonIndia) {
-          const cAdminQuery = [];
-          if (bizCountryId) cAdminQuery.push({ countryId: bizCountryId });
-          cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
-          targetAdmins = await User.find({
-            role: ROLES.COUNTRY_ADMIN,
-            status: "Active",
-            $or: cAdminQuery,
-          }).select("_id email name");
-        }
+        // ==========================================
+        // [COUNTRY_MODULE_DISABLED] Country Admin Payment Alert
+        // if (isNonIndia) {
+        //   const cAdminQuery = [];
+        //   if (bizCountryId) cAdminQuery.push({ countryId: bizCountryId });
+        //   cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+        //   targetAdmins = await User.find({
+        //     role: ROLES.COUNTRY_ADMIN,
+        //     status: "Active",
+        //     $or: cAdminQuery,
+        //   }).select("_id email name");
+        // }
+        // ==========================================
 
         if (targetAdmins.length === 0) {
           targetAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");

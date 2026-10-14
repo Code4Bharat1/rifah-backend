@@ -24,58 +24,61 @@ export const getChapterFilter = async (user, entityType = "direct") => {
     return {};
   }
 
-  // Handle Country Admin scope (strictly isolated to their country)
-  if (user.role === ROLES.COUNTRY_ADMIN) {
-    let countryId = user.countryId;
-    let country = user.country;
-    if (!countryId && !country && (user.id || user._id)) {
-      const { User } = await import("../../modules/users/user.model.js");
-      const uDoc = await User.findById(user.id || user._id).select("country countryId").lean();
-      if (uDoc) {
-        countryId = uDoc.countryId;
-        country = uDoc.country;
-      }
-    }
-    if (!countryId && !country) return { _id: null };
-    const countryName = (country || "").trim();
-    const countryRegex = countryName ? new RegExp(`^${countryName}$`, "i") : null;
-
-    const countryChaptersQuery = [];
-    if (countryId) countryChaptersQuery.push({ countryId: countryId });
-    if (countryRegex) countryChaptersQuery.push({ country: countryRegex });
-
-    const countryChapters = countryChaptersQuery.length > 0
-      ? await Chapter.find({ $or: countryChaptersQuery }).select("_id name")
-      : [];
-    const chapterIds = countryChapters.map((c) => c._id);
-    const chapterNames = countryChapters.map((c) => new RegExp(c.name.trim(), "i"));
-
-    if (entityType === "direct_id") {
-      const orList = [];
-      if (countryId) orList.push({ countryId: countryId });
-      if (countryRegex) orList.push({ country: countryRegex });
-      if (chapterIds.length > 0) orList.push({ chapterId: { $in: chapterIds } });
-      if (chapterNames.length > 0) orList.push({ chapter: { $in: chapterNames } });
-      return orList.length === 1 ? orList[0] : (orList.length > 0 ? { $or: orList } : { _id: null });
-    }
-
-    if (entityType === "business_ref") {
-      const bizQuery = [];
-      if (countryId) bizQuery.push({ countryId: countryId });
-      if (countryRegex) bizQuery.push({ country: countryRegex });
-      if (chapterIds.length > 0) bizQuery.push({ chapterId: { $in: chapterIds } });
-
-      const businesses = await Business.find(bizQuery.length > 0 ? { $or: bizQuery } : { _id: null }).select("_id");
-      return { business: { $in: businesses.map((b) => b._id) } };
-    }
-
-    const orConditions = [];
-    if (countryId) orConditions.push({ countryId: countryId });
-    if (countryRegex) orConditions.push({ country: countryRegex });
-    if (chapterNames.length > 0) orConditions.push({ chapter: { $in: chapterNames } });
-    if (user._id || user.id) orConditions.push({ author: user._id || user.id });
-    return orConditions.length > 0 ? { $or: orConditions } : { _id: null };
-  }
+  // ==========================================
+  // [COUNTRY_MODULE_DISABLED]
+  // // Handle Country Admin scope (strictly isolated to their country)
+  // if (user.role === ROLES.COUNTRY_ADMIN) {
+  //   let countryId = user.countryId;
+  //   let country = user.country;
+  //   if (!countryId && !country && (user.id || user._id)) {
+  //     const { User } = await import("../../modules/users/user.model.js");
+  //     const uDoc = await User.findById(user.id || user._id).select("country countryId").lean();
+  //     if (uDoc) {
+  //       countryId = uDoc.countryId;
+  //       country = uDoc.country;
+  //     }
+  //   }
+  //   if (!countryId && !country) return { _id: null };
+  //   const countryName = (country || "").trim();
+  //   const countryRegex = countryName ? new RegExp(`^${countryName}$`, "i") : null;
+  //
+  //   const countryChaptersQuery = [];
+  //   if (countryId) countryChaptersQuery.push({ countryId: countryId });
+  //   if (countryRegex) countryChaptersQuery.push({ country: countryRegex });
+  //
+  //   const countryChapters = countryChaptersQuery.length > 0
+  //     ? await Chapter.find({ $or: countryChaptersQuery }).select("_id name")
+  //     : [];
+  //   const chapterIds = countryChapters.map((c) => c._id);
+  //   const chapterNames = countryChapters.map((c) => new RegExp(c.name.trim(), "i"));
+  //
+  //   if (entityType === "direct_id") {
+  //     const orList = [];
+  //     if (countryId) orList.push({ countryId: countryId });
+  //     if (countryRegex) orList.push({ country: countryRegex });
+  //     if (chapterIds.length > 0) orList.push({ chapterId: { $in: chapterIds } });
+  //     if (chapterNames.length > 0) orList.push({ chapter: { $in: chapterNames } });
+  //     return orList.length === 1 ? orList[0] : (orList.length > 0 ? { $or: orList } : { _id: null });
+  //   }
+  //
+  //   if (entityType === "business_ref") {
+  //     const bizQuery = [];
+  //     if (countryId) bizQuery.push({ countryId: countryId });
+  //     if (countryRegex) bizQuery.push({ country: countryRegex });
+  //     if (chapterIds.length > 0) bizQuery.push({ chapterId: { $in: chapterIds } });
+  //
+  //     const businesses = await Business.find(bizQuery.length > 0 ? { $or: bizQuery } : { _id: null }).select("_id");
+  //     return { business: { $in: businesses.map((b) => b._id) } };
+  //   }
+  //
+  //   const orConditions = [];
+  //   if (countryId) orConditions.push({ countryId: countryId });
+  //   if (countryRegex) orConditions.push({ country: countryRegex });
+  //   if (chapterNames.length > 0) orConditions.push({ chapter: { $in: chapterNames } });
+  //   if (user._id || user.id) orConditions.push({ author: user._id || user.id });
+  //   return orConditions.length > 0 ? { $or: orConditions } : { _id: null };
+  // }
+  // ==========================================
 
   // Handle State Admin scope
   if (user.role === ROLES.STATE_ADMIN) {
