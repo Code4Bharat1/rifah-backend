@@ -5,7 +5,8 @@ import { Country } from "../countries/country.model.js";
 import { Catalogue } from "../catalogue/catalogue.model.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
-import { NotFoundError, ForbiddenError, ConflictError } from "../../shared/errors/errors.js";
+import crypto from "crypto";
+import { NotFoundError, ForbiddenError, ConflictError, BadRequestError } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { Payment } from "../payments/payment.model.js";
 import { getNextInvoiceNumber, getNextMembershipId, getChapterCode, getStateCode } from "../../shared/utils/sequence-generator.js";
@@ -16,6 +17,8 @@ import { hashPassword } from "../../infrastructure/auth/password.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { categoryService } from "../categories/category.service.js";
+import { OtpVerification } from "../auth/otp.model.js";
+import { logger } from "../../infrastructure/logger/logger.js";
 
 /**
  * Ensures the given category/sub-category strings exist in the shared
@@ -96,6 +99,91 @@ export const isSubscriberTierBusiness = (business) => {
   }
 
   return false;
+};
+
+/**
+ * Checks whether a business is eligible for multi-member registration under its account.
+ * Multi-member registration under a single business/GST is supported ONLY when:
+ * 1. The business has purchased an accredited Chamber Membership (Silver, Gold, Platinum, Diamond); AND
+ * 2. The business has an active Tier 4 (Enterprise) subscription.
+ */
+export const isBusinessEligibleForMemberLink = (business) => {
+  if (!business) return { eligible: false, reason: "Business profile was not found." };
+
+  const status = String(business.status || "").toLowerCase();
+  if (status === "suspended" || status === "rejected" || status === "draft") {
+    return { eligible: false, reason: "Business profile is not currently active." };
+  }
+
+  // 1. Check Chamber Membership (Silver, Gold, Platinum, Diamond)
+  const mem = String(
+    business.membership ||
+    business.membershipPlan ||
+    business.membershipTier ||
+    business.chamberMembership ||
+    business.owner?.membershipPlan ||
+    business.owner?.chamberMembership ||
+    ""
+  ).trim().toLowerCase();
+
+  const hasChamberMembership =
+    mem.includes("silver") ||
+    mem.includes("gold") ||
+    mem.includes("platinum") ||
+    mem.includes("diamond");
+
+  if (!hasChamberMembership) {
+    return {
+      eligible: false,
+      reason: "This business does not have an active Chamber Membership (Silver, Gold, Platinum, or Diamond). Both an active Chamber Membership and Tier IV (Enterprise) subscription are required to register team members.",
+    };
+  }
+
+  // 2. Check Tier 4 (Enterprise) Subscription
+  const subTier = String(
+    business.subscriberTier ||
+    business.subscriber_tier ||
+    business.owner?.subscriberTier ||
+    ""
+  ).trim().toLowerCase();
+
+  const isTier4 =
+    subTier === "tier_4" ||
+    subTier === "tier-4" ||
+    subTier === "tier 4" ||
+    subTier.includes("tier iv") ||
+    subTier.includes("enterprise");
+
+  if (!isTier4) {
+    return {
+      eligible: false,
+      reason: "This business is on a lower subscriber tier and does not have an active Tier IV (Enterprise) subscription. Only businesses holding an active Tier IV subscription can add multiple members.",
+    };
+  }
+
+  // 3. Check Team Capacity (Max 5 members = 1 owner + 4 members)
+  const activeMembers = Array.isArray(business.gstGroupMembers)
+    ? business.gstGroupMembers.filter((m) => m && m.status !== "removed")
+    : [];
+  if (activeMembers.length >= 4) {
+    return {
+      eligible: false,
+      reason: "This business has already reached the maximum team limit (5 members including owner).",
+    };
+  }
+
+  return { eligible: true };
+};
+
+export const maskEmail = (email) => {
+  if (!email || typeof email !== "string" || !email.includes("@")) return "";
+  const parts = email.trim().toLowerCase().split("@");
+  if (parts.length !== 2) return "";
+  const [local, domain] = parts;
+  if (local.length <= 2) {
+    return `${local.charAt(0)}***@${domain}`;
+  }
+  return `${local.charAt(0)}***${local.charAt(local.length - 1)}@${domain}`;
 };
 
 // Scaled for 10k/50k users: In-memory profile view buffer with periodic batch flush to MongoDB
@@ -738,21 +826,27 @@ export const businessService = {
     let business = null;
 
     if (isObjectId) {
-      business = await Business.findById(trimmed).populate("owner", "name email phone avatar designation roleInBusiness");
+      business = await Business.findById(trimmed)
+        .populate("owner", "name email phone avatar designation roleInBusiness")
+        .populate("gstGroupMembers.user", "name email phone avatar designation");
     }
 
     if (!business) {
       // Case-insensitive exact slug match
       business = await Business.findOne({
         slug: new RegExp(`^${escapeRegex(trimmed)}$`, "i"),
-      }).populate("owner", "name email phone avatar designation roleInBusiness");
+      })
+        .populate("owner", "name email phone avatar designation roleInBusiness")
+        .populate("gstGroupMembers.user", "name email phone avatar designation");
     }
 
     if (!business) {
       // Fallback: match by business name
       business = await Business.findOne({
         name: new RegExp(`^${escapeRegex(trimmed)}$`, "i"),
-      }).populate("owner", "name email phone avatar designation roleInBusiness");
+      })
+        .populate("owner", "name email phone avatar designation roleInBusiness")
+        .populate("gstGroupMembers.user", "name email phone avatar designation");
     }
 
     if (!business) {
@@ -796,7 +890,9 @@ export const businessService = {
    * Get business owned by a specific user
    */
   getBusinessByOwnerId: async (ownerId) => {
-    let business = await Business.findOne({ owner: ownerId }).populate("owner", "name email phone avatar designation roleInBusiness");
+    let business = await Business.findOne({ owner: ownerId })
+      .populate("owner", "name email phone avatar designation roleInBusiness")
+      .populate("gstGroupMembers.user", "name email phone avatar designation");
     if (!business) {
       const user = await User.findById(ownerId);
       // Only business accounts may own/auto-provision a business. Admins and customers used to get
@@ -929,6 +1025,9 @@ export const businessService = {
       // Ensure owner is populated and contactPerson is populated with real owner's name
       if (!business.populated || !business.populated("owner")) {
         await business.populate("owner", "name email phone avatar designation roleInBusiness");
+      }
+      if (!business.populated || !business.populated("gstGroupMembers.user")) {
+        await business.populate("gstGroupMembers.user", "name email phone avatar designation");
       }
       const ownerName = business.owner?.name;
       const currentContact = (business.contactPerson || "").trim();
@@ -1535,6 +1634,194 @@ export const businessService = {
         joinedAt: b.createdAt,
       };
     });
+  },
+
+  /**
+   * Retrieves active businesses for multi-member registration, filtered by State and Chapter.
+   * Includes masked contact email and real-time eligibility evaluation for Tier 4 + Chamber membership.
+   */
+  getLinkableBusinesses: async ({ state, chapter, search, includeIneligible }) => {
+    const query = {
+      status: { $in: ["Active", "active"] },
+    };
+
+    if (state && typeof state === "string" && state.trim()) {
+      query.state = { $regex: new RegExp(`^${escapeRegex(state.trim())}$`, "i") };
+    }
+    if (chapter && typeof chapter === "string" && chapter.trim()) {
+      query.chapter = { $regex: new RegExp(`^${escapeRegex(chapter.trim())}$`, "i") };
+    }
+    if (search && typeof search === "string" && search.trim()) {
+      query.name = { $regex: new RegExp(escapeRegex(search.trim()), "i") };
+    }
+
+    const businesses = await Business.find(query)
+      .populate("owner", "name email membershipPlan subscriberTier role")
+      .select("_id name slug chapter chapterId state city logo email ownerEmail membership membershipTier membershipPlan subscriberTier status isPaid gstGroupMembers owner")
+      .sort({ name: 1 })
+      .limit(100)
+      .lean();
+
+    const mapped = businesses.map((b) => {
+      const eligibility = isBusinessEligibleForMemberLink(b);
+      const contactEmail = (b.email || b.ownerEmail || b.owner?.email || "").trim();
+      return {
+        _id: b._id,
+        name: b.name,
+        slug: b.slug,
+        chapter: b.chapter || "",
+        state: b.state || "",
+        city: b.city || "",
+        logo: b.logo || "",
+        maskedEmail: maskEmail(contactEmail),
+        hasContactEmail: Boolean(contactEmail),
+        membership: b.membership || b.owner?.membershipPlan || "Free",
+        subscriberTier: b.subscriberTier || b.owner?.subscriberTier || "tier_1",
+        isEligibleForMemberLink: eligibility.eligible,
+        ineligibleReason: eligibility.reason || null,
+        membersCount: Array.isArray(b.gstGroupMembers) ? b.gstGroupMembers.length : 0,
+      };
+    });
+
+    if (includeIneligible === true || includeIneligible === "true") {
+      return mapped;
+    }
+
+    return mapped.filter((b) => b.isEligibleForMemberLink);
+  },
+
+  /**
+   * Sends an OTP to the email address associated with the business/member.
+   * Enforces that the business must have an active Chamber membership and active Tier 4 subscription.
+   */
+  sendBusinessMemberOtp: async (businessId) => {
+    const business = await Business.findById(businessId).populate("owner", "name email");
+    if (!business) {
+      throw new NotFoundError("Business profile not found.");
+    }
+
+    const eligibility = isBusinessEligibleForMemberLink(business);
+    if (!eligibility.eligible) {
+      throw new BadRequestError(
+        eligibility.reason || "This business is not eligible to add team members. An active Chamber Membership and Tier IV (Enterprise) subscription are required."
+      );
+    }
+
+    const contactEmail = (business.email || business.ownerEmail || business.owner?.email || "").trim().toLowerCase();
+    if (!contactEmail || !contactEmail.includes("@")) {
+      throw new BadRequestError("The selected business does not have a registered contact email address for OTP verification.");
+    }
+
+    const cleanBusinessId = business._id.toString();
+    const existingOtp = await OtpVerification.findOne({
+      purpose: `business_member_link:${cleanBusinessId}`,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (existingOtp && (Date.now() - new Date(existingOtp.updatedAt || existingOtp.createdAt).getTime()) < 60000) {
+      return {
+        success: true,
+        message: "A verification code was recently sent. Please check your inbox or wait 60 seconds to resend.",
+        maskedEmail: maskEmail(contactEmail),
+      };
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await OtpVerification.findOneAndUpdate(
+      {
+        email: contactEmail,
+        purpose: `business_member_link:${cleanBusinessId}`,
+      },
+      {
+        otp,
+        verified: false,
+        verifiedToken: null,
+        expiresAt,
+      },
+      { upsert: true, new: true }
+    );
+
+    // Send email to business official email
+    try {
+      await emailService.sendEmail({
+        to: contactEmail,
+        subject: `RIFAH Chamber: Team Member Registration OTP for ${business.name}`,
+        text: `Dear ${business.name} Team,\n\nA request was initiated to register a new member under your business "${business.name}" on RIFAH Connect.\n\nYour 6-digit One-Time Password (OTP) is: ${otp}\n\nThis OTP is valid for 10 minutes. If you did not authorize this registration request, please ignore this email or contact support.\n\nWarm regards,\nRIFAH Chamber of Commerce & Industry`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <h2 style="color: #071328; margin: 0;">RIFAH CONNECT</h2>
+              <p style="color: #0284c7; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-top: 4px;">Chamber of Commerce & Industry</p>
+            </div>
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+              <p style="color: #334155; margin-top: 0;">A user has initiated a request to register as a team member under <strong>${business.name}</strong>.</p>
+              <p style="color: #334155;">To authorize this registration, please provide the one-time verification code below:</p>
+              <div style="text-align: center; margin: 24px 0;">
+                <span style="display: inline-block; font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #0284c7; background-color: #e0f2fe; padding: 12px 28px; border-radius: 8px; border: 1px dashed #0284c7;">${otp}</span>
+              </div>
+              <p style="color: #64748b; font-size: 13px; margin-bottom: 0;">This code is valid for <strong>10 minutes</strong>. If you did not authorize this registration, please contact your chapter administrator or ignore this email.</p>
+            </div>
+            <p style="color: #94a3b8; font-size: 12px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Official Verification Service</p>
+          </div>
+        `,
+      });
+    } catch (mailErr) {
+      logger.error(`[BUSINESS MEMBER OTP] Failed to send email to ${contactEmail}:`, mailErr);
+    }
+
+    return {
+      success: true,
+      message: `A 6-digit verification code has been sent to ${maskEmail(contactEmail)}`,
+      maskedEmail: maskEmail(contactEmail),
+    };
+  },
+
+  /**
+   * Verifies the business member registration OTP and generates a signed businessLinkToken.
+   */
+  verifyBusinessMemberOtp: async (businessId, otp) => {
+    if (!otp || String(otp).trim().length !== 6) {
+      throw new BadRequestError("Please provide a valid 6-digit verification code.");
+    }
+
+    const business = await Business.findById(businessId);
+    if (!business) {
+      throw new NotFoundError("Business profile not found.");
+    }
+
+    const eligibility = isBusinessEligibleForMemberLink(business);
+    if (!eligibility.eligible) {
+      throw new BadRequestError(eligibility.reason || "This business is not eligible to add team members.");
+    }
+
+    const cleanBusinessId = business._id.toString();
+    const cleanOtp = String(otp).trim();
+
+    const record = await OtpVerification.findOne({
+      purpose: `business_member_link:${cleanBusinessId}`,
+      otp: cleanOtp,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!record) {
+      throw new BadRequestError("Invalid or expired verification code. Please check the code or request a new one.");
+    }
+
+    const businessLinkToken = crypto.randomBytes(32).toString("hex");
+    record.verified = true;
+    record.verifiedToken = businessLinkToken;
+    await record.save();
+
+    return {
+      success: true,
+      businessLinkToken,
+      businessId: business._id,
+      businessName: business.name,
+      chapter: business.chapter || "",
+      state: business.state || "",
+    };
   },
 };
 

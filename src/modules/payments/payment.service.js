@@ -225,8 +225,8 @@ async function fulfillPaymentOrder({
         status: isUserTier ? "Active" : "Pending Verification",
         verificationStatus: isUserTier ? "Unverified" : "Pending",
         verification: "unverified",
-        membership: formattedTier,
-        subscriberTier: isUserTier ? (planId || "tier_1") : undefined,
+        membership: isUserTier ? "Free" : formattedTier,
+        subscriberTier: isUserTier ? (planId || "tier_1") : "tier_1",
         region: isIntlPurchase ? "international" : (userDoc.region || "national"),
         currency: isIntlPurchase ? "USD" : "INR",
         rating: 5,
@@ -235,7 +235,6 @@ async function fulfillPaymentOrder({
     } else {
       const formattedTier = membershipPlan.name;
 
-      businessDoc.membership = formattedTier;
       businessDoc.paymentStatus = "Paid";
       businessDoc.isPaid = true;
       if (isIntlPurchase) {
@@ -244,16 +243,21 @@ async function fulfillPaymentOrder({
       }
       if (isUserTier) {
         businessDoc.subscriberTier = planId || "tier_1";
-        businessDoc.status = "Active";
-        businessDoc.verification = "unverified";
-        businessDoc.verificationStatus = "unverified";
-        businessDoc.isVerified = false;
-      } else if (!businessDoc.isVerified) {
-        businessDoc.status = "Pending Verification";
-        businessDoc.verificationStatus = "Pending";
-        businessDoc.verification = "pending";
-        businessDoc.verificationReviewReason = "";
-        businessDoc.verificationRemarks = "";
+        if (!businessDoc.membership) {
+          businessDoc.membership = "Free";
+        }
+      } else {
+        businessDoc.membership = formattedTier;
+        if (!businessDoc.subscriberTier) {
+          businessDoc.subscriberTier = "tier_1";
+        }
+        if (!businessDoc.isVerified) {
+          businessDoc.status = "Pending Verification";
+          businessDoc.verificationStatus = "Pending";
+          businessDoc.verification = "pending";
+          businessDoc.verificationReviewReason = "";
+          businessDoc.verificationRemarks = "";
+        }
       }
 
       if (payload.taxId && !businessDoc.taxId) businessDoc.taxId = payload.taxId.trim();
@@ -901,8 +905,8 @@ export const paymentService = {
           status: isUserTier ? "Active" : "Pending Verification",
           verificationStatus: isUserTier ? "Unverified" : "Pending",
           verification: "unverified",
-          membership: formattedTier,
-          subscriberTier: isUserTier ? (data.planId || "tier_1") : undefined,
+          membership: isUserTier ? "Free" : formattedTier,
+          subscriberTier: isUserTier ? (data.planId || "tier_1") : "tier_1",
           region: isIntlPurchase ? "international" : (userDoc.region || "national"),
           currency: isIntlPurchase ? "USD" : "INR",
           rating: 5,
@@ -914,24 +918,27 @@ export const paymentService = {
                            String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
                            String(data.planId || "").toLowerCase() === "free";
 
-        businessDoc.membership = formattedTier;
         if (isIntlPurchase) {
           businessDoc.region = "international";
           businessDoc.currency = "USD";
         }
         if (isUserTier) {
           businessDoc.subscriberTier = data.planId || "tier_1";
-          if (!businessDoc.isVerified) {
-            businessDoc.status = "Active";
-            businessDoc.verification = "unverified";
-            businessDoc.verificationStatus = "Unverified";
+          if (!businessDoc.membership) {
+            businessDoc.membership = "Free";
           }
-        } else if (!businessDoc.isVerified) {
-          businessDoc.status = "Pending Verification";
-          businessDoc.verificationStatus = "Pending";
-          businessDoc.verification = "pending";
-          businessDoc.verificationReviewReason = "";
-          businessDoc.verificationRemarks = "";
+        } else {
+          businessDoc.membership = formattedTier;
+          if (!businessDoc.subscriberTier) {
+            businessDoc.subscriberTier = "tier_1";
+          }
+          if (!businessDoc.isVerified) {
+            businessDoc.status = "Pending Verification";
+            businessDoc.verificationStatus = "Pending";
+            businessDoc.verification = "pending";
+            businessDoc.verificationReviewReason = "";
+            businessDoc.verificationRemarks = "";
+          }
         }
 
         if (!Array.isArray(businessDoc.verificationHistory)) {

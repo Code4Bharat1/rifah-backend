@@ -172,21 +172,28 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
 // every subsequent upgrade/downgrade. Called from both upgradePlan branches below.
 // Failure here is logged, not thrown — a sync-field write must never roll back an
 // otherwise-successful plan change the member is actively waiting on.
-async function syncOwnerUserTier(business, membershipPlanName, subscriberTier) {
+export async function syncOwnerUserTier(business, membershipPlanName, subscriberTier) {
   try {
     if (!business?.owner) return;
-    await User.findByIdAndUpdate(business.owner, {
-      $set: {
-        membershipPlan: membershipPlanName || "",
-        subscriberTier: subscriberTier || "",
-      },
-    });
+    const updateObj = {};
+    if (membershipPlanName) {
+      updateObj.membershipPlan = membershipPlanName;
+    }
+    if (subscriberTier) {
+      updateObj.subscriberTier = subscriberTier;
+    }
+    if (Object.keys(updateObj).length > 0) {
+      await User.findByIdAndUpdate(business.owner, {
+        $set: updateObj,
+      });
+    }
   } catch (err) {
     logger.error(`[MEMBERSHIP SYNC] Failed to sync tier fields onto User ${business?.owner}:`, err);
   }
 }
 
 export const membershipService = {
+  syncOwnerUserTier,
   getPlans: async () => {
     let plansArray = await Plan.find().sort({ displayOrder: 1, createdAt: 1 }).lean();
 
@@ -310,24 +317,35 @@ export const membershipService = {
       status: { $in: ["Paid", "paid", "Completed", "completed", "Success", "success"] },
     });
     const isPaid = Boolean(business?.isPaid || hasPaidPayment);
-    const bizTier = (business?.membership || "Free").toLowerCase();
+    const rawBizMembership = business?.membership || "Free";
+    const bizTier = rawBizMembership.toLowerCase().trim();
+    // Match any accredited chamber tier (diamond, platinum, gold, silver) regardless of suffix ("tier", "membership", etc.)
+    const matchedChamber = ["diamond", "platinum", "gold", "silver"].find(k => bizTier.includes(k));
+    const isChamberPlan = Boolean(matchedChamber);
+    const canonicalChamberKey = matchedChamber || "silver";
+    const chamberDurationMap = { diamond: 25, platinum: 10, gold: 2, silver: 1 };
+    const chamberPriceMap = { diamond: 50000, platinum: 25000, gold: 5000, silver: 3000 };
+    const durationYears = chamberDurationMap[canonicalChamberKey] || 1;
 
     if (!membership) {
-      if (bizTier === "free") {
+      if (isChamberPlan) {
+        const plan = await Plan.findOne({ planId: canonicalChamberKey }).lean() || 
+                     DEFAULT_MEMBERSHIP_PLANS[canonicalChamberKey] || 
+                     DEFAULT_MEMBERSHIP_PLANS.silver;
+        
+        const chamberEndDate = new Date(business?.createdAt || Date.now());
+        chamberEndDate.setFullYear(chamberEndDate.getFullYear() + durationYears);
+
         membership = await Membership.create({
           business: businessId,
-          planId: "free",
-          planName: "Free",
-          price: 0,
-          billingCycle: "Free",
+          planId: canonicalChamberKey,
+          planName: plan?.name || (canonicalChamberKey.charAt(0).toUpperCase() + canonicalChamberKey.slice(1)),
+          price: plan?.price || chamberPriceMap[canonicalChamberKey] || 3000,
+          billingCycle: `${durationYears} Year${durationYears > 1 ? "s" : ""}`,
           startDate: business?.createdAt || new Date(),
-          endDate: null,
-          status: "Active",
-          features: [
-            "Directory listing on RIFAH Connect",
-            "Basic business profile",
-            "Search visibility",
-          ],
+          endDate: isPaid ? chamberEndDate : null,
+          status: isPaid ? "Active" : "Pending",
+          features: plan?.features || [],
         });
       } else if (bizTier.startsWith("tier_") || business?.subscriberTier?.startsWith("tier_")) {
         const tierKey = (business?.subscriberTier || bizTier).toLowerCase();
@@ -347,26 +365,43 @@ export const membershipService = {
           features: plan?.features || [],
         });
       } else {
-        const plan = await Plan.findOne({ planId: bizTier }).lean() || 
-                     DEFAULT_MEMBERSHIP_PLANS[bizTier] || 
-                     DEFAULT_MEMBERSHIP_PLANS.silver;
-        
-        const durationYears = Number(plan?.durationYears) || 1;
         membership = await Membership.create({
           business: businessId,
-          planId: bizTier,
-          planName: plan?.name || "Silver",
-          price: plan?.price || 3000,
-          billingCycle: `${durationYears} Year${durationYears > 1 ? "s" : ""}`,
+          planId: "free",
+          planName: "Free",
+          price: 0,
+          billingCycle: "Free",
           startDate: business?.createdAt || new Date(),
-          endDate: isPaid ? addDays(365 * durationYears) : null,
-          status: isPaid ? "Active" : "Pending",
-          features: plan?.features || [],
+          endDate: null,
+          status: "Active",
+          features: [
+            "Directory listing on RIFAH Connect",
+            "Basic business profile",
+            "Search visibility",
+          ],
         });
       }
     } else {
       // Reconcile existing DB membership with real plan & payment status
-      if ((membership.planId || "").toLowerCase() === "free") {
+      if (isChamberPlan && isPaid) {
+        const chamberStartDate = new Date(membership.startDate || business?.createdAt || Date.now());
+        const targetEnd = new Date(chamberStartDate);
+        targetEnd.setFullYear(targetEnd.getFullYear() + durationYears);
+
+        // If membership in DB was overwritten with 30-day tier plan or has short/missing endDate
+        const currentEndMs = membership.endDate ? new Date(membership.endDate).getTime() : 0;
+        const startMs = chamberStartDate.getTime();
+        const isShortDuration = (currentEndMs - startMs) < (300 * 24 * 60 * 60 * 1000); // less than 300 days
+
+        if (!membership.endDate || isShortDuration || (membership.planId && membership.planId.startsWith("tier_"))) {
+          membership.planId = canonicalChamberKey;
+          membership.planName = business?.membership || (canonicalChamberKey.charAt(0).toUpperCase() + canonicalChamberKey.slice(1));
+          membership.billingCycle = `${durationYears} Year${durationYears > 1 ? "s" : ""}`;
+          membership.endDate = targetEnd;
+          membership.status = "Active";
+          await membership.save();
+        }
+      } else if ((membership.planId || "").toLowerCase() === "free") {
         if (membership.endDate !== null || membership.price !== 0) {
           membership.endDate = null;
           membership.price = 0;
@@ -398,8 +433,25 @@ export const membershipService = {
     const diffMs = endDate ? endDate.getTime() - now.getTime() : 0;
     const daysRemaining = endDate ? Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24))) : null;
 
+    // Chamber term metadata
+    const chamberStartDate = new Date(membership.startDate || business?.createdAt || Date.now());
+    const chamberEndDate = new Date(chamberStartDate);
+    chamberEndDate.setFullYear(chamberEndDate.getFullYear() + durationYears);
+    const chamberDiffMs = chamberEndDate.getTime() - now.getTime();
+
     membershipObj.isPaid = isPaid;
     membershipObj.daysRemaining = daysRemaining;
+    membershipObj.chamberPlanName = business?.membership || (canonicalChamberKey.charAt(0).toUpperCase() + canonicalChamberKey.slice(1));
+    membershipObj.chamberDurationYears = durationYears;
+    membershipObj.chamberEndDate = isPaid ? chamberEndDate : null;
+    membershipObj.chamberDaysRemaining = isPaid ? Math.max(0, Math.ceil(chamberDiffMs / (1000 * 60 * 60 * 24))) : 0;
+    membershipObj.subscriberTier = business?.subscriberTier || "tier_1";
+
+    // Subscription cycle (30 days cycle for monthly tier)
+    const subRenewDate = addDays(30);
+    membershipObj.subscriptionEndDate = subRenewDate;
+    membershipObj.subscriptionDaysRemaining = 30;
+
     membershipObj.isExpiringSoon = Boolean(membership.status === "Active" && daysRemaining !== null && daysRemaining <= 30 && daysRemaining > 0);
     membershipObj.isExpired = Boolean(membership.status === "Expired" || (endDate && endDate < now));
 
@@ -427,7 +479,7 @@ export const membershipService = {
       membership = new Membership({ business: businessId });
     }
 
-    // "Free" is the baseline, no-cost tier
+    // "Free" or "tier_1" is the baseline, no-cost subscriber tier
     if (planKey === "free" || planKey === "tier_1") {
       membership.planId = "tier_1";
       membership.planName = "Tier I (Free)";
@@ -440,13 +492,12 @@ export const membershipService = {
       membership.remindersSent = [];
       await membership.save();
 
-      business.membership = "Tier I (Free)";
       business.subscriberTier = "tier_1";
-      business.verification = "unverified";
-      business.verificationStatus = "unverified";
-      business.isVerified = false;
+      if (!business.membership || business.membership === "Tier I (Free)") {
+        business.membership = "Free";
+      }
       await business.save();
-      await syncOwnerUserTier(business, "Tier I (Free)", "tier_1");
+      await syncOwnerUserTier(business, business.membership, "tier_1");
 
       return membership;
     }
@@ -459,33 +510,61 @@ export const membershipService = {
       throw new NotFoundError("Selected membership plan is unavailable");
     }
 
-    const durationYears = Number(plan.durationYears) || (isUserPlan ? 0 : 1);
-    const durationDays = isUserPlan ? 30 : 365 * durationYears;
-
-    membership.planId = planKey;
-    membership.planName = plan.name;
-    membership.price = isIntlBusiness
-      ? (plan.priceUsd ?? (plan.price === 0 ? 0 : Math.round(plan.price / 80)))
-      : (plan.price || 0);
-    membership.billingCycle = isUserPlan
-      ? (isIntlBusiness ? "Monthly (Tier Plan)" : "Monthly")
-      : `${durationYears} Year${durationYears > 1 ? "s" : ""}`;
-    membership.startDate = new Date();
-    membership.endDate = addDays(durationDays);
-    membership.status = "Active";
-    membership.features = plan.features || [];
-    membership.remindersSent = []; // Reset reminders for the new cycle
-    await membership.save();
-
-    business.membership = plan.name;
     if (isUserPlan) {
+      // Purchasing a subscription (Tier 1 - 4) updates subscriberTier.
+      // If the business already holds an accredited Chamber plan (Diamond, Platinum, Gold, Silver),
+      // preserve their multi-year chamber validity so a monthly 30-day quota doesn't wipe out their chamber accreditation.
+      const rawBizChamber = (business.membership || "").toLowerCase();
+      const hasChamber = ["diamond", "platinum", "gold", "silver"].some(k => rawBizChamber.includes(k));
+
+      if (!hasChamber) {
+        membership.planId = planKey;
+        membership.planName = plan.name;
+        membership.price = isIntlBusiness
+          ? (plan.priceUsd ?? (plan.price === 0 ? 0 : Math.round(plan.price / 80)))
+          : (plan.price || 0);
+        membership.billingCycle = isIntlBusiness ? "Monthly (Tier Plan)" : "Monthly";
+        membership.startDate = new Date();
+        membership.endDate = addDays(30);
+        membership.status = "Active";
+        membership.features = plan.features || [];
+        membership.remindersSent = [];
+        await membership.save();
+      }
+
       business.subscriberTier = planKey;
-      business.verification = "unverified";
-      business.verificationStatus = "unverified";
-      business.isVerified = false;
+      if (!business.membership) {
+        business.membership = "Free";
+      }
+      await business.save();
+      await syncOwnerUserTier(business, business.membership, planKey);
+    } else {
+      // Purchasing a Chamber Membership (Silver, Gold, Platinum, Diamond) updates membership
+      // and sets multi-year validity (Diamond=25y, Platinum=10y, Gold=2y, Silver=1y)
+      const durationYears = Number(plan.durationYears) || (planKey === "diamond" ? 25 : planKey === "platinum" ? 10 : planKey === "gold" ? 2 : 1);
+      const chamberEndDate = new Date();
+      chamberEndDate.setFullYear(chamberEndDate.getFullYear() + durationYears);
+
+      membership.planId = planKey;
+      membership.planName = plan.name;
+      membership.price = isIntlBusiness
+        ? (plan.priceUsd ?? (plan.price === 0 ? 0 : Math.round(plan.price / 80)))
+        : (plan.price || 0);
+      membership.billingCycle = `${durationYears} Year${durationYears > 1 ? "s" : ""}`;
+      membership.startDate = new Date();
+      membership.endDate = chamberEndDate;
+      membership.status = "Active";
+      membership.features = plan.features || [];
+      membership.remindersSent = [];
+      await membership.save();
+
+      business.membership = plan.name;
+      if (!business.subscriberTier) {
+        business.subscriberTier = "tier_1";
+      }
+      await business.save();
+      await syncOwnerUserTier(business, plan.name, business.subscriberTier || "tier_1");
     }
-    await business.save();
-    await syncOwnerUserTier(business, plan.name, isUserPlan ? planKey : "");
 
     return membership;
   },

@@ -16,9 +16,14 @@ const router = Router();
 
 // Public directory & verification routes
 router.get("/", optionalAuthMiddleware, businessController.searchDirectory);
+router.get("/linkable", businessController.getLinkableBusinesses);
 router.get("/detail/:identifier", optionalAuthMiddleware, businessController.getBusinessByIdOrSlug);
 router.post("/gst/verify", gstRateLimitMiddleware, businessController.verifyGst);
 router.post("/gst/details", gstRateLimitMiddleware, businessController.getGstDetails);
+
+// Multi-member registration OTP routes under an existing business
+router.post("/:id/send-member-otp", validateObjectIdParam("id"), businessController.sendMemberOtp);
+router.post("/:id/verify-member-otp", validateObjectIdParam("id"), businessController.verifyMemberOtp);
 
 // Authenticated Business Owner routes
 router.get("/me", authMiddleware, businessController.getMyBusiness);

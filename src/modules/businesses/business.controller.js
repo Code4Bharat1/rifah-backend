@@ -183,4 +183,22 @@ export const businessController = {
     const newMembers = await businessService.getNewChapterMembers(req.user);
     return ApiResponse.success(res, { newMembers }, "New chapter members fetched successfully");
   }),
+
+  getLinkableBusinesses: asyncHandler(async (req, res) => {
+    const businesses = await businessService.getLinkableBusinesses(req.query);
+    return ApiResponse.success(res, businesses, "Linkable businesses retrieved successfully");
+  }),
+
+  sendMemberOtp: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const result = await businessService.sendBusinessMemberOtp(id);
+    return ApiResponse.success(res, result, result.message || "Verification code sent successfully");
+  }),
+
+  verifyMemberOtp: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { otp } = req.body;
+    const result = await businessService.verifyBusinessMemberOtp(id, otp);
+    return ApiResponse.success(res, result, "Business member verification successful");
+  }),
 };

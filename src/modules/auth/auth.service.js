@@ -11,6 +11,7 @@ import {
 import { categoryService } from "../categories/category.service.js";
 import { OtpVerification } from "./otp.model.js";
 import { Role } from "../roles/role.model.js";
+import { isBusinessEligibleForMemberLink } from "../businesses/business.service.js";
 import crypto from "crypto";
 import {
   hashPassword,
@@ -197,6 +198,8 @@ export const authService = {
     sourcingInterest,
     subscriberTier,
     membershipId,
+    businessId,
+    businessLinkToken,
     isGuestCheckout,
     verifiedToken,
   }) => {
@@ -222,7 +225,7 @@ export const authService = {
       );
     }
 
-    // Verify OTP token if provided
+    // Verify individual email OTP token if provided
     if (verifiedToken) {
       const record = await OtpVerification.findOne({
         email: cleanEmail,
@@ -239,15 +242,50 @@ export const authService = {
 
     const cleanMembershipId = (membershipId || "").trim().toUpperCase();
     let linkedBusiness = null;
-    if (cleanMembershipId) {
+
+    // Existing Business Link flow: verified via business OTP
+    if (businessLinkToken && businessId) {
+      const cleanBusinessId = String(businessId).trim();
+      const otpRecord = await OtpVerification.findOne({
+        purpose: `business_member_link:${cleanBusinessId}`,
+        verifiedToken: businessLinkToken,
+        verified: true,
+        expiresAt: { $gt: new Date() },
+      });
+      if (!otpRecord) {
+        throw new BadRequestError(
+          "Invalid or expired business verification token. Please verify under the selected business again."
+        );
+      }
+
+      linkedBusiness = await Business.findById(cleanBusinessId);
+      if (!linkedBusiness) {
+        throw new NotFoundError("Selected business profile was not found.");
+      }
+
+      const eligibility = isBusinessEligibleForMemberLink(linkedBusiness);
+      if (!eligibility.eligible) {
+        throw new BadRequestError(
+          eligibility.reason || "This business is not eligible to add team members. An active Chamber Membership and Tier IV (Enterprise) subscription are required."
+        );
+      }
+    } else if (cleanMembershipId) {
       linkedBusiness = await Business.findOne({ membershipId: cleanMembershipId });
+      if (linkedBusiness) {
+        const eligibility = isBusinessEligibleForMemberLink(linkedBusiness);
+        if (!eligibility.eligible) {
+          throw new BadRequestError(
+            eligibility.reason || "This business is not eligible to add team members under its membership ID."
+          );
+        }
+      }
     }
 
     const passwordHash = await hashPassword(password);
     const chapterName = chapter || linkedBusiness?.chapter || "";
     const chapterId = (await resolveChapterIdByName(chapterName)) || linkedBusiness?.chapterId || null;
     let resolvedOrg = (businessName || organization || linkedBusiness?.name || "").trim();
-    const isCustomerAccount = !resolvedOrg && !subscriberTier && !cleanMembershipId;
+    const isCustomerAccount = !resolvedOrg && !subscriberTier && !cleanMembershipId && !linkedBusiness;
     const resolvedAccountType = isCustomerAccount ? "customer" : "user";
     const resolvedTier = isCustomerAccount
       ? ""
@@ -290,6 +328,7 @@ export const authService = {
       chapterId,
       organization: resolvedOrg,
       businessName: resolvedOrg,
+      businessId: linkedBusiness?._id || undefined,
       membershipId: cleanMembershipId || linkedBusiness?.membershipId || "",
       isRifahMember: Boolean(cleanMembershipId || linkedBusiness),
       category: category ? category.trim() : (linkedBusiness?.industry || ""),
@@ -310,28 +349,38 @@ export const authService = {
           ? [category]
           : [],
       subscriberTier: resolvedTier,
-      membershipPlan: resolvedTier,
+      membershipPlan: linkedBusiness?.membership || resolvedTier,
       role: ROLES.CUSTOMER,
       accountType: resolvedAccountType,
       isProfileComplete: true,
     });
 
     if (linkedBusiness) {
-      // Multiple members registrations under a single membership.
-      // Register this user into the parent business's member roster.
+      // Multiple members registrations under a single business/GST.
+      // Atomically register this user into the parent business's member roster.
       try {
-        const alreadyInGroup = linkedBusiness.gstGroupMembers?.some(
-          (m) => String(m.user) === String(user._id)
+        await Business.findOneAndUpdate(
+          {
+            _id: linkedBusiness._id,
+            status: { $in: ["Active", "active"] },
+            "gstGroupMembers.user": { $ne: user._id },
+          },
+          {
+            $addToSet: {
+              gstGroupMembers: {
+                user: user._id,
+                role: "member",
+                status: "active",
+                joinedAt: new Date(),
+              },
+            },
+          }
         );
-        if (!alreadyInGroup) {
-          if (!linkedBusiness.gstGroupMembers) linkedBusiness.gstGroupMembers = [];
-          linkedBusiness.gstGroupMembers.push({
-            user: user._id,
-            role: "member",
-            status: "active",
-            joinedAt: new Date(),
+        if (businessLinkToken) {
+          await OtpVerification.deleteMany({
+            purpose: `business_member_link:${linkedBusiness._id.toString()}`,
+            verifiedToken: businessLinkToken,
           });
-          await linkedBusiness.save();
         }
       } catch (err) {
         logger.warn("[AUTH] Failed to link member to parent business roster:", err);
@@ -365,11 +414,11 @@ export const authService = {
           verification: "unverified",
           verificationStatus: "unverified",
           isVerified: false,
-          membership: resolvedTier,
-          membershipPlan: resolvedTier,
-          subscriberTier: resolveTierPlanId(resolvedTier),
+          membership: "Free",
+          membershipPlan: "Free",
+          subscriberTier: resolveTierPlanId(resolvedTier) || "tier_1",
           membershipId: cleanMembershipId || undefined,
-          isPaid: resolvedTier !== "Tier I (Free)",
+          isPaid: false,
         });
         try {
           const resolvedPlanId = resolveTierPlanId(resolvedTier);
