@@ -93,6 +93,10 @@ export const paymentService = {
       }
       numericAmount = Number(courseDoc.price);
     } else if (planId) {
+      const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || String(planId || "").toLowerCase() === "free";
+      if (isInternational && !isUserTier) {
+        throw new BadRequestError("International businesses must select a Tier Plan (Tier I, II, III, or IV), not a Chamber subscription.");
+      }
       const plan = await getActivePlan(planId);
       const charge = getPlanCharge(plan, selectedCurrency);
       numericAmount = charge.totalAmount;
@@ -206,6 +210,14 @@ export const paymentService = {
     }
 
     const isMembership = itemType === "Membership" || Boolean(planId);
+    const isIntlPurchase = String(currency || "").toUpperCase() === "USD" || businessDoc?.region === "international" || businessDoc?.currency === "USD";
+    const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || 
+                       String(planId || "").toLowerCase() === "free";
+
+    if (isMembership && isIntlPurchase && !isUserTier) {
+      throw new BadRequestError("International businesses must select a Tier Plan (Tier I, II, III, or IV), not a Chamber subscription.");
+    }
+
     const membershipPlan = isMembership ? await getActivePlan(planId) : null;
     const planCharge = membershipPlan ? getPlanCharge(membershipPlan, currency) : null;
 
@@ -284,6 +296,8 @@ export const paymentService = {
           verification: "unverified",
           membership: formattedTier,
           subscriberTier: isUserTier ? (planId || "tier_1") : undefined,
+          region: isIntlPurchase ? "international" : (userDoc.region || "national"),
+          currency: isIntlPurchase ? "USD" : "INR",
           rating: 5,
         });
         finalBusinessId = businessDoc._id;
@@ -297,6 +311,10 @@ export const paymentService = {
         businessDoc.membership = formattedTier;
         businessDoc.paymentStatus = "Paid";
         businessDoc.isPaid = true;
+        if (isIntlPurchase) {
+          businessDoc.region = "international";
+          businessDoc.currency = "USD";
+        }
         if (isUserTier) {
           businessDoc.subscriberTier = planId || "tier_1";
           if (!businessDoc.isVerified) {
@@ -649,6 +667,14 @@ export const paymentService = {
     }
 
     const isMembership = data.itemType === "Membership" || Boolean(data.planId);
+    const isIntlPurchase = String(data.currency || "").toUpperCase() === "USD" || businessDoc?.region === "international" || businessDoc?.currency === "USD";
+    const isUserTier = String(data.planId || "").toLowerCase().startsWith("tier_") || 
+                       String(data.planId || "").toLowerCase() === "free";
+
+    if (isMembership && isIntlPurchase && !isUserTier) {
+      throw new BadRequestError("International businesses must select a Tier Plan (Tier I, II, III, or IV), not a Chamber subscription.");
+    }
+
     const membershipPlan = isMembership ? await getActivePlan(data.planId) : null;
     const planCharge = membershipPlan ? getPlanCharge(membershipPlan, data.currency) : null;
     if (isMembership && userDoc) {
@@ -697,6 +723,8 @@ export const paymentService = {
           verification: "unverified",
           membership: formattedTier,
           subscriberTier: isUserTier ? (data.planId || "tier_1") : undefined,
+          region: isIntlPurchase ? "international" : (userDoc.region || "national"),
+          currency: isIntlPurchase ? "USD" : "INR",
           rating: 5,
         });
         finalBusinessId = businessDoc._id;
@@ -707,6 +735,10 @@ export const paymentService = {
                            String(data.planId || "").toLowerCase() === "free";
 
         businessDoc.membership = formattedTier;
+        if (isIntlPurchase) {
+          businessDoc.region = "international";
+          businessDoc.currency = "USD";
+        }
         if (isUserTier) {
           businessDoc.subscriberTier = data.planId || "tier_1";
           if (!businessDoc.isVerified) {
