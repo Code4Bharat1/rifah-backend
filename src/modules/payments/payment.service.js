@@ -18,6 +18,7 @@ import { signAccessToken, signRefreshToken } from "../../infrastructure/auth/jwt
 import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 import { revenueShareService } from "../revenue-sharing/revenueShare.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
+import { stripeClient } from "../../infrastructure/stripe/stripe.client.js";
 
 const BUILTIN_MEMBERSHIP_PLANS = {
   free: { planId: "free", name: "Free Starter", price: 0, priceUsd: 0, durationYears: 0, gstRate: 0 },
@@ -66,20 +67,498 @@ function getPlanCharge(plan, currency) {
   return { baseAmount, gstRate, gstAmount, totalAmount: baseAmount + gstAmount };
 }
 
+/**
+ * Common fulfillment helper for both Razorpay (Domestic INR) and Stripe (International USD)
+ */
+async function fulfillPaymentOrder({
+  payload,
+  user,
+  transactionId,
+  orderId = "",
+  method = "Online Payment",
+}) {
+  const userDoc = await User.findById(user.id || user._id);
+  if (!userDoc) {
+    throw new NotFoundError("User not found");
+  }
+
+  // Idempotency: If this transaction was already processed (e.g. webhook fired first), return existing payment
+  if (transactionId) {
+    const existing = await Payment.findOne({ transactionId });
+    if (existing) {
+      let biz = existing.business ? await Business.findById(existing.business) : await Business.findOne({ owner: userDoc._id });
+      const tokenPayload = {
+        id: userDoc._id,
+        email: userDoc.email,
+        role: userDoc.role,
+        chapter: userDoc.chapter,
+        forcePasswordChange: userDoc.forcePasswordChange,
+      };
+      await userDoc.populate("savedBusinesses");
+      const userObj = userDoc.toJSON();
+      if (Array.isArray(userObj.savedBusinesses)) {
+        userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
+      }
+      return {
+        verified: true,
+        payment: existing,
+        business: biz,
+        user: userObj,
+        accessToken: signAccessToken(tokenPayload),
+        refreshToken: signRefreshToken(tokenPayload),
+      };
+    }
+  }
+
+  const {
+    planId,
+    businessId,
+    amount,
+    itemType,
+    description,
+    currency = "INR",
+    courseId,
+    eventId,
+  } = payload;
+
+  let finalBusinessId = businessId;
+  let businessDoc = null;
+
+  if (finalBusinessId) {
+    businessDoc = await Business.findById(finalBusinessId);
+  }
+
+  if (!businessDoc) {
+    businessDoc = await Business.findOne({ owner: userDoc._id });
+    if (businessDoc) {
+      finalBusinessId = businessDoc._id;
+    }
+  }
+
+  let invoiceNumber = (payload.invoiceNumber || "").trim().toUpperCase();
+  if (!invoiceNumber || (await Payment.findOne({ invoiceNumber }))) {
+    invoiceNumber = await getNextInvoiceNumber({
+      chapter: businessDoc?.chapter || userDoc?.chapter,
+    });
+  }
+
+  const isMembership = itemType === "Membership" || Boolean(planId);
+  const isIntlPurchase = String(currency || "").toUpperCase() === "USD" || businessDoc?.region === "international" || businessDoc?.currency === "USD";
+  const membershipPlan = isMembership ? await getActivePlan(planId) : null;
+  const planCharge = membershipPlan ? getPlanCharge(membershipPlan, currency) : null;
+
+  const isUserTier =
+    String(planId || "").toLowerCase().startsWith("tier_") ||
+    String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
+    String(planId || "").toLowerCase() === "free";
+
+  if (isMembership && isIntlPurchase && !isUserTier) {
+    throw new BadRequestError("International businesses must select a Tier Plan (Tier I, II, III, or IV), not a Chamber subscription.");
+  }
+
+  // If upgrading or purchasing a membership
+  if (isMembership) {
+    // 1. Upgrade user role in database permanently to business_owner
+    if (userDoc.role === ROLES.CUSTOMER) {
+      userDoc.role = ROLES.BUSINESS_OWNER;
+    }
+    if (payload.city && !userDoc.city) {
+      userDoc.city = payload.city.trim();
+    }
+    if (payload.state && !userDoc.state) {
+      userDoc.state = payload.state.trim();
+    }
+    await userDoc.save();
+
+    // 2. If user doesn't have an existing Business profile, auto-create one
+    if (!businessDoc) {
+      const rawBizName =
+        (payload.businessName && payload.businessName.trim()) ||
+        userDoc.organization ||
+        `${userDoc.name}'s Enterprise`;
+
+      let slug = generateSlug(rawBizName);
+      const slugConflict = await Business.findOne({ slug });
+      if (slugConflict) {
+        slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+      }
+
+      const formattedTier = membershipPlan.name;
+
+      const bizCity = (payload.city && payload.city.trim()) || userDoc.city || "";
+      const bizState = (payload.state && payload.state.trim()) || userDoc.state || "";
+      let bizChapter = (userDoc.chapter || "").trim();
+      let bizChapterId = userDoc.chapterId || null;
+      if (!bizChapter && bizCity) {
+        try {
+          const { Chapter } = await import("../chapters/chapter.model.js");
+          const cleanCity = bizCity.replace(/\b(chapter|chamber)\b/gi, "").trim();
+          const matchedChapter = await Chapter.findOne({
+            $or: [
+              { city: new RegExp(`^${cleanCity}$`, "i") },
+              { name: new RegExp(cleanCity, "i") },
+            ],
+          });
+          if (matchedChapter) {
+            bizChapter = matchedChapter.name;
+            bizChapterId = matchedChapter._id;
+          }
+        } catch (e) {}
+      }
+      const bizIndustry = (payload.industry && payload.industry.trim()) || userDoc.sourcingInterest || "";
+
+      businessDoc = await Business.create({
+        name: rawBizName,
+        slug,
+        owner: userDoc._id,
+        taxId: (payload.taxId && payload.taxId.trim()) || "",
+        address: (payload.billingAddress && payload.billingAddress.trim()) || "",
+        city: bizCity,
+        pincode: (payload.postalCode && payload.postalCode.trim()) || "",
+        state: bizState,
+        phone: payload.billingPhone || payload.phone || userDoc.phone || "",
+        email: payload.billingEmail || userDoc.email || "",
+        chapter: bizChapter,
+        chapterId: bizChapterId,
+        industry: bizIndustry,
+        categories: bizIndustry ? [bizIndustry] : [],
+        status: isUserTier ? "Active" : "Pending Verification",
+        verificationStatus: isUserTier ? "Unverified" : "Pending",
+        verification: "unverified",
+        membership: formattedTier,
+        subscriberTier: isUserTier ? (planId || "tier_1") : undefined,
+        region: isIntlPurchase ? "international" : (userDoc.region || "national"),
+        currency: isIntlPurchase ? "USD" : "INR",
+        rating: 5,
+      });
+      finalBusinessId = businessDoc._id;
+    } else {
+      const formattedTier = membershipPlan.name;
+
+      businessDoc.membership = formattedTier;
+      businessDoc.paymentStatus = "Paid";
+      businessDoc.isPaid = true;
+      if (isIntlPurchase) {
+        businessDoc.region = "international";
+        businessDoc.currency = "USD";
+      }
+      if (isUserTier) {
+        businessDoc.subscriberTier = planId || "tier_1";
+        businessDoc.status = "Active";
+        businessDoc.verification = "unverified";
+        businessDoc.verificationStatus = "unverified";
+        businessDoc.isVerified = false;
+      } else if (!businessDoc.isVerified) {
+        businessDoc.status = "Pending Verification";
+        businessDoc.verificationStatus = "Pending";
+        businessDoc.verification = "pending";
+        businessDoc.verificationReviewReason = "";
+        businessDoc.verificationRemarks = "";
+      }
+
+      if (payload.taxId && !businessDoc.taxId) businessDoc.taxId = payload.taxId.trim();
+      if (payload.billingAddress && !businessDoc.address) businessDoc.address = payload.billingAddress.trim();
+      if (payload.city && !businessDoc.city) businessDoc.city = payload.city.trim();
+      if (payload.state && !businessDoc.state) businessDoc.state = payload.state.trim();
+      if (payload.postalCode && !businessDoc.pincode) businessDoc.pincode = payload.postalCode.trim();
+
+      if (!Array.isArray(businessDoc.verificationHistory)) {
+        businessDoc.verificationHistory = [];
+      }
+      businessDoc.verificationHistory.push({
+        action: "payment",
+        reason: isUserTier
+          ? `Subscriber plan payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Account activated.`
+          : `Membership payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Queued for Chapter Administrator verification review.`,
+        reviewer: userDoc._id,
+        createdAt: new Date(),
+      });
+      await businessDoc.save();
+    }
+
+    // Sync Verification document in database ONLY for chamber tiers
+    if (!isUserTier) {
+      try {
+        const { Verification } = await import("../verification/verification.model.js");
+        let verificationDoc = await Verification.findOne({ business: businessDoc._id });
+        if (verificationDoc) {
+          if (verificationDoc.status !== "verified") {
+            verificationDoc.status = "pending";
+            verificationDoc.remarks = `Membership payment completed (Invoice #${invoiceNumber}). Awaiting Chapter Administrator review.`;
+            await verificationDoc.save();
+          }
+        } else {
+          await Verification.create({
+            business: businessDoc._id,
+            status: "pending",
+            remarks: `Membership payment completed for ${membershipPlan.name} tier. Verification initiated automatically.`,
+            history: [
+              {
+                status: "pending",
+                remarks: "Payment confirmed, queued for chapter admin review",
+                updatedBy: userDoc._id,
+                date: new Date(),
+              },
+            ],
+          });
+        }
+      } catch (verifErr) {
+        console.error("Error updating verification on payment:", verifErr);
+      }
+    }
+  }
+
+  const payment = await Payment.create({
+    invoiceNumber,
+    payer: userDoc._id,
+    business: finalBusinessId || null,
+    eventId: eventId || payload.eventId || null,
+    courseId: courseId || payload.courseId || null,
+    itemType: itemType || (courseId || payload.courseId ? "Course" : "Membership"),
+    planTier: planId || "",
+    description: description || (courseId || payload.courseId ? "Course Enrollment" : `Payment for ${planId || "Membership"} tier`),
+    amount: planCharge ? planCharge.baseAmount : Number(amount || 0),
+    currency: (currency || "INR").toUpperCase(),
+    method: method || (currency === "USD" ? "Stripe International" : "UPI / Razorpay"),
+    status: "Paid",
+    transactionId: transactionId || orderId || `TXN-${Date.now()}`,
+    paidAt: new Date(),
+    verificationToken: crypto.randomBytes(24).toString("hex"),
+  });
+
+  // Compute GST breakdown for receipt
+  const baseAmount = payment.amount;
+  const isEventItem = Boolean(eventId || payload.eventId || itemType === "Event Pass");
+  const gstRate = planCharge?.gstRate ?? (isEventItem ? 18 : 0);
+  const computedGst = planCharge?.gstAmount ?? (
+    isEventItem
+      ? (payload.gstAmount ? Number(payload.gstAmount) : Math.round(Number(amount) - (payload.baseAmount ? Number(payload.baseAmount) : Math.round(Number(amount) / 1.18))))
+      : 0
+  );
+  const totalWithGst = planCharge?.totalAmount ?? (
+    isEventItem
+      ? Number(amount)
+      : baseAmount
+  );
+  const planDurationYears = Number(membershipPlan?.durationYears) || 1;
+  if (computedGst > 0 || planDurationYears > 1 || isEventItem) {
+    payment.subtotal = payload.baseAmount ? Number(payload.baseAmount) : (totalWithGst - computedGst);
+    payment.gstRate = gstRate;
+    payment.gstAmount = computedGst;
+    payment.amount = totalWithGst;
+    payment.durationYears = planDurationYears;
+    await payment.save();
+  }
+
+  // Revenue Sharing ledger entries
+  try {
+    await revenueShareService.createLedgerEntriesForPayment(payment, { actor: userDoc });
+  } catch (revShareErr) {
+    logger.error(`[REVENUE SHARE] Failed to create ledger entries for payment ${payment._id}:`, revShareErr);
+  }
+
+  let updatedMembership = null;
+  if (planId && finalBusinessId) {
+    updatedMembership = await membershipService.upgradePlan(finalBusinessId, planId);
+  }
+
+  // Auto-enroll user and business in Course if paid course
+  const resolvedCourseId = courseId || payload.courseId || (itemType === "Course" ? payload.notes?.courseId : null);
+  if (resolvedCourseId) {
+    try {
+      const { Course } = await import("../courses/course.model.js");
+      const courseDoc = await Course.findById(resolvedCourseId);
+      if (courseDoc) {
+        const alreadyEnrolled = courseDoc.enrollments?.some(
+          (e) => String(e.userId) === String(userDoc._id) || (finalBusinessId && String(e.businessId) === String(finalBusinessId))
+        );
+        if (!alreadyEnrolled) {
+          courseDoc.enrollments = courseDoc.enrollments || [];
+          courseDoc.enrollments.push({
+            businessId: finalBusinessId || null,
+            userId: userDoc._id,
+            paymentId: payment._id,
+            enrolledAt: new Date(),
+          });
+          await courseDoc.save();
+        }
+      }
+    } catch (cErr) {
+      console.error("[PAYMENT] Failed to enroll user in course:", cErr);
+    }
+  }
+
+  // Fire-and-forget background notifications & email receipt
+  setImmediate(async () => {
+    try {
+      await notificationService.createNotification({
+        recipientId: userDoc._id,
+        type: "Payment",
+        title: "Payment Verified",
+        body: `Payment of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} ${payment.currency} (Invoice #${payment.invoiceNumber}) was verified successfully.`,
+        link: "/biz/payments",
+      });
+
+      const targetEmail = payload.billingEmail || userDoc?.email;
+      if (targetEmail && isMembership) {
+        emailService.sendMembershipInvoiceEmail({
+          email: targetEmail,
+          name: userDoc?.name || "Member",
+          businessName: businessDoc?.name || payload.businessName || "Member Business",
+          planName: membershipPlan?.name || "Membership",
+          amount: payment.amount,
+          subtotal: payment.subtotal || payment.amount,
+          gstAmount: payment.gstAmount || 0,
+          gstRate: payment.gstRate || 18,
+          currency: payment.currency,
+          invoiceNumber: payment.invoiceNumber,
+          paidAt: payment.paidAt,
+          transactionId: payment.transactionId || transactionId,
+          paymentMethod: payment.method || method,
+        }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
+      }
+
+      // Notify chapter and country admins
+      if (!isUserTier) {
+        const bizChapter = (businessDoc?.chapter || userDoc?.chapter || "").trim();
+        const bizChapterId = businessDoc?.chapterId || userDoc?.chapterId || null;
+        let chapterAdmins = [];
+        if (bizChapter || bizChapterId) {
+          const cleanChapter = bizChapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
+          chapterAdmins = await User.find({
+            role: ROLES.CHAPTER_ADMIN,
+            $or: [
+              ...(bizChapterId ? [{ chapterId: bizChapterId }] : []),
+              ...(cleanChapter ? [{ chapter: new RegExp(cleanChapter, "i") }] : []),
+              ...(bizChapter ? [{ chapter: new RegExp(`^${bizChapter}$`, "i") }] : []),
+            ],
+          }).select("_id email name chapter");
+        }
+
+        for (const ca of chapterAdmins) {
+          notificationService.createNotification({
+            recipientId: ca._id,
+            type: "Verification",
+            title: "New Membership Payment & Verification Request",
+            body: `Business "${businessDoc?.name || userDoc?.name}" (${bizChapter || "Your Chapter"}) has completed ${planId || "Membership"} payment (Invoice #${payment.invoiceNumber}) and is awaiting verification approval.`,
+            entityId: businessDoc?._id,
+            link: "/chapter-admin/verification",
+          }).catch(() => {});
+        }
+      }
+
+      const bizCountry = (businessDoc?.country || payload.country || userDoc?.country || "").trim();
+      const bizCountryId = businessDoc?.countryId || userDoc?.countryId;
+      const isNonIndia = bizCountry && bizCountry.toLowerCase() !== "india";
+
+      let targetAdmins = [];
+      // ==========================================
+      // [COUNTRY_MODULE_DISABLED] Country Admin Payment Alert
+      // if (isNonIndia) {
+      //   const cAdminQuery = [];
+      //   if (bizCountryId) cAdminQuery.push({ countryId: bizCountryId });
+      //   cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+      //   targetAdmins = await User.find({
+      //     role: ROLES.COUNTRY_ADMIN,
+      //     status: "Active",
+      //     $or: cAdminQuery,
+      //   }).select("_id email name");
+      // }
+      // ==========================================
+      if (targetAdmins.length === 0) {
+        targetAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
+      }
+
+      const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
+      const adminEmails = [...new Set([adminFallbackEmail, ...targetAdmins.map((a) => a.email)].filter(Boolean))];
+
+      for (const adminMail of adminEmails) {
+        emailService.sendAdminPaymentReceiptAlert({
+          adminEmail: adminMail,
+          name: userDoc?.name || "Member",
+          businessName: businessDoc?.name || payload.businessName || "Member Business",
+          planName: isMembership ? membershipPlan?.name : "EVENT PASS",
+          amount: payment.amount,
+          currency: payment.currency,
+          invoiceNumber: payment.invoiceNumber,
+          paidAt: payment.paidAt,
+          transactionId: payment.transactionId || transactionId,
+          paymentMethod: payment.method || method,
+          userPhone: userDoc?.phone || "",
+          userEmail: targetEmail || "",
+        }).catch(() => {});
+      }
+
+      const currSymbol = payment.currency === "USD" ? "$" : (payment.currency === "JPY" ? "¥" : "₹");
+      for (const admin of targetAdmins) {
+        notificationService.createNotification({
+          recipientId: admin._id,
+          type: "Payment",
+          title: "New Payment Receipt for Verification",
+          body: `Receipt #${payment.invoiceNumber} of ${currSymbol}${payment.amount} from ${businessDoc?.name || payload.businessName || "Member"} received for verification.`,
+          link: isNonIndia ? "/admin/verification" : "/admin/payments",
+        }).catch(() => {});
+      }
+    } catch (bgErr) {
+      console.error("Background payment notification error:", bgErr);
+    }
+  });
+
+  // Generate refreshed JWT tokens
+  const tokenPayload = {
+    id: userDoc._id,
+    email: userDoc.email,
+    role: userDoc.role,
+    chapter: userDoc.chapter,
+    forcePasswordChange: userDoc.forcePasswordChange,
+  };
+  const accessToken = signAccessToken(tokenPayload);
+  const refreshToken = signRefreshToken(tokenPayload);
+
+  await userDoc.populate("savedBusinesses");
+  const userObj = userDoc.toJSON();
+  if (Array.isArray(userObj.savedBusinesses)) {
+    userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
+  }
+
+  return {
+    verified: true,
+    payment,
+    membership: updatedMembership,
+    business: businessDoc,
+    user: userObj,
+    accessToken,
+    refreshToken,
+  };
+}
+
 export const paymentService = {
   /**
-   * Create Razorpay Order
+   * Get Gateway Public Config
    */
-  createRazorpayOrder: async ({ planId, amount, currency = "INR", eventId, courseId, itemType }, user) => {
+  getGatewayConfig: () => {
+    return {
+      razorpayKeyId: env.RAZORPAY.KEY_ID,
+      stripePublishableKey: env.STRIPE.PUBLISHABLE_KEY,
+      stripeCurrency: (env.STRIPE.CURRENCY || "usd").toLowerCase(),
+    };
+  },
+
+  /**
+   * Create Razorpay Order (Domestic INR) or route to Stripe if USD
+   */
+  createRazorpayOrder: async (payload, user) => {
+    const selectedCurrency = (payload?.currency || "INR").toUpperCase();
+    const isInternational = selectedCurrency === "USD" || payload?.provider === "stripe";
+
+    // International (USD) payments route to Stripe Hosted Checkout
+    if (isInternational) {
+      return paymentService.createStripeCheckoutSession(payload, user);
+    }
+
+    const { planId, amount, eventId, courseId, itemType } = payload;
     let invoiceNumber = await getNextInvoiceNumber({ chapter: user?.chapter });
-
-    const selectedCurrency = (currency || "INR").toUpperCase();
-    const isInternational = selectedCurrency === "USD";
-
-    // Route to International Gateway (foreign bank) or Domestic Gateway (Indian bank)
-    const gatewayConfig = isInternational && env.RAZORPAY_INTERNATIONAL?.KEY_ID
-      ? env.RAZORPAY_INTERNATIONAL
-      : env.RAZORPAY;
+    const gatewayConfig = env.RAZORPAY;
 
     let numericAmount = 0;
     let actualPlanId = null;
@@ -93,10 +572,6 @@ export const paymentService = {
       }
       numericAmount = Number(courseDoc.price);
     } else if (planId) {
-      const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || String(planId || "").toLowerCase() === "free";
-      if (isInternational && !isUserTier) {
-        throw new BadRequestError("International businesses must select a Tier Plan (Tier I, II, III, or IV), not a Chamber subscription.");
-      }
       const plan = await getActivePlan(planId);
       const charge = getPlanCharge(plan, selectedCurrency);
       numericAmount = charge.totalAmount;
@@ -112,7 +587,7 @@ export const paymentService = {
     const notes = {
       payerId: user.id,
       currency: selectedCurrency,
-      accountType: isInternational ? "international_foreign" : "national_domestic",
+      accountType: "national_domestic",
     };
     if (actualPlanId) notes.planId = actualPlanId;
     if (eventId) notes.eventId = String(eventId);
@@ -139,6 +614,7 @@ export const paymentService = {
     }
 
     return {
+      provider: "razorpay",
       orderId: orderData.id,
       amount: orderData.amount,
       currency: orderData.currency,
@@ -148,500 +624,204 @@ export const paymentService = {
   },
 
   /**
+   * Create Stripe Hosted Checkout Session (International USD)
+   */
+  createStripeCheckoutSession: async (payload, user) => {
+    let invoiceNumber = await getNextInvoiceNumber({ chapter: user?.chapter });
+    const selectedCurrency = (payload?.currency || "USD").toUpperCase();
+
+    let numericAmount = 0;
+    let actualPlanId = null;
+    let title = payload.description || "RIFAH International Payment";
+
+    if (payload.courseId) {
+      const { Course } = await import("../courses/course.model.js");
+      const courseDoc = await Course.findById(payload.courseId);
+      if (!courseDoc) throw new NotFoundError("Course not found");
+      if (!courseDoc.isPaid || !courseDoc.price) {
+        throw new BadRequestError("This course is free and does not require payment");
+      }
+      numericAmount = Number(courseDoc.priceUsd || Math.round(Number(courseDoc.price) / 80) || 1);
+      title = `Course: ${courseDoc.title}`;
+    } else if (payload.planId) {
+      const plan = await getActivePlan(payload.planId);
+      const charge = getPlanCharge(plan, selectedCurrency);
+      numericAmount = charge.totalAmount;
+      actualPlanId = plan.planId;
+      title = `RIFAH ${plan.name} Membership`;
+    } else if (payload.amount) {
+      numericAmount = Number(payload.amount);
+    }
+
+    if (numericAmount <= 0) {
+      throw new BadRequestError("Amount must be greater than zero to create a Stripe session");
+    }
+
+    const origin = payload.origin || "http://localhost:3000";
+    let successUrl = payload.successUrl;
+    let cancelUrl = payload.cancelUrl;
+
+    if (!successUrl) {
+      if (payload.courseId) {
+        successUrl = `${origin}/biz/courses/${payload.courseId}?stripe_session_id={CHECKOUT_SESSION_ID}&success=true`;
+        cancelUrl = `${origin}/biz/courses/${payload.courseId}?canceled=true`;
+      } else if (payload.eventId) {
+        successUrl = `${origin}/events/${payload.eventId}?stripe_session_id={CHECKOUT_SESSION_ID}&success=true`;
+        cancelUrl = `${origin}/events/${payload.eventId}?canceled=true`;
+      } else {
+        successUrl = `${origin}/membership/checkout?stripe_session_id={CHECKOUT_SESSION_ID}&plan=${actualPlanId || payload.planId || ""}&currency=USD&success=true`;
+        cancelUrl = `${origin}/membership/checkout?plan=${actualPlanId || payload.planId || ""}&currency=USD&canceled=true`;
+      }
+    }
+
+    const session = await stripeClient.createCheckoutSession({
+      amount: numericAmount,
+      currency: selectedCurrency.toLowerCase(),
+      name: title,
+      description: payload.description || `${title} (${selectedCurrency})`,
+      invoiceNumber,
+      customerEmail: payload.billingEmail || user?.email || undefined,
+      successUrl,
+      cancelUrl,
+      metadata: {
+        userId: user?.id || "",
+        planId: actualPlanId || payload.planId || "",
+        businessId: payload.businessId || "",
+        eventId: payload.eventId || "",
+        courseId: payload.courseId || "",
+        itemType: payload.itemType || (payload.courseId ? "Course" : "Membership"),
+        description: title,
+        billingEmail: payload.billingEmail || user?.email || "",
+        billingPhone: payload.billingPhone || "",
+        businessName: payload.businessName || "",
+        taxId: payload.taxId || "",
+        billingAddress: payload.billingAddress || "",
+        city: payload.city || "",
+        state: payload.state || "",
+        postalCode: payload.postalCode || "",
+      },
+    });
+
+    return {
+      provider: "stripe",
+      sessionId: session.id,
+      url: session.url,
+      orderId: session.id,
+      amount: numericAmount,
+      currency: selectedCurrency,
+      keyId: env.STRIPE.PUBLISHABLE_KEY,
+      publishableKey: env.STRIPE.PUBLISHABLE_KEY,
+      invoiceNumber,
+    };
+  },
+
+  /**
    * Verify Razorpay Payment Signature and Upgrade Plan
    */
   verifyRazorpayPayment: async (payload, user) => {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planId, businessId, amount, itemType, description, currency, courseId } = payload;
+    // If Stripe session, route to Stripe verification
+    if (payload.stripe_session_id || payload.sessionId || payload.provider === "stripe") {
+      return paymentService.verifyStripeSession(payload, user);
+    }
+
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = payload;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       throw new BadRequestError("Missing required Razorpay payment fields");
     }
 
-    const isInternational = (currency || "").toUpperCase() === "USD";
-    const gatewayConfig = isInternational && env.RAZORPAY_INTERNATIONAL?.KEY_SECRET
-      ? env.RAZORPAY_INTERNATIONAL
-      : env.RAZORPAY;
-
+    const gatewayConfig = env.RAZORPAY;
     const body = `${razorpay_order_id}|${razorpay_payment_id}`;
-    let expectedSignature = crypto
+    const expectedSignature = crypto
       .createHmac("sha256", gatewayConfig.KEY_SECRET)
       .update(body.toString())
       .digest("hex");
-
-    // Dual-check fallback if international test keys match domestic secret
-    if (expectedSignature !== razorpay_signature && isInternational && env.RAZORPAY?.KEY_SECRET) {
-      const fallbackSig = crypto
-        .createHmac("sha256", env.RAZORPAY.KEY_SECRET)
-        .update(body.toString())
-        .digest("hex");
-      if (fallbackSig === razorpay_signature) {
-        expectedSignature = fallbackSig;
-      }
-    }
 
     if (expectedSignature !== razorpay_signature) {
       throw new BadRequestError("Invalid payment signature");
     }
 
-    const userDoc = await User.findById(user.id);
-    if (!userDoc) {
-      throw new NotFoundError("User not found");
-    }
-
-    let finalBusinessId = businessId;
-    let businessDoc = null;
-
-    if (finalBusinessId) {
-      businessDoc = await Business.findById(finalBusinessId);
-    }
-
-    if (!businessDoc) {
-      businessDoc = await Business.findOne({ owner: user.id });
-      if (businessDoc) {
-        finalBusinessId = businessDoc._id;
-      }
-    }
-
-    let invoiceNumber = (payload.invoiceNumber || "").trim().toUpperCase();
-    if (!invoiceNumber || (await Payment.findOne({ invoiceNumber }))) {
-      invoiceNumber = await getNextInvoiceNumber({
-        chapter: businessDoc?.chapter || userDoc?.chapter,
-      });
-    }
-
-    const isMembership = itemType === "Membership" || Boolean(planId);
-    const isIntlPurchase = String(currency || "").toUpperCase() === "USD" || businessDoc?.region === "international" || businessDoc?.currency === "USD";
-    const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || 
-                       String(planId || "").toLowerCase() === "free";
-
-    if (isMembership && isIntlPurchase && !isUserTier) {
-      throw new BadRequestError("International businesses must select a Tier Plan (Tier I, II, III, or IV), not a Chamber subscription.");
-    }
-
-    const membershipPlan = isMembership ? await getActivePlan(planId) : null;
-    const planCharge = membershipPlan ? getPlanCharge(membershipPlan, currency) : null;
-
-    // If upgrading or purchasing a membership
-    if (isMembership) {
-      // 1. Upgrade user role in database permanently to business_owner
-      if (userDoc.role === ROLES.CUSTOMER) {
-        userDoc.role = ROLES.BUSINESS_OWNER;
-      }
-      if (payload.city && !userDoc.city) {
-        userDoc.city = payload.city.trim();
-      }
-      if (payload.state && !userDoc.state) {
-        userDoc.state = payload.state.trim();
-      }
-      await userDoc.save();
-
-      // 2. If user doesn't have an existing Business profile, auto-create one
-      if (!businessDoc) {
-        const rawBizName =
-          (payload.businessName && payload.businessName.trim()) ||
-          userDoc.organization ||
-          `${userDoc.name}'s Enterprise`;
-
-        let slug = generateSlug(rawBizName);
-        const slugConflict = await Business.findOne({ slug });
-        if (slugConflict) {
-          slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
-        }
-
-        const formattedTier = membershipPlan.name;
-
-        const bizCity = (payload.city && payload.city.trim()) || userDoc.city || "";
-        const bizState = (payload.state && payload.state.trim()) || userDoc.state || "";
-        let bizChapter = (userDoc.chapter || "").trim();
-        let bizChapterId = userDoc.chapterId || null;
-        if (!bizChapter && bizCity) {
-          try {
-            const { Chapter } = await import("../chapters/chapter.model.js");
-            const cleanCity = bizCity.replace(/\b(chapter|chamber)\b/gi, "").trim();
-            const matchedChapter = await Chapter.findOne({
-              $or: [
-                { city: new RegExp(`^${cleanCity}$`, "i") },
-                { name: new RegExp(cleanCity, "i") },
-              ],
-            });
-            if (matchedChapter) {
-              bizChapter = matchedChapter.name;
-              bizChapterId = matchedChapter._id;
-            }
-          } catch (e) {}
-        }
-        const bizIndustry = (payload.industry && payload.industry.trim()) || userDoc.sourcingInterest || "";
-
-        const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || 
-                           String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
-                           String(planId || "").toLowerCase() === "free";
-
-        businessDoc = await Business.create({
-          name: rawBizName,
-          slug,
-          owner: userDoc._id,
-          taxId: (payload.taxId && payload.taxId.trim()) || "",
-          address: (payload.billingAddress && payload.billingAddress.trim()) || "",
-          city: bizCity,
-          pincode: (payload.postalCode && payload.postalCode.trim()) || "",
-          state: bizState,
-          phone: payload.billingPhone || payload.phone || userDoc.phone || "",
-          email: payload.billingEmail || userDoc.email || "",
-          chapter: bizChapter,
-          chapterId: bizChapterId,
-          industry: bizIndustry,
-          categories: bizIndustry ? [bizIndustry] : [],
-          status: isUserTier ? "Active" : "Pending Verification",
-          verificationStatus: isUserTier ? "Unverified" : "Pending",
-          verification: "unverified",
-          membership: formattedTier,
-          subscriberTier: isUserTier ? (planId || "tier_1") : undefined,
-          region: isIntlPurchase ? "international" : (userDoc.region || "national"),
-          currency: isIntlPurchase ? "USD" : "INR",
-          rating: 5,
-        });
-        finalBusinessId = businessDoc._id;
-      } else {
-        // Business exists: update membership & reset verification state to pending for Chapter Admin review ONLY if chamber plan
-        const formattedTier = membershipPlan.name;
-        const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || 
-                           String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
-                           String(planId || "").toLowerCase() === "free";
-
-        businessDoc.membership = formattedTier;
-        businessDoc.paymentStatus = "Paid";
-        businessDoc.isPaid = true;
-        if (isIntlPurchase) {
-          businessDoc.region = "international";
-          businessDoc.currency = "USD";
-        }
-        if (isUserTier) {
-          businessDoc.subscriberTier = planId || "tier_1";
-          if (!businessDoc.isVerified) {
-            businessDoc.status = "Active";
-            businessDoc.verification = "unverified";
-            businessDoc.verificationStatus = "Unverified";
-          }
-        }
-        if (payload.billingPhone && !businessDoc.phone) {
-          businessDoc.phone = payload.billingPhone;
-        }
-        if (payload.billingPhone && !userDoc.phone) {
-          userDoc.phone = payload.billingPhone;
-          await userDoc.save();
-        }
-        if (!businessDoc.chapter && (userDoc.chapter || businessDoc.city || payload.city)) {
-          const targetCity = (businessDoc.city || payload.city || userDoc.city || "").trim();
-          if (userDoc.chapter) {
-            businessDoc.chapter = userDoc.chapter;
-            businessDoc.chapterId = userDoc.chapterId || businessDoc.chapterId;
-          } else if (targetCity) {
-            try {
-              const { Chapter } = await import("../chapters/chapter.model.js");
-              const cleanCity = targetCity.replace(/\b(chapter|chamber)\b/gi, "").trim();
-              const matched = await Chapter.findOne({
-                $or: [
-                  { city: new RegExp(`^${cleanCity}$`, "i") },
-                  { name: new RegExp(cleanCity, "i") },
-                ],
-              });
-              if (matched) {
-                businessDoc.chapter = matched.name;
-                businessDoc.chapterId = matched._id;
-              }
-            } catch (e) {}
-          }
-        }
-        if (!isUserTier && !businessDoc.isVerified) {
-          businessDoc.status = "Pending Verification";
-          businessDoc.verificationStatus = "Pending";
-          businessDoc.verification = "pending";
-          businessDoc.verificationReviewReason = "";
-          businessDoc.verificationRemarks = "";
-        }
-
-        if (!Array.isArray(businessDoc.verificationHistory)) {
-          businessDoc.verificationHistory = [];
-        }
-        businessDoc.verificationHistory.push({
-          action: "payment",
-          reason: isUserTier
-            ? `Subscriber plan payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Account activated.`
-            : `Membership payment completed for ${formattedTier} tier (Invoice #${invoiceNumber}). Queued for Chapter Administrator verification review.`,
-          reviewer: userDoc._id,
-          createdAt: new Date(),
-        });
-        await businessDoc.save();
-      }
-
-      // Sync Verification document in database ONLY for Chamber Multi-Year plans (Silver/Gold/Platinum/Diamond)
-      const isUserTier = String(planId || "").toLowerCase().startsWith("tier_") || 
-                         String(membershipPlan?.planId || "").toLowerCase().startsWith("tier_") ||
-                         String(planId || "").toLowerCase() === "free";
-      if (!isUserTier) {
-        try {
-          const { Verification } = await import("../verification/verification.model.js");
-          let verificationDoc = await Verification.findOne({ business: businessDoc._id });
-          if (verificationDoc) {
-            if (verificationDoc.status !== "verified") {
-              verificationDoc.status = "pending";
-              verificationDoc.remarks = `Membership payment verified (Invoice #${invoiceNumber}). Awaiting Chapter Administrator review.`;
-              await verificationDoc.save();
-            }
-          } else {
-            await Verification.create({
-              business: businessDoc._id,
-              status: "pending",
-              remarks: `Membership payment verified (Invoice #${invoiceNumber}).`,
-              submittedBy: userDoc._id,
-              documents: businessDoc.documents || [],
-            });
-          }
-        } catch (verifErr) {
-          console.error("Error updating verification on payment:", verifErr);
-        }
-      }
-    }
-
-    const payment = await Payment.create({
-      invoiceNumber,
-      payer: user.id,
-      business: finalBusinessId || null,
-      eventId: payload.eventId || null,
-      courseId: courseId || payload.courseId || null,
-      itemType: itemType || (courseId || payload.courseId ? "Course" : "Membership"),
-      planTier: planId || "",
-      description: description || (courseId || payload.courseId ? "Course Enrollment" : `Payment for ${planId || "Membership"} tier`),
-      amount: planCharge ? planCharge.baseAmount : Number(amount),
-      currency: payload.currency || "INR",
-      method: payload.currency === "USD" ? "International Card" : "UPI",
-      status: "Paid",
+    return fulfillPaymentOrder({
+      payload,
+      user,
       transactionId: razorpay_payment_id,
-      paidAt: new Date(),
-      verificationToken: crypto.randomBytes(24).toString("hex"),
+      orderId: razorpay_order_id,
+      method: "Razorpay (UPI / Cards)",
     });
-
-    // Compute GST breakdown for receipt
-    const baseAmount = payment.amount;
-    const isEventItem = Boolean(payload.eventId || itemType === "Event Pass");
-    const isCourseItem = Boolean(courseId || payload.courseId || itemType === "Course");
-    const gstRate = planCharge?.gstRate ?? (isEventItem ? 18 : 0);
-    const computedGst = planCharge?.gstAmount ?? (
-      isEventItem
-        ? (payload.gstAmount ? Number(payload.gstAmount) : Math.round(Number(amount) - (payload.baseAmount ? Number(payload.baseAmount) : Math.round(Number(amount) / 1.18))))
-        : 0
-    );
-    const totalWithGst = planCharge?.totalAmount ?? (
-      isEventItem
-        ? Number(amount)
-        : baseAmount
-    );
-    const planDurationYears = Number(membershipPlan?.durationYears) || 1;
-    if (computedGst > 0 || planDurationYears > 1 || isEventItem) {
-      payment.subtotal = payload.baseAmount ? Number(payload.baseAmount) : (totalWithGst - computedGst);
-      payment.gstRate = gstRate;
-      payment.gstAmount = computedGst;
-      payment.amount = totalWithGst;
-      payment.durationYears = planDurationYears;
-      await payment.save();
-    }
-
-    // Revenue Sharing: ledger entries for this payment's chapter/state/central (or
-    // event-organizer) allocations. Non-fatal — a failure here must not break the
-    // payment/membership flow the member is actively waiting on; it's logged for
-    // follow-up instead. Safe to call unconditionally: createLedgerEntriesForPayment
-    // itself no-ops for out-of-scope itemTypes and is idempotent against retries.
-    try {
-      await revenueShareService.createLedgerEntriesForPayment(payment, { actor: user });
-    } catch (revShareErr) {
-      logger.error(`[REVENUE SHARE] Failed to create ledger entries for payment ${payment._id}:`, revShareErr);
-    }
-
-    let updatedMembership = null;
-    if (planId && finalBusinessId) {
-      updatedMembership = await membershipService.upgradePlan(finalBusinessId, planId);
-    }
-
-    // Auto-enroll user and business in Course if paid course
-    const resolvedCourseId = courseId || payload.courseId || (itemType === "Course" ? payload.notes?.courseId : null);
-    if (resolvedCourseId) {
-      try {
-        const { Course } = await import("../courses/course.model.js");
-        const courseDoc = await Course.findById(resolvedCourseId);
-        if (courseDoc) {
-          const alreadyEnrolled = courseDoc.enrollments?.some(
-            (e) => String(e.userId) === String(user.id) || (finalBusinessId && String(e.businessId) === String(finalBusinessId))
-          );
-          if (!alreadyEnrolled) {
-            courseDoc.enrollments = courseDoc.enrollments || [];
-            courseDoc.enrollments.push({
-              businessId: finalBusinessId || null,
-              userId: user.id,
-              paymentId: payment._id,
-              enrolledAt: new Date(),
-            });
-            await courseDoc.save();
-          }
-        }
-      } catch (cErr) {
-        console.error("[PAYMENT] Failed to enroll user in course:", cErr);
-      }
-    }
-
-    // Fire-and-forget: send notifications & emails without blocking the response
-    setImmediate(async () => {
-      try {
-        await notificationService.createNotification({
-          recipientId: user.id,
-          type: "Payment",
-          title: "Payment Verified",
-          body: `Payment of ${payment.currency === "USD" ? "$" : "₹"}${payment.amount} ${payment.currency} (Invoice #${payment.invoiceNumber}) was verified successfully.`,
-          link: "/biz/payments",
-        });
-
-        const targetEmail = payload.billingEmail || userDoc?.email;
-        if (targetEmail && isMembership) {
-          emailService.sendMembershipInvoiceEmail({
-            email: targetEmail,
-            name: userDoc?.name || "Member",
-            businessName: businessDoc?.name || payload.businessName || "Member Business",
-            planName: membershipPlan?.name || "Membership",
-            amount: payment.amount,
-            subtotal: payment.subtotal || payment.amount,
-            gstAmount: payment.gstAmount || 0,
-            gstRate: payment.gstRate || 18,
-            currency: payment.currency,
-            invoiceNumber: payment.invoiceNumber,
-            paidAt: payment.paidAt,
-            transactionId: payment.transactionId || razorpay_payment_id,
-            paymentMethod: payment.method || "Razorpay Online Payment",
-          }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
-        }
-
-        // 1. Notify Chapter Admin of the specific Chapter only (Chamber multi-year tiers only)
-        if (!isUserTier) {
-          const bizChapter = (businessDoc?.chapter || userDoc?.chapter || "").trim();
-          const bizChapterId = businessDoc?.chapterId || userDoc?.chapterId || null;
-          let chapterAdmins = [];
-          if (bizChapter || bizChapterId) {
-            const cleanChapter = bizChapter.replace(/\b(chapter|chamber)\b/gi, "").trim();
-            chapterAdmins = await User.find({
-              role: ROLES.CHAPTER_ADMIN,
-              $or: [
-                ...(bizChapterId ? [{ chapterId: bizChapterId }] : []),
-                ...(cleanChapter ? [{ chapter: new RegExp(cleanChapter, "i") }] : []),
-                ...(bizChapter ? [{ chapter: new RegExp(`^${bizChapter}$`, "i") }] : []),
-              ],
-            }).select("_id email name chapter");
-          }
-
-          for (const ca of chapterAdmins) {
-            notificationService.createNotification({
-              recipientId: ca._id,
-              type: "Verification",
-              title: "New Membership Payment & Verification Request",
-              body: `Business "${businessDoc?.name || userDoc?.name}" (${bizChapter || "Your Chapter"}) has completed ${planId || "Membership"} payment (Invoice #${payment.invoiceNumber}) and is awaiting verification approval.`,
-              entityId: businessDoc?._id,
-              link: "/chapter-admin/verification",
-            }).catch(() => {});
-
-            if (ca.email) {
-              emailService.sendAdminVerificationAlert({
-                adminEmail: ca.email,
-                businessName: businessDoc?.name || userDoc?.name,
-                ownerName: userDoc?.name,
-                chapter: bizChapter || "General",
-                notes: `Membership payment completed for ${planId || "Membership"} tier (Invoice #${payment.invoiceNumber}). Awaiting verification approval.`,
-              }).catch(() => {});
-            }
-          }
-        }
-
-        // 2. Notify Assigned Country Admin (for Japan/USA/non-India) or Central Admin (India/fallback)
-        const bizCountry = (businessDoc?.country || payload.country || userDoc?.country || "").trim();
-        const bizCountryId = businessDoc?.countryId || userDoc?.countryId;
-        const isNonIndia = bizCountry && bizCountry.toLowerCase() !== "india";
-
-        // ==========================================
-        // [COUNTRY_MODULE_DISABLED] Country Admin Payment Alert
-        // if (isNonIndia) {
-        //   const cAdminQuery = [];
-        //   if (bizCountryId) cAdminQuery.push({ countryId: bizCountryId });
-        //   cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
-        //   targetAdmins = await User.find({
-        //     role: ROLES.COUNTRY_ADMIN,
-        //     status: "Active",
-        //     $or: cAdminQuery,
-        //   }).select("_id email name");
-        // }
-        // ==========================================
-
-        if (targetAdmins.length === 0) {
-          targetAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
-        }
-
-        const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
-        const adminEmails = [...new Set([adminFallbackEmail, ...targetAdmins.map((a) => a.email)].filter(Boolean))];
-
-        for (const adminMail of adminEmails) {
-          emailService.sendAdminPaymentReceiptAlert({
-            adminEmail: adminMail,
-            name: userDoc?.name || "Member",
-            businessName: businessDoc?.name || payload.businessName || "Member Business",
-            planName: isMembership ? membershipPlan?.name : "EVENT PASS",
-            amount: payment.amount,
-            currency: payment.currency,
-            invoiceNumber: payment.invoiceNumber,
-            paidAt: payment.paidAt,
-            transactionId: payment.transactionId || razorpay_payment_id,
-            paymentMethod: payment.method || "Razorpay Online Payment",
-            userPhone: userDoc?.phone || "",
-            userEmail: targetEmail || "",
-          }).catch(() => {});
-        }
-
-        const currSymbol = payment.currency === "USD" ? "$" : (payment.currency === "JPY" ? "¥" : "₹");
-        for (const admin of targetAdmins) {
-          notificationService.createNotification({
-            recipientId: admin._id,
-            type: "Payment",
-            title: "New Payment Receipt for Verification",
-            body: `Receipt #${payment.invoiceNumber} of ${currSymbol}${payment.amount} from ${businessDoc?.name || payload.businessName || "Member"} received for verification.`,
-            link: isNonIndia ? "/admin/verification" : "/admin/payments",
-          }).catch(() => {});
-        }
-      } catch (bgErr) {
-        console.error("Background payment notification error:", bgErr);
-      }
-    });
-
-    // Generate refreshed JWT tokens with the updated role
-    const tokenPayload = {
-      id: userDoc._id,
-      email: userDoc.email,
-      role: userDoc.role,
-      chapter: userDoc.chapter,
-      forcePasswordChange: userDoc.forcePasswordChange,
-    };
-    const accessToken = signAccessToken(tokenPayload);
-    const refreshToken = signRefreshToken(tokenPayload);
-
-    await userDoc.populate("savedBusinesses");
-    const userObj = userDoc.toJSON();
-    if (Array.isArray(userObj.savedBusinesses)) {
-      userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
-    }
-
-    return {
-      verified: true,
-      payment,
-      membership: updatedMembership,
-      business: businessDoc,
-      user: userObj,
-      accessToken,
-      refreshToken,
-    };
   },
+
+  /**
+   * Verify Stripe Checkout Session (International USD)
+   */
+  verifyStripeSession: async (payload, user) => {
+    const sessionId = payload.sessionId || payload.stripe_session_id;
+    if (!sessionId) {
+      throw new BadRequestError("Missing Stripe Session ID");
+    }
+
+    const session = await stripeClient.retrieveCheckoutSession(sessionId);
+    if (!session) {
+      throw new NotFoundError("Stripe checkout session not found");
+    }
+
+    if (session.payment_status !== "paid") {
+      throw new BadRequestError(`Payment has not been completed. Status: ${session.payment_status}`);
+    }
+
+    const transactionId = session.payment_intent?.id || session.id;
+    const metadata = session.metadata || {};
+
+    const fulfillmentResult = await fulfillPaymentOrder({
+      payload: {
+        ...metadata,
+        ...payload,
+        currency: (session.currency || "usd").toUpperCase(),
+        amount: (session.amount_total || 0) / 100,
+        invoiceNumber: session.client_reference_id || metadata.invoiceNumber || payload.invoiceNumber,
+      },
+      user: user || { id: metadata.userId },
+      transactionId,
+      orderId: session.id,
+      method: "Stripe International (Card / Apple Pay)",
+    });
+
+    return fulfillmentResult;
+  },
+
+  /**
+   * Handle Stripe Webhook Events
+   */
+  handleStripeWebhook: async (rawBody, signature) => {
+    const event = stripeClient.verifyWebhook(rawBody, signature);
+    logger.info(`[STRIPE WEBHOOK] Received event: ${event.type}`);
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      if (session.payment_status === "paid") {
+        const metadata = session.metadata || {};
+        if (metadata.userId) {
+          const transactionId = session.payment_intent || session.id;
+          await fulfillPaymentOrder({
+            payload: {
+              ...metadata,
+              currency: (session.currency || "usd").toUpperCase(),
+              amount: (session.amount_total || 0) / 100,
+              invoiceNumber: session.client_reference_id || metadata.invoiceNumber,
+            },
+            user: { id: metadata.userId },
+            transactionId,
+            orderId: session.id,
+            method: "Stripe International (Card / Apple Pay)",
+          });
+        }
+      }
+    }
+
+    return { received: true };
+  },
+
+  createOrder: async (payload, user) => paymentService.createRazorpayOrder(payload, user),
+  verifyPayment: async (payload, user) => paymentService.verifyRazorpayPayment(payload, user),
 
   /**
    * Process / Record a payment transaction
@@ -898,12 +1078,13 @@ export const paymentService = {
         const bizCountryId = businessDoc?.countryId || userDoc?.countryId;
         const isNonIndia = bizCountry && bizCountry.toLowerCase() !== "india";
 
+        let targetAdmins = [];
         // ==========================================
         // [COUNTRY_MODULE_DISABLED] Country Admin Payment Alert
         // if (isNonIndia) {
         //   const cAdminQuery = [];
         //   if (bizCountryId) cAdminQuery.push({ countryId: bizCountryId });
-        //   cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+        //   cAdminQuery.push({ country: new RegExp(`^${bizCountry.replace(/[.*+?^${}()|[]\]/g, "\\$&")}$`, "i") });
         //   targetAdmins = await User.find({
         //     role: ROLES.COUNTRY_ADMIN,
         //     status: "Active",

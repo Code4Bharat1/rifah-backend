@@ -1,5 +1,6 @@
 import { Verification } from "./verification.model.js";
 import { Business } from "../businesses/business.model.js";
+import { isSubscriberTierBusiness } from "../businesses/business.service.js";
 import { User } from "../users/user.model.js";
 import { Payment } from "../payments/payment.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -21,6 +22,12 @@ export const verificationService = {
 
     if (String(business.owner) !== String(user.id)) {
       throw new ForbiddenError("You are not the owner of this business");
+    }
+
+    if (isSubscriberTierBusiness(business)) {
+      throw new ForbiddenError(
+        "Business verification is exclusive to Chamber Memberships (Silver, Gold, Platinum, Diamond) and is not available for online Subscriber Tiers (Tier I - IV)."
+      );
     }
 
     let verification = await Verification.findOne({ business: businessId });

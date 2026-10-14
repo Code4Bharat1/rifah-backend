@@ -442,6 +442,9 @@ export const membershipService = {
 
       business.membership = "Tier I (Free)";
       business.subscriberTier = "tier_1";
+      business.verification = "unverified";
+      business.verificationStatus = "unverified";
+      business.isVerified = false;
       await business.save();
       await syncOwnerUserTier(business, "Tier I (Free)", "tier_1");
 
@@ -477,6 +480,9 @@ export const membershipService = {
     business.membership = plan.name;
     if (isUserPlan) {
       business.subscriberTier = planKey;
+      business.verification = "unverified";
+      business.verificationStatus = "unverified";
+      business.isVerified = false;
     }
     await business.save();
     await syncOwnerUserTier(business, plan.name, isUserPlan ? planKey : "");

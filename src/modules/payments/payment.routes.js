@@ -8,8 +8,12 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
+router.get("/config", paymentController.getConfig);
 router.post("/order", authMiddleware, paymentController.createOrder);
 router.post("/verify", authMiddleware, paymentController.verifyPayment);
+router.post("/stripe/create-session", authMiddleware, paymentController.createStripeSession);
+router.post("/stripe/verify", authMiddleware, paymentController.verifyStripeSession);
+router.post("/stripe/webhook", paymentController.handleStripeWebhook);
 
 router.post(
   "/",
