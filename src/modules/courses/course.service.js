@@ -35,11 +35,11 @@ export const canManageCourse = (user, course) => {
  */
 export const createCourse = async (courseData, user) => {
   const isCentralAdmin = user.role === ROLES.CENTRAL_ADMIN;
-  const isCountryAdmin = user.role === ROLES.COUNTRY_ADMIN;
+  // [COUNTRY_MODULE_DISABLED] const isCountryAdmin = user.role === ROLES.COUNTRY_ADMIN;
   const isBusinessOwner = user.role === ROLES.BUSINESS_OWNER;
 
-  if (!isCentralAdmin && !isCountryAdmin) {
-    throw new ForbiddenError("Only Central Admin and Country Admin can create official courses");
+  if (!isCentralAdmin) {
+    throw new ForbiddenError("Only Central Admin can create official courses");
   }
 
   if (!courseData.title || !String(courseData.title).trim()) {
@@ -80,9 +80,15 @@ export const createCourse = async (courseData, user) => {
     price = Math.round(parsedPrice);
   }
 
-  const scope = isCountryAdmin ? 'country' : (courseData.scope || 'centre');
-  const country = isCountryAdmin ? user.country : (courseData.country || null);
-  const countryId = isCountryAdmin ? user.countryId : (courseData.countryId || null);
+  // ==========================================
+  // [COUNTRY_MODULE_DISABLED]
+  // const scope = isCountryAdmin ? 'country' : (courseData.scope || 'centre');
+  // const country = isCountryAdmin ? user.country : (courseData.country || null);
+  // const countryId = isCountryAdmin ? user.countryId : (courseData.countryId || null);
+  const scope = courseData.scope || 'centre';
+  const country = null;
+  const countryId = null;
+  // ==========================================
   const businessId = null;
   const approvalStatus = 'not_required';
   const approvedBy = user.id || user._id;

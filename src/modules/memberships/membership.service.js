@@ -329,6 +329,23 @@ export const membershipService = {
             "Search visibility",
           ],
         });
+      } else if (bizTier.startsWith("tier_") || business?.subscriberTier?.startsWith("tier_")) {
+        const tierKey = (business?.subscriberTier || bizTier).toLowerCase();
+        const plan = await Plan.findOne({ planId: tierKey }).lean() || 
+                     DEFAULT_MEMBERSHIP_PLANS[tierKey] || 
+                     DEFAULT_MEMBERSHIP_PLANS.tier_1;
+        const isIntlBiz = business?.region === "international" || business?.currency === "USD";
+        membership = await Membership.create({
+          business: businessId,
+          planId: tierKey,
+          planName: plan?.name || "Tier I (Free)",
+          price: isIntlBiz ? (plan?.priceUsd || 0) : (plan?.price || 0),
+          billingCycle: isIntlBiz ? "Monthly (Tier Plan)" : "Monthly",
+          startDate: business?.createdAt || new Date(),
+          endDate: isPaid ? addDays(30) : null,
+          status: isPaid ? "Active" : "Pending",
+          features: plan?.features || [],
+        });
       } else {
         const plan = await Plan.findOne({ planId: bizTier }).lean() || 
                      DEFAULT_MEMBERSHIP_PLANS[bizTier] || 
@@ -397,22 +414,25 @@ export const membershipService = {
       throw new NotFoundError("Business not found");
     }
 
+    const isIntlBusiness = business.region === "international" || business.currency === "USD";
+    const isUserPlan = String(planKey).toLowerCase().startsWith("tier_") || planKey === "free";
+
+    // International businesses must strictly buy Tier Plans, NOT multi-year Chamber subscriptions
+    if (isIntlBusiness && !isUserPlan) {
+      throw new BadRequestError("International businesses must select a Tier Plan (Tier I, II, III, or IV), not a multi-year Chamber subscription.");
+    }
+
     let membership = await Membership.findOne({ business: businessId });
     if (!membership) {
       membership = new Membership({ business: businessId });
     }
 
-    // "Free" is the baseline, no-cost tier (BUG-025: "Free Basic plan" button in
-    // Biz > Membership) — it isn't a purchasable catalog entry, so it must not
-    // depend on a matching `Plan` document existing. The canonical plan catalog
-    // (see DEFAULT_MEMBERSHIP_PLANS below: Silver/Gold/Platinum/Diamond) never
-    // seeds a "free" Plan row, so looking it up via Plan.findOne always 404'd and
-    // the activation silently failed. Handle it directly instead.
+    // "Free" is the baseline, no-cost tier
     if (planKey === "free" || planKey === "tier_1") {
       membership.planId = "tier_1";
       membership.planName = "Tier I (Free)";
       membership.price = 0;
-      membership.billingCycle = "Free";
+      membership.billingCycle = isIntlBusiness ? "Free (Tier Plan)" : "Free";
       membership.startDate = new Date();
       membership.endDate = null;
       membership.status = "Active";
@@ -422,6 +442,9 @@ export const membershipService = {
 
       business.membership = "Tier I (Free)";
       business.subscriberTier = "tier_1";
+      business.verification = "unverified";
+      business.verificationStatus = "unverified";
+      business.isVerified = false;
       await business.save();
       await syncOwnerUserTier(business, "Tier I (Free)", "tier_1");
 
@@ -436,14 +459,17 @@ export const membershipService = {
       throw new NotFoundError("Selected membership plan is unavailable");
     }
 
-    const isUserPlan = String(planKey).toLowerCase().startsWith("tier_") || String(plan.planId).toLowerCase().startsWith("tier_");
     const durationYears = Number(plan.durationYears) || (isUserPlan ? 0 : 1);
     const durationDays = isUserPlan ? 30 : 365 * durationYears;
 
     membership.planId = planKey;
     membership.planName = plan.name;
-    membership.price = plan.price || 0;
-    membership.billingCycle = isUserPlan ? "Monthly" : `${durationYears} Year${durationYears > 1 ? "s" : ""}`;
+    membership.price = isIntlBusiness
+      ? (plan.priceUsd ?? (plan.price === 0 ? 0 : Math.round(plan.price / 80)))
+      : (plan.price || 0);
+    membership.billingCycle = isUserPlan
+      ? (isIntlBusiness ? "Monthly (Tier Plan)" : "Monthly")
+      : `${durationYears} Year${durationYears > 1 ? "s" : ""}`;
     membership.startDate = new Date();
     membership.endDate = addDays(durationDays);
     membership.status = "Active";
@@ -454,6 +480,9 @@ export const membershipService = {
     business.membership = plan.name;
     if (isUserPlan) {
       business.subscriberTier = planKey;
+      business.verification = "unverified";
+      business.verificationStatus = "unverified";
+      business.isVerified = false;
     }
     await business.save();
     await syncOwnerUserTier(business, plan.name, isUserPlan ? planKey : "");

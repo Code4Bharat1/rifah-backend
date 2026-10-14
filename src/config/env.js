@@ -53,9 +53,11 @@ export const env = {
     KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || "7F7NmMGfMcDVTHqlO35raX2u",
   },
 
-  RAZORPAY_INTERNATIONAL: {
-    KEY_ID: process.env.RAZORPAY_INTL_KEY_ID || process.env.RAZORPAY_KEY_ID || "rzp_test_TTykh9OVkLKNHl",
-    KEY_SECRET: process.env.RAZORPAY_INTL_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET || "7F7NmMGfMcDVTHqlO35raX2u",
+  STRIPE: {
+    SECRET_KEY: process.env.STRIPE_SECRET_KEY || "",
+    PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "",
+    WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || "",
+    CURRENCY: (process.env.STRIPE_CURRENCY || "usd").toLowerCase(),
   },
 
   GOOGLE: {

@@ -57,6 +57,47 @@ const resolveChapterFields = async (data) => {
   return {};
 };
 
+/**
+ * Identifies whether a business is on a Subscriber Tier (Tier I / II / III / IV / Free / Starter / Growth / Enterprise)
+ * without an accredited Chamber membership (Silver, Gold, Platinum, Diamond).
+ * Per RIFAH Feature Matrix Row 19: Subscriber tiers NEVER include business verification.
+ */
+export const isSubscriberTierBusiness = (business) => {
+  if (!business) return false;
+  const mem = String(business.membership || business.membershipPlan || business.chamberMembership || "").trim().toLowerCase();
+  const subTier = String(business.subscriberTier || business.subscriber_tier || "").trim().toLowerCase();
+
+  const isChamber =
+    mem.includes("silver") ||
+    mem.includes("gold") ||
+    mem.includes("platinum") ||
+    mem.includes("diamond");
+
+  if (isChamber) return false;
+
+  if (
+    subTier === "tier_1" || subTier === "tier_2" || subTier === "tier_3" || subTier === "tier_4" ||
+    subTier === "tier-1" || subTier === "tier-2" || subTier === "tier-3" || subTier === "tier-4" ||
+    subTier === "tier 1" || subTier === "tier 2" || subTier === "tier 3" || subTier === "tier 4" ||
+    subTier.startsWith("tier_") || subTier.startsWith("tier-") || subTier.startsWith("tier ") ||
+    subTier === "free" || subTier === "starter" || subTier === "growth" || subTier === "enterprise"
+  ) {
+    return true;
+  }
+
+  if (
+    mem.includes("tier ") || mem.includes("tier_") || mem.includes("tier-") ||
+    mem.includes("tier i") || mem.includes("tier ii") || mem.includes("tier iii") || mem.includes("tier iv") ||
+    mem === "free" || mem === "starter" || mem === "growth" || mem === "free member" ||
+    mem.includes("(free)") || mem.includes("(starter)") || mem.includes("(growth)") || mem.includes("(enterprise)") ||
+    !mem
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 // Scaled for 10k/50k users: In-memory profile view buffer with periodic batch flush to MongoDB
 const pendingProfileViews = new Map();
 
@@ -669,6 +710,12 @@ export const businessService = {
         }
       }
 
+      if (isSubscriberTierBusiness(doc)) {
+        doc.verification = "unverified";
+        doc.verificationStatus = "unverified";
+        doc.isVerified = false;
+      }
+
       return doc;
     });
 
@@ -712,14 +759,20 @@ export const businessService = {
       throw new NotFoundError("Business profile not found");
     }
 
-    // In-memory verification status safety check without blocking DB write
-    if (business && Array.isArray(business.verificationHistory)) {
-      const hasEverBeenApproved = business.verificationHistory.some(
-        (h) => h.action === "verified" || h.action === "approved"
-      );
-      if (hasEverBeenApproved && business.verification !== "verified" && business.verification !== "rejected") {
-        business.verification = "verified";
-        business.isVerified = true;
+    // Safety check: Subscriber tiers (Tier I..IV) CANNOT be verified.
+    if (business) {
+      if (isSubscriberTierBusiness(business)) {
+        business.verification = "unverified";
+        business.verificationStatus = "unverified";
+        business.isVerified = false;
+      } else if (Array.isArray(business.verificationHistory)) {
+        const hasEverBeenApproved = business.verificationHistory.some(
+          (h) => h.action === "verified" || h.action === "approved"
+        );
+        if (hasEverBeenApproved && business.verification !== "verified" && business.verification !== "rejected") {
+          business.verification = "verified";
+          business.isVerified = true;
+        }
       }
     }
 
@@ -784,11 +837,12 @@ export const businessService = {
               state: user.state || "",
               city: user.city || "",
               status: "Active",
-              verification: "verified",
-              verificationStatus: "verified",
-              isVerified: true,
+              verification: "unverified",
+              verificationStatus: "unverified",
+              isVerified: false,
               membership: user.subscriberTier || user.membershipPlan || "Tier I (Free)",
               membershipPlan: user.subscriberTier || user.membershipPlan || "Tier I (Free)",
+              subscriberTier: user.subscriberTier || "tier_1",
               isPaid: (user.subscriberTier || user.membershipPlan || "Tier I (Free)") !== "Tier I (Free)",
             });
           } catch (createErr) {}
@@ -796,24 +850,38 @@ export const businessService = {
       }
     }
     if (business) {
-      const hasEverBeenApproved =
-        Array.isArray(business.verificationHistory) &&
-        business.verificationHistory.some(
-          (h) => h.action === "verified" || h.action === "approved"
-        );
-      if (
-        (hasEverBeenApproved || business.status === "Active") &&
-        business.verification !== "verified" &&
-        business.verification !== "rejected"
-      ) {
-        business.verification = "verified";
-        business.verificationStatus = "verified";
-        business.isVerified = true;
-        await Business.findByIdAndUpdate(business._id, {
-          verification: "verified",
-          verificationStatus: "verified",
-          isVerified: true,
-        });
+      if (isSubscriberTierBusiness(business)) {
+        // Enforce that subscriber tiers (Tier I, II, III, IV) are NEVER verified
+        if (business.verification !== "unverified" || business.verificationStatus !== "unverified" || business.isVerified !== false) {
+          business.verification = "unverified";
+          business.verificationStatus = "unverified";
+          business.isVerified = false;
+          await Business.findByIdAndUpdate(business._id, {
+            verification: "unverified",
+            verificationStatus: "unverified",
+            isVerified: false,
+          });
+        }
+      } else {
+        const hasEverBeenApproved =
+          Array.isArray(business.verificationHistory) &&
+          business.verificationHistory.some(
+            (h) => h.action === "verified" || h.action === "approved"
+          );
+        if (
+          hasEverBeenApproved &&
+          business.verification !== "verified" &&
+          business.verification !== "rejected"
+        ) {
+          business.verification = "verified";
+          business.verificationStatus = "verified";
+          business.isVerified = true;
+          await Business.findByIdAndUpdate(business._id, {
+            verification: "verified",
+            verificationStatus: "verified",
+            isVerified: true,
+          });
+        }
       }
 
       // Auto-heal Unassigned or missing chapter in backend
@@ -932,9 +1000,11 @@ export const businessService = {
       slug,
       owner: ownerId,
       status: initialStatus,
-      verificationStatus: initialVerification,
+      verificationStatus: "unverified",
       verification: "unverified",
-      membership: "Free",
+      isVerified: false,
+      membership: "Tier I (Free)",
+      subscriberTier: "tier_1",
       featured: false,
       rating: 0,
     });

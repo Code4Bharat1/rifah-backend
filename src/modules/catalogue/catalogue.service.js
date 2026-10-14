@@ -302,15 +302,11 @@ export const catalogueService = {
       const b = item.business;
       const v = String(b.verification || "").toLowerCase();
       const s = String(b.status || "").toLowerCase();
+      if (s === "rejected" || s === "suspended") return false;
+      if (v === "rejected") return false;
       const isVerified = v === "verified" || v === "approved" || b.isVerified === true;
-      const isPendingOrRejected =
-        v === "rejected" ||
-        v === "pending" ||
-        v === "under_review" ||
-        v === "unverified" ||
-        s === "rejected" ||
-        s === "suspended";
-      return isVerified && !isPendingOrRejected;
+      const isActiveBusiness = s === "active" || s === "live";
+      return isVerified || isActiveBusiness;
     });
 
     return {
@@ -392,9 +388,10 @@ export const catalogueService = {
             state: userDoc.state || "",
             city: userDoc.city || "",
             status: "Active",
-            verification: "verified",
-            verificationStatus: "verified",
-            isVerified: true,
+            verification: "unverified",
+            verificationStatus: "unverified",
+            isVerified: false,
+            subscriberTier: userDoc.subscriberTier || "tier_1",
             membership: userDoc.subscriberTier || userDoc.membershipPlan || "Tier I (Free)",
             membershipPlan: userDoc.subscriberTier || userDoc.membershipPlan || "Tier I (Free)",
             isPaid: (userDoc.subscriberTier || userDoc.membershipPlan || "Tier I (Free)") !== "Tier I (Free)",

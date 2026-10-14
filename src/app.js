@@ -38,7 +38,14 @@ app.use(cors(corsConfig));
 app.use(compression());
 
 // Body parsers
-app.use(express.json({ limit: "10mb" }));
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // NoSQL Query & Body Sanitization (Blocks MongoDB operator injections)

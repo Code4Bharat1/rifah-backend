@@ -41,7 +41,8 @@ import { galleryRoutes } from "../modules/gallery/gallery.routes.js";
 import { copilotRoutes } from "../modules/copilot/copilot.routes.js";
 import { advertisementRoutes } from "../modules/advertisements/advertisement.routes.js";
 import { ticketRoutes } from "../modules/tickets/ticket.routes.js";
-import { countryRoutes } from "../modules/countries/country.routes.js";
+// [COUNTRY_MODULE_DISABLED]
+// import { countryRoutes } from "../modules/countries/country.routes.js";
 import { revenueSharingRoutes } from "../modules/revenue-sharing/revenueSharing.routes.js";
 import { dignitaryRoutes } from "../modules/dignitaries/dignitary.routes.js";
 import { visaReferralRoutes } from "../modules/visa-referrals/visa-referral.routes.js";
@@ -59,7 +60,12 @@ apiRouter.use("/users", userRoutes);
 apiRouter.use("/businesses", businessRoutes);
 apiRouter.use("/categories", categoryRoutes);
 apiRouter.use("/chapters", chapterRoutes);
-apiRouter.use("/countries", countryRoutes);
+// ==========================================
+// [COUNTRY_MODULE_DISABLED]
+// apiRouter.use("/countries", countryRoutes);
+// Safe fallback returning empty array so no 404 occurs:
+apiRouter.use("/countries", (req, res) => res.json({ success: true, data: [] }));
+// ==========================================
 apiRouter.use("/verification", verificationRoutes);
 apiRouter.use("/catalogue", catalogueRoutes);
 apiRouter.use("/enquiries", enquiryRoutes);

@@ -1,5 +1,6 @@
 import { Verification } from "./verification.model.js";
 import { Business } from "../businesses/business.model.js";
+import { isSubscriberTierBusiness } from "../businesses/business.service.js";
 import { User } from "../users/user.model.js";
 import { Payment } from "../payments/payment.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
@@ -21,6 +22,12 @@ export const verificationService = {
 
     if (String(business.owner) !== String(user.id)) {
       throw new ForbiddenError("You are not the owner of this business");
+    }
+
+    if (isSubscriberTierBusiness(business)) {
+      throw new ForbiddenError(
+        "Business verification is exclusive to Chamber Memberships (Silver, Gold, Platinum, Diamond) and is not available for online Subscriber Tiers (Tier I - IV)."
+      );
     }
 
     let verification = await Verification.findOne({ business: businessId });
@@ -81,17 +88,19 @@ export const verificationService = {
 
       let targetAdmins = [];
 
-      // 1. If country is specified, find Country Admin for this country
-      if (targetCountry && targetCountry.toLowerCase() !== "india") {
-        const cAdminQuery = [];
-        if (targetCountryId) cAdminQuery.push({ countryId: targetCountryId });
-        cAdminQuery.push({ country: new RegExp(`^${targetCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
-        targetAdmins = await User.find({
-          role: ROLES.COUNTRY_ADMIN,
-          status: "Active",
-          $or: cAdminQuery,
-        });
-      }
+      // ==========================================
+      // [COUNTRY_MODULE_DISABLED] Country Admin Alert Routing
+      // if (targetCountry && targetCountry.toLowerCase() !== "india") {
+      //   const cAdminQuery = [];
+      //   if (targetCountryId) cAdminQuery.push({ countryId: targetCountryId });
+      //   cAdminQuery.push({ country: new RegExp(`^${targetCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+      //   targetAdmins = await User.find({
+      //     role: ROLES.COUNTRY_ADMIN,
+      //     status: "Active",
+      //     $or: cAdminQuery,
+      //   });
+      // }
+      // ==========================================
 
       // 2. If no Country Admin found (or India/unassigned), notify Central Admins
       if (targetAdmins.length === 0) {

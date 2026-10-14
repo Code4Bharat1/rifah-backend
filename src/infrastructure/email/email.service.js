@@ -577,7 +577,8 @@ RIFAH Chamber of Commerce & Industry
       year: "numeric",
     });
 
-    const formattedAmount = `₹ ${Number(amount || 0).toLocaleString("en-IN")}`;
+    const isUsd = (currency || "").toUpperCase() === "USD";
+    const formattedAmount = isUsd ? `$ ${Number(amount || 0).toLocaleString("en-US")} USD` : `₹ ${Number(amount || 0).toLocaleString("en-IN")}`;
     const cleanPlanName = (planName || "Membership").replace(/subscription/i, "").trim().toUpperCase();
 
     // 1. Generate Vector PDF Buffer matching Image 2
@@ -640,7 +641,7 @@ RIFAH Chamber of Commerce & Industry
                     Status: <span style="display: inline-block; background-color: #dcfce7; color: #166534; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase;">• PAID</span>
                   </p>
                   <p style="margin: 0; font-size: 11px; color: #475569;">Transaction ID: <span style="font-family: monospace; font-weight: 600;">${transactionId || "pay_ONLINE"}</span></p>
-                  <p style="margin: 2px 0 0 0; font-size: 11px; color: #475569;">Payment Method: <strong>${paymentMethod || "Razorpay Online Payment"}</strong></p>
+                  <p style="margin: 2px 0 0 0; font-size: 11px; color: #475569;">Payment Method: <strong>${paymentMethod || (isUsd ? "Stripe International" : "Razorpay Online Payment")}</strong></p>
                 </div>
               </td>
             </tr>

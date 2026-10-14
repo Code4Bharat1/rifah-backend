@@ -3,14 +3,36 @@ import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 
 export const paymentController = {
+  getConfig: asyncHandler(async (req, res) => {
+    const config = paymentService.getGatewayConfig();
+    return ApiResponse.success(res, config, "Gateway configuration retrieved");
+  }),
+
   createOrder: asyncHandler(async (req, res) => {
     const order = await paymentService.createRazorpayOrder(req.body, req.user);
-    return ApiResponse.success(res, order, "Razorpay order created successfully");
+    const msg = order?.provider === "stripe" ? "Stripe session created successfully" : "Razorpay order created successfully";
+    return ApiResponse.success(res, order, msg);
+  }),
+
+  createStripeSession: asyncHandler(async (req, res) => {
+    const session = await paymentService.createStripeCheckoutSession(req.body, req.user);
+    return ApiResponse.success(res, session, "Stripe session created successfully");
   }),
 
   verifyPayment: asyncHandler(async (req, res) => {
     const result = await paymentService.verifyRazorpayPayment(req.body, req.user);
     return ApiResponse.success(res, result, "Payment verified and processed successfully");
+  }),
+
+  verifyStripeSession: asyncHandler(async (req, res) => {
+    const result = await paymentService.verifyStripeSession(req.body, req.user);
+    return ApiResponse.success(res, result, "Stripe payment verified successfully");
+  }),
+
+  handleStripeWebhook: asyncHandler(async (req, res) => {
+    const signature = req.headers["stripe-signature"];
+    const result = await paymentService.handleStripeWebhook(req.rawBody || req.body, signature);
+    return ApiResponse.success(res, result, "Webhook processed successfully");
   }),
 
   createPayment: asyncHandler(async (req, res) => {

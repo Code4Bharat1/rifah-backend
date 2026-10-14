@@ -124,7 +124,7 @@ BT /F1 10 Tf 430 762 Td (Issued: ${formattedDate}) Tj ET
 0.40 0.45 0.50 rg BT /F1 10 Tf 325 682 Td (Status:) Tj ET
 0.09 0.60 0.35 rg BT /F2 10 Tf 365 682 Td ([ PAID & VERIFIED ]) Tj ET
 0.40 0.45 0.50 rg BT /F1 9 Tf 325 662 Td (Transaction ID: ${(transactionId || "pay_ONLINE").slice(0, 24)}) Tj ET
-0.40 0.45 0.50 rg BT /F1 9 Tf 325 646 Td (Payment Method: ${paymentMethod || "Razorpay Online Payment"}) Tj ET
+0.40 0.45 0.50 rg BT /F1 9 Tf 325 646 Td (Payment Method: ${paymentMethod || (isUsd ? "Stripe International" : "Razorpay Online Payment")}) Tj ET
 
 % DESCRIPTION / PURPOSE Items Table Header Box
 0.06 0.12 0.22 rg 30 580 535 32 re f

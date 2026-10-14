@@ -362,11 +362,12 @@ export const authService = {
           state: user.state || "",
           city: user.city || "",
           status: "Active",
-          verification: "verified",
-          verificationStatus: "verified",
-          isVerified: true,
+          verification: "unverified",
+          verificationStatus: "unverified",
+          isVerified: false,
           membership: resolvedTier,
           membershipPlan: resolvedTier,
+          subscriberTier: resolveTierPlanId(resolvedTier),
           membershipId: cleanMembershipId || undefined,
           isPaid: resolvedTier !== "Tier I (Free)",
         });
@@ -1132,36 +1133,38 @@ export const authService = {
         }
       }
 
-      // 1.5. If international business, notify assigned Country Admin for verification
-      const targetCountry = (resolvedCountry || country || "").trim();
-      const targetCountryId = countryId;
-      if (targetCountry && targetCountry.toLowerCase() !== "india") {
-        try {
-          const cAdminQuery = [];
-          if (targetCountryId) cAdminQuery.push({ countryId: targetCountryId });
-          cAdminQuery.push({ country: new RegExp(`^${targetCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
-          const countryAdmins = await User.find({
-            role: ROLES.COUNTRY_ADMIN,
-            status: "Active",
-            $or: cAdminQuery,
-          });
-
-          for (const cAdmin of countryAdmins) {
-            notificationService
-              .createNotification({
-                recipientId: cAdmin._id,
-                type: "Verification",
-                title: `📋 New Business Registration: ${business.name}`,
-                body: `New business "${business.name}" from ${targetCountry} has registered and submitted for verification.`,
-                entityId: verification._id,
-                link: `/admin/verification`,
-              })
-              .catch(() => {});
-          }
-        } catch (cAdminErr) {
-          logger.warn("[AUTH] Failed to notify country admin on registration:", cAdminErr?.message || cAdminErr);
-        }
-      }
+      // ==========================================
+      // [COUNTRY_MODULE_DISABLED] Country Admin Registration Alert
+      // const targetCountry = (resolvedCountry || country || "").trim();
+      // const targetCountryId = countryId;
+      // if (targetCountry && targetCountry.toLowerCase() !== "india") {
+      //   try {
+      //     const cAdminQuery = [];
+      //     if (targetCountryId) cAdminQuery.push({ countryId: targetCountryId });
+      //     cAdminQuery.push({ country: new RegExp(`^${targetCountry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") });
+      //     const countryAdmins = await User.find({
+      //       role: ROLES.COUNTRY_ADMIN,
+      //       status: "Active",
+      //       $or: cAdminQuery,
+      //     });
+      //
+      //     for (const cAdmin of countryAdmins) {
+      //       notificationService
+      //         .createNotification({
+      //           recipientId: cAdmin._id,
+      //           type: "Verification",
+      //           title: `📋 New Business Registration: ${business.name}`,
+      //           body: `New business "${business.name}" from ${targetCountry} has registered and submitted for verification.`,
+      //           entityId: verification._id,
+      //           link: `/admin/verification`,
+      //         })
+      //         .catch(() => {});
+      //     }
+      //   } catch (cAdminErr) {
+      //     logger.warn("[AUTH] Failed to notify country admin on registration:", cAdminErr?.message || cAdminErr);
+      //   }
+      // }
+      // ==========================================
 
       // 2. Notify all active business owners under this chapter so they can welcome the new member
       if (chapter || chapterId) {
