@@ -360,4 +360,158 @@ export const userService = {
 
     return { message: "Account has been deactivated successfully" };
   },
+
+  /**
+   * Permanently delete a user account and all associated data from the database.
+   */
+  permanentlyDeleteUser: async (userId, requester) => {
+    const userToDelete = await User.findById(userId);
+    if (!userToDelete) {
+      throw new NotFoundError("User not found");
+    }
+
+    const isSelfDelete = requester && String(requester.id || requester._id) === String(userId);
+
+    if (!isSelfDelete && requester) {
+      // Permission checks for admin-driven deletion
+      if (requester.role === ROLES.CHAPTER_ADMIN) {
+        const adminTiers = [ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN];
+        if (adminTiers.includes(userToDelete.role)) {
+          throw new ForbiddenError("Chapter Admins cannot delete administrative accounts");
+        }
+        if (
+          userToDelete.chapterId &&
+          requester.chapterId &&
+          String(userToDelete.chapterId) !== String(requester.chapterId)
+        ) {
+          throw new ForbiddenError("Chapter Admins can only delete members of their own chapter");
+        }
+      }
+
+      if (requester.role === ROLES.STATE_ADMIN) {
+        if ([ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN].includes(userToDelete.role)) {
+          throw new ForbiddenError("State Admins cannot delete State, Country, or Central Admins");
+        }
+        if (
+          userToDelete.state &&
+          requester.state &&
+          userToDelete.state.trim().toLowerCase() !== requester.state.trim().toLowerCase()
+        ) {
+          throw new ForbiddenError("State Admins can only delete members within their jurisdiction");
+        }
+      }
+
+      if (requester.role === ROLES.COUNTRY_ADMIN) {
+        if ([ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN].includes(userToDelete.role)) {
+          throw new ForbiddenError("Country Admins cannot delete Central or Country Admins");
+        }
+      }
+
+      if (userToDelete.role === ROLES.CENTRAL_ADMIN) {
+        const centralAdminCount = await User.countDocuments({ role: ROLES.CENTRAL_ADMIN });
+        if (centralAdminCount <= 1) {
+          throw new BadRequestError("Cannot delete the only Central Admin account in the system");
+        }
+      }
+    } else if (isSelfDelete) {
+      if (userToDelete.role === ROLES.CENTRAL_ADMIN) {
+        const centralAdminCount = await User.countDocuments({ role: ROLES.CENTRAL_ADMIN });
+        if (centralAdminCount <= 1) {
+          throw new BadRequestError("Cannot delete the only Central Admin account");
+        }
+      }
+    }
+
+    // 1. Find all businesses owned by this user
+    const businesses = await Business.find({ owner: userId }).select("_id");
+    const businessIds = businesses.map((b) => b._id);
+
+    // 2. Import optional models dynamically or safely to perform deep cascading cleanup
+    const [
+      { Catalogue },
+      { Branch },
+      { Verification },
+      { Membership },
+      { Advertisement },
+      { Enquiry },
+      { Lead },
+      { Review },
+      { Notification },
+      { Role },
+      { Ticket },
+      { Query },
+      { Followup },
+      { Event },
+      { CourseProgress },
+      { Certificate },
+    ] = await Promise.all([
+      import("../catalogue/catalogue.model.js"),
+      import("../branches/branch.model.js"),
+      import("../verification/verification.model.js"),
+      import("../memberships/membership.model.js"),
+      import("../advertisements/advertisement.model.js"),
+      import("../enquiries/enquiry.model.js"),
+      import("../leads/lead.model.js"),
+      import("../reviews/review.model.js"),
+      import("../notifications/notification.model.js"),
+      import("../roles/role.model.js"),
+      import("../tickets/ticket.model.js"),
+      import("../queries/query.model.js"),
+      import("../followups/followup.model.js"),
+      import("../events/event.model.js"),
+      import("../courses/courseProgress.model.js"),
+      import("../courses/certificate.model.js"),
+    ]);
+
+    // 3. Delete all business-linked records
+    if (businessIds.length > 0) {
+      await Promise.allSettled([
+        Catalogue.deleteMany({ businessId: { $in: businessIds } }),
+        Branch.deleteMany({ businessId: { $in: businessIds } }),
+        Verification.deleteMany({ businessId: { $in: businessIds } }),
+        Membership.deleteMany({ business: { $in: businessIds } }),
+        Advertisement.deleteMany({ businessId: { $in: businessIds } }),
+        Enquiry.deleteMany({ businessId: { $in: businessIds } }),
+        Lead.deleteMany({ businessId: { $in: businessIds } }),
+        Review.deleteMany({ business: { $in: businessIds } }),
+        Business.deleteMany({ _id: { $in: businessIds } }),
+      ]);
+    }
+
+    // 4. Delete user-level records
+    await Promise.allSettled([
+      Enquiry.deleteMany({ $or: [{ buyerId: userId }, { sender: userId }, { user: userId }] }),
+      Lead.deleteMany({ $or: [{ buyerId: userId }, { user: userId }] }),
+      Review.deleteMany({ user: userId }),
+      Notification.deleteMany({ $or: [{ recipient: userId }, { user: userId }] }),
+      Role.deleteMany({ userId }),
+      Ticket.deleteMany({ $or: [{ user: userId }, { createdBy: userId }] }),
+      Query.deleteMany({ $or: [{ user: userId }, { createdBy: userId }] }),
+      Followup.deleteMany({ $or: [{ userId }, { businessId: { $in: businessIds } }] }),
+      CourseProgress.deleteMany({ user: userId }),
+      Certificate.deleteMany({ user: userId }),
+      Business.updateMany(
+        { "gstGroupMembers.user": userId },
+        { $pull: { gstGroupMembers: { user: userId } } }
+      ),
+      Event.updateMany(
+        { "roleAssignments.user": userId },
+        { $pull: { roleAssignments: { user: userId } } }
+      ),
+      User.updateMany(
+        { savedBusinesses: { $in: businessIds } },
+        { $pull: { savedBusinesses: { $in: businessIds } } }
+      ),
+      // Finally, hard delete the user document
+      User.findByIdAndDelete(userId),
+    ]);
+
+    // 5. Sync Copilot Knowledge Base
+    try {
+      const { syncLiveEntitiesToFile } = await import("../copilot/copilot.sync.js");
+      syncLiveEntitiesToFile(true).catch(() => {});
+    } catch {}
+
+    return { message: "Account and all associated data have been permanently deleted from the database" };
+  },
 };

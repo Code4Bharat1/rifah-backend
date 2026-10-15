@@ -35,6 +35,11 @@ router.post(
   authMiddleware,
   userController.deactivateMe
 );
+router.delete(
+  "/me",
+  authMiddleware,
+  userController.deleteMe
+);
 router.get(
   "/me/event-assignments",
   authMiddleware,
@@ -74,6 +79,14 @@ router.patch(
   validateObjectIdParam("id"),
   validateRequest(validateAssignAdminRole),
   userController.assignAdminRole
+);
+
+router.delete(
+  "/:id",
+  authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  validateObjectIdParam("id"),
+  userController.deleteUser
 );
 
 export { router as userRoutes };

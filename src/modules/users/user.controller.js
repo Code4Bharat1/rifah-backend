@@ -66,4 +66,15 @@ export const userController = {
     const result = await userService.deactivateAccount(req.user.id, req.body);
     return ApiResponse.success(res, result, "Account has been deactivated");
   }),
+
+  deleteMe: asyncHandler(async (req, res) => {
+    const result = await userService.permanentlyDeleteUser(req.user.id, req.user);
+    return ApiResponse.success(res, result, "Your account and all associated data have been permanently deleted");
+  }),
+
+  deleteUser: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const result = await userService.permanentlyDeleteUser(id, req.user);
+    return ApiResponse.success(res, result, "User account and all associated data have been permanently deleted");
+  }),
 };
