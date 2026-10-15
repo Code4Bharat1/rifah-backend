@@ -73,34 +73,50 @@ export const pdfService = {
       "0 740 595 102 re",
       "f",
 
-      // Header Title
+      // Header Brand
       "BT",
-      "/F2 18 Tf",
-      "1 1 1 rg",
-      "40 795 Td",
-      "(RIFAH CONNECT - OFFICIAL B2B QUOTATION) Tj",
+      "/F1 9 Tf",
+      "0.80 0.90 1.0 rg",
+      "40 804 Td",
+      "(RIFAH CONNECT · B2B TRADE NETWORK) Tj",
       "ET",
 
+      // Header Main Title
       "BT",
-      "/F1 10 Tf",
-      "0.85 0.92 1.0 rg",
-      "40 775 Td",
+      "/F2 16 Tf",
+      "1 1 1 rg",
+      "40 784 Td",
+      "(OFFICIAL B2B QUOTATION) Tj",
+      "ET",
+
+      // Header Tagline
+      "BT",
+      "/F1 8.5 Tf",
+      "0.75 0.85 0.95 rg",
+      "40 766 Td",
       "(Chamber of Commerce & Industry Trade Network) Tj",
       "ET",
 
-      // Quotation Ref & Date
+      // Quotation Ref & Date (Right Column - safe gap from title)
       "BT",
       "/F2 11 Tf",
       "1 1 1 rg",
-      "400 795 Td",
+      "380 796 Td",
       `(${escapePdfText(`Ref: ${quotationRef}`)}) Tj`,
       "ET",
 
       "BT",
       "/F1 9 Tf",
       "0.85 0.92 1.0 rg",
-      "400 775 Td",
+      "380 778 Td",
       `(${escapePdfText(`Date: ${dateStr}`)}) Tj`,
+      "ET",
+
+      "BT",
+      "/F1 8 Tf",
+      "0.70 0.85 0.95 rg",
+      "380 762 Td",
+      "(Status: Verified Chamber Quote) Tj",
       "ET",
 
       // Separator
