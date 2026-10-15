@@ -181,6 +181,21 @@ export const branchService = {
       throw new BadRequestError("City is required.");
     }
 
+    let phone = data.phone ? String(data.phone).trim() : "";
+    if (phone) {
+      phone = phone.replace(/[^\d+]/g, "");
+      if (phone.startsWith("+")) {
+        phone = "+" + phone.slice(1).replace(/\+/g, "");
+      } else {
+        phone = phone.replace(/\+/g, "");
+      }
+    }
+
+    let pincode = data.pincode ? String(data.pincode).trim() : "";
+    if (pincode) {
+      pincode = pincode.replace(/\D/g, "").slice(0, 6);
+    }
+
     const branch = await Branch.create({
       business: business._id,
       owner: userId,
@@ -188,13 +203,13 @@ export const branchService = {
       branchType: data.branchType || "Branch Office",
       image: data.image || "",
       contactPerson: data.contactPerson?.trim() || "",
-      phone: data.phone?.trim() || "",
+      phone,
       email: data.email?.trim() || "",
       address: data.address?.trim() || "",
       city: data.city.trim(),
       state: data.state?.trim() || business.state || "",
       country: data.country?.trim() || business.country || "India",
-      pincode: data.pincode?.trim() || "",
+      pincode,
       mapUrl: data.mapUrl?.trim() || "",
       timings: data.timings?.trim() || "Mon - Sat: 9:00 AM - 7:00 PM",
       isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
@@ -235,7 +250,20 @@ export const branchService = {
 
     for (const field of allowedFields) {
       if (data[field] !== undefined) {
-        branch[field] = data[field];
+        if (field === "phone") {
+          let p = String(data.phone || "").trim();
+          p = p.replace(/[^\d+]/g, "");
+          if (p.startsWith("+")) {
+            p = "+" + p.slice(1).replace(/\+/g, "");
+          } else {
+            p = p.replace(/\+/g, "");
+          }
+          branch.phone = p;
+        } else if (field === "pincode") {
+          branch.pincode = String(data.pincode || "").replace(/\D/g, "").slice(0, 6);
+        } else {
+          branch[field] = data[field];
+        }
       }
     }
 
