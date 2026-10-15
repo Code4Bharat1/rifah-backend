@@ -1,7 +1,7 @@
 import { Message } from "./message.model.js";
 import { User } from "../users/user.model.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
-import { resolveMemberPlanContext, assertMembershipValid } from "../../shared/utils/feature-access.js";
+import { resolveMemberPlanContext, assertMembershipValid, assertFeatureAccess } from "../../shared/utils/feature-access.js";
 
 import { emitToUser } from "../../infrastructure/socket/socket.js";
 import { notificationService } from "../notifications/notification.service.js";
@@ -30,46 +30,21 @@ export const messageService = {
     }
 
     // --- Enforce Plan Tier Direct Chat limits ---
-    const senderDoc = await User.findById(senderId).select("membershipPlan membership role");
+    const senderDoc = await User.findById(senderId).select("membershipPlan subscriberTier role");
     const isAdmin = ["central_admin", "state_admin", "chapter_admin"].includes(senderDoc?.role);
 
     if (!isAdmin && senderDoc) {
       const context = await resolveMemberPlanContext(senderId);
-      const plan = context.planName;
-      const norm = context.norm;
-
-      if (context.isFree) {
-        throw new ForbiddenError(
-          "Direct messaging is not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above."
-        );
-      }
-      // BUG-065: a lapsed paid subscription previously kept full access forever — the
-      // cached plan-name string was never checked against the real Membership record's
-      // status/expiry. This is the first place that record actually gets consulted.
       assertMembershipValid(context, ForbiddenError);
 
-      let maxChats = 5;
-      if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
-        maxChats = Infinity;
-      } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
-        maxChats = 30;
-      } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
-        maxChats = 15;
-      }
+      const convId = messageService.getConversationId(senderId, recipientId);
+      const existingConvs = await Message.distinct("conversationId", {
+        $or: [{ sender: senderId }, { recipient: senderId }],
+      });
+      const isNewConv = !existingConvs.includes(convId);
 
-      if (isFinite(maxChats)) {
-        // Count distinct user conversations sender has participated in
-        const existingConvs = await Message.distinct("conversationId", {
-          $or: [{ sender: senderId }, { recipient: senderId }],
-        });
-        const currentConvId = messageService.getConversationId(senderId, recipientId);
-        const isNewConv = !existingConvs.includes(currentConvId);
-
-        if (isNewConv && existingConvs.length >= maxChats) {
-          throw new ForbiddenError(
-            `Direct chat limit reached (${existingConvs.length}/${maxChats} active conversations on ${plan}). Please upgrade your subscription plan to start new chats.`
-          );
-        }
+      if (isNewConv || context.isFree) {
+        await assertFeatureAccess(context, "chat", 1, ForbiddenError);
       }
     }
 

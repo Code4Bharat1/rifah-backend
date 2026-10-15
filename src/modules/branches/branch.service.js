@@ -9,6 +9,7 @@ import {
   ForbiddenError,
 } from "../../shared/errors/errors.js";
 import { ROLES } from "../../shared/constants/roles.js";
+import { resolveMemberPlanContext } from "../../shared/utils/feature-access.js";
 
 /**
  * Normalizes tier name into canonical tier key
@@ -51,39 +52,11 @@ function normalizeTier(str) {
  */
 async function resolveOwnerTier(userId, business) {
   const user = await User.findById(userId);
-  const membership = business
-    ? await Membership.findOne({ business: business._id })
-    : null;
+  const context = await resolveMemberPlanContext(userId);
+  const highestTier = context.tierKey;
+  const maxRank = context.rank;
 
-  const bizTierDirect =
-    business?.subscriberTier ||
-    (String(business?.membership || "").toLowerCase().startsWith("tier_") ? business?.membership : null) ||
-    membership?.subscriberTier ||
-    (String(membership?.planId || "").toLowerCase().startsWith("tier_") ? (membership?.planName || membership?.planId) : null);
-
-  const userTierDirect =
-    user?.subscriberTier ||
-    (String(user?.membershipPlan || "").toLowerCase().startsWith("tier_") ? user?.membershipPlan : null);
-
-  const TIER_RANKS = { tier_1: 1, tier_2: 2, tier_3: 3, tier_4: 4 };
-  let highestTier = "tier_1";
-  let maxRank = 1;
-
-  if (bizTierDirect) {
-    highestTier = normalizeTier(bizTierDirect);
-    maxRank = TIER_RANKS[highestTier] || 1;
-  } else if (userTierDirect) {
-    highestTier = normalizeTier(userTierDirect);
-    maxRank = TIER_RANKS[highestTier] || 1;
-  }
-
-  // If an explicit subscriber tier was set on the business or user, honor that tier
-  // (Ensures Tier 1/2 locks and Tier 3 1-branch limits are strictly enforced)
-  if (bizTierDirect || userTierDirect) {
-    return { tier: highestTier, rank: maxRank, isAdmin: false, user };
-  }
-
-  // Admin roles bypass tier restrictions only when no explicit subscription tier was configured
+  // Admin roles bypass tier restrictions only when no explicit paid subscription tier was configured
   if (
     user &&
     [
@@ -92,7 +65,8 @@ async function resolveOwnerTier(userId, business) {
       ROLES.ADMIN,
       ROLES.STATE_ADMIN,
       ROLES.CHAPTER_ADMIN,
-    ].includes(user.role)
+    ].includes(user.role) &&
+    highestTier === "tier_1"
   ) {
     return { tier: "tier_4", rank: 4, isAdmin: true, user };
   }

@@ -63,7 +63,7 @@ router.post(
 // Learner Routes (Watch, Certificates)
 router.post(
   "/:id/contents/:contentId/watch",
-  requireRole(ROLES.BUSINESS_OWNER, ROLES.CUSTOMER),
+  requireRole(ROLES.BUSINESS_OWNER, ROLES.CUSTOMER, ROLES.BUYER),
   courseController.markWatched
 );
 

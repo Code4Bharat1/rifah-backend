@@ -115,7 +115,15 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     displayOrder: 5,
     isRecommended: false,
     summary: "Essential access to Rifah Connect directory and basic networking.",
-    features: ["0 Users", "Directory listing on RIFAH Connect", "Basic business presence", "2 Inquiries/month", "1 Lead unlock/month", "0 Direct chats"],
+    features: [
+      "1 User",
+      "Directory listing on RIFAH Connect",
+      "Basic business presence",
+      "2 Inquiries/month",
+      "1 Lead unlock/month",
+      "1 Catalogue product",
+      "1 Service listing",
+    ],
     missingFeatures: [],
   },
   tier_2: {
@@ -126,8 +134,22 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     gstRate: 0,
     displayOrder: 6,
     isRecommended: false,
-    summary: "Starter monthly subscription with 15 direct chats and 5 post feeds.",
-    features: ["0 Users", "5 Feed posts/month", "15 Direct chats", "10 Inquiries/month", "5 Lead unlocks/month", "5 Catalogue products", "Free LMS Content"],
+    summary: "Starter monthly subscription with 5 feed posts, 5 chats, and 5 catalogue listings.",
+    features: [
+      "1 User",
+      "5 Feed posts/month",
+      "5 Direct chats",
+      "Join 5 Networking Groups",
+      "10 Inquiries/month",
+      "5 Lead unlocks/month",
+      "5 Quotation posting + chat",
+      "5 One-to-One meeting requests",
+      "5 Catalogue products",
+      "5 Services listing",
+      "Free LMS Content",
+      "Standard Support",
+      "5 Event notifications & announcements",
+    ],
     missingFeatures: [],
   },
   tier_3: {
@@ -138,8 +160,27 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     gstRate: 0,
     displayOrder: 7,
     isRecommended: true,
-    summary: "Most popular monthly plan for active business lead generation and 30 chats.",
-    features: ["0 Users", "15 Feed posts/month", "30 Direct chats", "30 Inquiries/month", "15 Lead unlocks/month", "10 Catalogue products", "Featured business visibility", "WhatsApp Integration"],
+    summary: "Most popular monthly plan for active business growth with 10 posts and 15 chats.",
+    features: [
+      "1 User",
+      "10 Feed posts/month",
+      "15 Direct chats",
+      "Join 5 + Create Networking Groups",
+      "30 Inquiries/month",
+      "15 Lead unlocks/month",
+      "20 Quotation posting + chat",
+      "15 One-to-One meeting requests",
+      "10 Catalogue products",
+      "10 Services listing",
+      "Featured business & products",
+      "Priority visibility",
+      "Advanced Analytics",
+      "Selected LMS Content",
+      "WhatsApp Integration",
+      "Priority Support",
+      "Carry Forward Plans",
+      "10 Event notifications & announcements",
+    ],
     missingFeatures: [],
   },
   tier_4: {
@@ -150,17 +191,27 @@ export const DEFAULT_MEMBERSHIP_PLANS = {
     gstRate: 0,
     displayOrder: 8,
     isRecommended: false,
-    summary: "Enterprise tier supporting multiple member registrations under a single membership (All members have to purchase subscriptions), unlimited chats, and unlimited leads.",
+    summary: "Enterprise scale with 5 users, 20 posts/month, and unlimited chats, leads, and catalogue listings.",
     features: [
-      "Multiple member registrations under single membership",
-      "All members have to purchase subscriptions",
+      "5 Users",
       "20 Feed posts/month",
       "Unlimited Direct chats",
+      "Unlimited Create & Join Networking Groups",
       "Unlimited Inquiries",
       "Unlimited Lead unlocks",
+      "Unlimited Quotation posting + chat",
+      "Unlimited One-to-One meeting requests",
       "Unlimited Catalogue products",
-      "Featured business visibility",
+      "Unlimited Services listing",
+      "Featured business & products",
+      "Priority visibility",
+      "Enterprise Analytics",
       "Full LMS Access",
+      "Multiple Locations Listing",
+      "WhatsApp Integration",
+      "Priority Support",
+      "Carry Forward Plans",
+      "Unlimited Event notifications & announcements",
     ],
     missingFeatures: [],
   },
@@ -445,7 +496,7 @@ export const membershipService = {
     membershipObj.chamberDurationYears = durationYears;
     membershipObj.chamberEndDate = isPaid ? chamberEndDate : null;
     membershipObj.chamberDaysRemaining = isPaid ? Math.max(0, Math.ceil(chamberDiffMs / (1000 * 60 * 60 * 24))) : 0;
-    membershipObj.subscriberTier = business?.subscriberTier || "tier_1";
+    membershipObj.subscriberTier = business?.subscriberTier || membership.subscriberTier || (membership.planId && membership.planId.startsWith("tier_") ? membership.planId : "tier_1");
 
     // Subscription cycle (30 days cycle for monthly tier)
     const subRenewDate = addDays(30);
@@ -483,6 +534,7 @@ export const membershipService = {
     if (planKey === "free" || planKey === "tier_1") {
       membership.planId = "tier_1";
       membership.planName = "Tier I (Free)";
+      membership.subscriberTier = "tier_1";
       membership.price = 0;
       membership.billingCycle = isIntlBusiness ? "Free (Tier Plan)" : "Free";
       membership.startDate = new Date();
@@ -497,7 +549,7 @@ export const membershipService = {
         business.membership = "Free";
       }
       await business.save();
-      await syncOwnerUserTier(business, business.membership, "tier_1");
+      await syncOwnerUserTier(business, "Tier I (Free)", "tier_1");
 
       return membership;
     }
@@ -517,6 +569,7 @@ export const membershipService = {
       const rawBizChamber = (business.membership || "").toLowerCase();
       const hasChamber = ["diamond", "platinum", "gold", "silver"].some(k => rawBizChamber.includes(k));
 
+      membership.subscriberTier = planKey;
       if (!hasChamber) {
         membership.planId = planKey;
         membership.planName = plan.name;
@@ -529,15 +582,16 @@ export const membershipService = {
         membership.status = "Active";
         membership.features = plan.features || [];
         membership.remindersSent = [];
-        await membership.save();
       }
+      await membership.save();
 
       business.subscriberTier = planKey;
       if (!business.membership) {
         business.membership = "Free";
       }
       await business.save();
-      await syncOwnerUserTier(business, business.membership, planKey);
+      const userPlanDisplayName = hasChamber ? business.membership : plan.name;
+      await syncOwnerUserTier(business, userPlanDisplayName, planKey);
     } else {
       // Purchasing a Chamber Membership (Silver, Gold, Platinum, Diamond) updates membership
       // and sets multi-year validity (Diamond=25y, Platinum=10y, Gold=2y, Silver=1y)

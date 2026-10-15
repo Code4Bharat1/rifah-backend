@@ -5,7 +5,7 @@ import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError } from "../../shared/errors/errors.js";
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
-import { resolveMemberPlanContext, assertMembershipValid } from "../../shared/utils/feature-access.js";
+import { resolveMemberPlanContext, assertMembershipValid, assertFeatureAccess } from "../../shared/utils/feature-access.js";
 
 async function ensureSeedCatalogue() {
   try {
@@ -415,57 +415,21 @@ export const catalogueService = {
     // reverse (user's own plan first, falling back to business). Standardized on the
     // shared resolver's order here too: now that upgradePlan (membership.service.js)
     // correctly syncs both User and Business on every plan change, these should agree
-    // going forward, and user-first matches every other gated feature.
     const context = user?.id ? await resolveMemberPlanContext(user.id) : null;
-    const planName = context?.planName || business.membership || "Tier I (Free)";
+    const itemType = (data.type || "Product").toLowerCase() === "service" ? "Service" : "Product";
+    const featureKey = itemType === "Service" ? "service_listing" : "product_listing";
+
     if (context) {
-      // BUG-065: see message.service.js sendMessage for why this check exists now.
       assertMembershipValid(context, ForbiddenError);
-    }
-
-    const norm = String(planName || "Free").toLowerCase().trim();
-    let maxProducts = 1;
-    let maxServices = 1;
-
-    if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
-      maxProducts = Infinity;
-      maxServices = Infinity;
-    } else if (norm.includes("gold")) {
-      maxProducts = 15;
-      maxServices = 15;
-    } else if (norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
-      maxProducts = 10;
-      maxServices = 10;
-    } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
-      maxProducts = 5;
-      maxServices = 5;
-    } else {
-      // Tier I (Free) / Unregistered / Free
-      maxProducts = 1;
-      maxServices = 1;
+      await assertFeatureAccess(context, featureKey, 1, ForbiddenError);
     }
 
     const globalSettings = await Settings.findOne({ isSingleton: "global" });
-
-    // BUG-064: maxCatalogueItems already existed on the Settings schema (and this
-    // function's own docstring claimed it enforced it), but nothing ever read it — the
-    // per-type tier limits above were the only cap actually applied. Central Admin now
-    // gets a real, enforced global ceiling: whichever is smaller between the business's
-    // plan-tier limit and Central Admin's configured maxCatalogueItems wins, so lowering
-    // it in Settings caps everyone immediately, including "unlimited" top-tier plans.
     const globalMaxPerType = Number(globalSettings?.maxCatalogueItems) || 50;
-
-    const itemType = (data.type || "Product").toLowerCase() === "service" ? "Service" : "Product";
     const currentTypeCount = await Catalogue.countDocuments({ business: business._id, type: itemType });
-    const tierLimit = itemType === "Service" ? maxServices : maxProducts;
-    const limit = Math.min(isFinite(tierLimit) ? tierLimit : Infinity, globalMaxPerType);
-
-    if (isFinite(limit) && currentTypeCount >= limit) {
-      const limitedByPlan = limit === tierLimit;
+    if (currentTypeCount >= globalMaxPerType) {
       throw new ForbiddenError(
-        limitedByPlan
-          ? `${itemType} catalogue limit reached (${limit} item allowed on ${planName}). Please upgrade your membership plan to list more ${itemType.toLowerCase()}s.`
-          : `${itemType} catalogue limit reached (${limit} items allowed per business, set by Central Admin).`
+        `${itemType} catalogue limit reached (${globalMaxPerType} items allowed per business, set by Central Admin).`
       );
     }
 

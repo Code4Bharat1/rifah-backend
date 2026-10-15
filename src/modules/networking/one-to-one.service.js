@@ -3,7 +3,7 @@ import { resolveOwnBusiness, resolveMemberBusiness } from "./networking.utils.js
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../shared/errors/errors.js";
-import { resolveMemberPlanContext, assertMembershipValid } from "../../shared/utils/feature-access.js";
+import { resolveMemberPlanContext, assertMembershipValid, assertFeatureAccess } from "../../shared/utils/feature-access.js";
 
 const POPULATE_FIELDS = [
   ["initiatorBusiness", "name logo city"],
@@ -56,44 +56,13 @@ export const oneToOneService = {
       throw new BadRequestError("You cannot log a one-to-one meeting with yourself.");
     }
 
-    // --- Enforce Plan Tier One-to-One Meeting Request limits ---
+    // --- Enforce Plan Tier One-to-One Meeting Request limits: Tier I=Not Allowed, Tier II=5, Tier III=15, Tier IV=Unlimited ---
     const { User } = await import("../users/user.model.js");
-    const userDoc = await User.findById(userId).select("membershipPlan membership role");
+    const userDoc = await User.findById(userId).select("membershipPlan subscriberTier role");
     const isAdmin = ["central_admin", "state_admin", "chapter_admin"].includes(userDoc?.role);
 
     if (!isAdmin) {
-      const context = await resolveMemberPlanContext(userId);
-      const plan = context.planName;
-      const norm = context.norm;
-
-      if (context.isFree) {
-        throw new ForbiddenError(
-          "One-to-One Meeting Requests are not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above."
-        );
-      }
-      // BUG-065: see message.service.js sendMessage for why this check exists now.
-      assertMembershipValid(context, ForbiddenError);
-
-      let maxMeetings = 5;
-      if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
-        maxMeetings = Infinity;
-      } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
-        maxMeetings = 15;
-      } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
-        maxMeetings = 5;
-      }
-
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const monthlyCount = await OneToOne.countDocuments({
-        initiatorUser: userId,
-        createdAt: { $gte: thirtyDaysAgo },
-      });
-
-      if (isFinite(maxMeetings) && monthlyCount >= maxMeetings) {
-        throw new ForbiddenError(
-          `Monthly One-to-One meeting request limit reached (${monthlyCount}/${maxMeetings} meetings logged this month on ${plan}). Please upgrade your plan for higher capacity.`
-        );
-      }
+      await assertFeatureAccess(userId, "meeting_request", 1, ForbiddenError);
     }
 
     const memberBusiness = await resolveMemberBusiness(memberBusinessId);

@@ -8,7 +8,7 @@ import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/err
 import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 import { messageService } from "../messages/message.service.js";
 import { pdfService } from "../../infrastructure/pdf/pdf.service.js";
-import { resolveMemberPlanContext, assertMembershipValid } from "../../shared/utils/feature-access.js";
+import { resolveMemberPlanContext, assertMembershipValid, assertFeatureAccess } from "../../shared/utils/feature-access.js";
 
 export const leadService = {
   /**
@@ -305,38 +305,9 @@ export const leadService = {
       throw new ForbiddenError("Security Violation: You are not authorized to quote on this business lead");
     }
 
-    // 1.1 ENFORCE PLAN-BASED QUOTATION LIMITS
+    // 1.1 ENFORCE PLAN-BASED QUOTATION LIMITS: Tier I=Not Allowed, Tier II=5, Tier III=20, Tier IV=Unlimited
     if (!isAdmin) {
-      const context = await resolveMemberPlanContext(user.id || user._id);
-      const plan = context.planName;
-      const norm = context.norm;
-
-      if (context.isFree) {
-        throw new ForbiddenError("Quotation posting is not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above.");
-      }
-      // BUG-065: see message.service.js sendMessage for why this check exists now.
-      assertMembershipValid(context, ForbiddenError);
-
-      let maxQuotes = 5;
-      if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
-        maxQuotes = Infinity;
-      } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
-        maxQuotes = 10;
-      } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
-        maxQuotes = 5;
-      }
-
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const monthlyQuotesCount = await Lead.countDocuments({
-        business: lead.business?._id,
-        "quotation.submittedAt": { $gte: thirtyDaysAgo },
-      });
-
-      if (isFinite(maxQuotes) && monthlyQuotesCount >= maxQuotes) {
-        throw new ForbiddenError(
-          `Monthly quotation posting limit reached (${monthlyQuotesCount}/${maxQuotes} quotes used this month on ${plan}). Please upgrade your subscription plan to submit more quotations.`
-        );
-      }
+      await assertFeatureAccess(user.id || user._id, "quotation_chat", 1, ForbiddenError);
     }
 
     // 2. ROBUST TARGET CUSTOMER RESOLUTION (Guaranteed Message Box Delivery)
@@ -554,41 +525,9 @@ export const leadService = {
         }
       }
 
-      // Enforce lead unlock limit when accepting/advancing a lead
+      // Enforce lead unlock limit when accepting/advancing a lead: Tier I=1, Tier II=5, Tier III=15, Tier IV=Unlimited
       if (!isAdmin && ["In Progress", "Accepted", "Contacted"].includes(status) && lead.status === "New") {
-        const context = await resolveMemberPlanContext(user.id || user._id);
-        const plan = context.planName;
-        const norm = context.norm;
-        // BUG-065: see message.service.js sendMessage for why this check exists now.
-        // Unlike the quotation-posting check above, this block never blocked Free-tier
-        // entirely (it falls through to maxLeads=1 below) — assertMembershipValid
-        // already no-ops for a free-tier context, so this stays behavior-identical for
-        // Free and only adds the new expired/inactive check for paid tiers.
-        assertMembershipValid(context, ForbiddenError);
-
-        let maxLeads = 1;
-        if (norm.includes("diamond") || norm.includes("platinum") || norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
-          maxLeads = Infinity;
-        } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
-          maxLeads = 15;
-        } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
-          maxLeads = 5;
-        } else {
-          maxLeads = 1;
-        }
-
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const unlockedCount = await Lead.countDocuments({
-          business: lead.business?._id,
-          status: { $in: ["In Progress", "Accepted", "Contacted", "Responded", "Won", "Closed"] },
-          createdAt: { $gte: thirtyDaysAgo },
-        });
-
-        if (isFinite(maxLeads) && unlockedCount >= maxLeads) {
-          throw new ForbiddenError(
-            `Monthly lead unlock limit reached (${unlockedCount}/${maxLeads} leads unlocked this month on ${plan}). Please upgrade your subscription plan to unlock more leads.`
-          );
-        }
+        await assertFeatureAccess(user.id || user._id, "lead_unlock", 1, ForbiddenError);
       }
     }
 
