@@ -220,8 +220,31 @@ const resolveClaimPayer = (beneficiaryLevel, revenueType = "membership") => {
   return "central";
 };
 
+/**
+ * Central (and Country) Admin can create a claim directly against a chapter or state,
+ * rather than waiting for that org to submit one — this is what lets Central "settle
+ * funds without claims by state and chapter". Such claims skip straight to "approved"
+ * since Central is both the creator and the only approver, so it can call
+ * recordSettlement on it immediately.
+ */
+const resolveCentralDirectBeneficiary = async (payload) => {
+  if (payload.beneficiaryLevel === "state") {
+    if (!payload.state)
+      throw new BadRequestError("state is required to settle a state directly");
+    return { level: "state", id: payload.state };
+  }
+  if (!payload.chapterId)
+    throw new BadRequestError("chapterId is required to settle a chapter directly");
+  const chapter = await Chapter.findById(payload.chapterId).select("_id");
+  if (!chapter) throw new NotFoundError("Chapter not found");
+  return { level: "chapter", id: payload.chapterId };
+};
+
 export const createClaim = async (user, payload) => {
-  const { level, id } = await resolveOwnBeneficiary(user);
+  const isCentral = [ROLES.CENTRAL_ADMIN, ROLES.SECRETARIAT].includes(user.role);
+  const { level, id } = isCentral
+    ? await resolveCentralDirectBeneficiary(payload)
+    : await resolveOwnBeneficiary(user);
   const revenueType = payload.revenueType === "event" ? "event" : "membership";
   const claimedAmount = round2(Number(payload.claimedAmount));
   if (!(claimedAmount > 0))
@@ -274,8 +297,18 @@ export const createClaim = async (user, payload) => {
     overrideApproved: Boolean(payload.overrideApproved),
     overrideReason: payload.overrideReason || "",
     overrideBy: payload.overrideApproved ? user.id || user._id : null,
-    status: "draft",
+    status: isCentral ? "approved" : "draft",
     createdBy: user.id || user._id,
+    ...(isCentral
+      ? {
+          submittedBy: user.id || user._id,
+          submittedAt: new Date(),
+          reviewedBy: user.id || user._id,
+          reviewedAt: new Date(),
+          approvedBy: user.id || user._id,
+          approvedAt: new Date(),
+        }
+      : {}),
   });
 
   return claim;
@@ -385,14 +418,27 @@ const requireCentralAdmin = (user) => {
   }
 };
 
-const assertSettlementPermission = (user, claim) => {
+/**
+ * A State Admin can settle two kinds of claims: its own state-level claims against
+ * Central, and its chapters' membership-share claims (payingOrgLevel "state") — since
+ * the state itself is the one paying those out, per the chapter/state/central revenue
+ * split. Event-revenue chapter claims are paid by Central and are not included here.
+ */
+const assertSettlementPermission = async (user, claim) => {
   if ([ROLES.CENTRAL_ADMIN, ROLES.SECRETARIAT].includes(user.role)) return;
   if (user.role === ROLES.STATE_ADMIN) {
     if (
       claim.beneficiaryLevel === "state" &&
       claim.state?.toLowerCase() === (user.state || "").toLowerCase()
-    )
+    ) {
       return;
+    }
+    if (claim.beneficiaryLevel === "chapter" && claim.payingOrgLevel === "state") {
+      const chapter = await Chapter.findById(claim.chapterId).select("state");
+      if (chapter?.state?.toLowerCase() === (user.state || "").toLowerCase()) {
+        return;
+      }
+    }
   }
   throw new ForbiddenError("You are not allowed to settle this claim");
 };
@@ -482,7 +528,7 @@ export const cancelClaim = async (user, claimId) => {
 export const recordSettlement = async (user, claimId, payload) => {
   const claim = await RevenueClaim.findById(claimId);
   if (!claim) throw new NotFoundError("Claim not found");
-  assertSettlementPermission(user, claim);
+  await assertSettlementPermission(user, claim);
 
   const amount = round2(Number(payload.amount));
   if (!(amount > 0))

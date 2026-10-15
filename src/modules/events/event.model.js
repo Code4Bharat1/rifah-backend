@@ -495,6 +495,9 @@ const eventSchema = new mongoose.Schema(
       closingRemarks: { type: String, default: "" },
       voteOfThanks: { type: String, default: "" },
       eventEnd: { type: String, default: "" },
+      // When true, the assigned Event Coordinator gets Next/Hold/Start projector controls
+      // in their own My Duty panel, not just the admin's Live Control tab.
+      allowCoordinatorRemote: { type: Boolean, default: false },
     },
     // Structured, permission-relevant mirror of the 5 "functional" teamAssignments roles
     // (entranceIncharge, followupCoordinator, treasurer, guestManager, eventCoordinator).

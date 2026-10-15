@@ -17,7 +17,10 @@ const router = Router();
 
 // Secure Event Ticket QR Verification & Staff Check-in Routes (Must precede /:identifier)
 router.get("/tickets/verify/:ticketId", verificationRateLimitMiddleware, eventController.verifyTicket);
-router.post("/tickets/check-in/:ticketId", optionalAuthMiddleware, eventController.checkInTicket);
+// Requires login; the event behind the ticket isn't known until resolved inside the
+// service, so the admin-or-assigned-entranceIncharge check happens there, not via
+// requireEventRoleOrAdmin (which needs an event id already in req.params).
+router.post("/tickets/check-in/:ticketId", authMiddleware, eventController.checkInTicket);
 router.get("/tickets/:ticketId/pass", eventController.getTicketPass);
 router.patch("/tickets/:ticketId/status", authMiddleware, requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN), eventController.updateTicketStatus);
 
@@ -239,6 +242,14 @@ router.get(
   authMiddleware,
   validateObjectIdParam("id"),
   eventController.getMyDuty
+);
+
+router.patch(
+  "/:id/coordinator-slide",
+  authMiddleware,
+  requireEventRoleOrAdmin("eventCoordinator"),
+  validateObjectIdParam("id"),
+  eventController.updateCoordinatorSlide
 );
 
 // ─── Ask & Give Routes ───────────────────────────────────────────────────
