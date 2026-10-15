@@ -47,6 +47,7 @@ import { revenueSharingRoutes } from "../modules/revenue-sharing/revenueSharing.
 import { dignitaryRoutes } from "../modules/dignitaries/dignitary.routes.js";
 import { visaReferralRoutes } from "../modules/visa-referrals/visa-referral.routes.js";
 import { branchRoutes } from "../modules/branches/branch.routes.js";
+import { googleDriveRoutes } from "../modules/google-drive/google-drive.routes.js";
 
 const apiRouter = Router();
 
@@ -105,6 +106,7 @@ apiRouter.use("/revenue-sharing", revenueSharingRoutes);
 apiRouter.use("/dignitaries", dignitaryRoutes);
 apiRouter.use("/visa-referrals", visaReferralRoutes);
 apiRouter.use("/branches", branchRoutes);
+apiRouter.use("/google-drive", googleDriveRoutes);
 
 export { apiRouter };
 export default apiRouter;
