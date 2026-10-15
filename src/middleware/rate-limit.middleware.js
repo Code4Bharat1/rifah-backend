@@ -1,14 +1,36 @@
 import rateLimit from "express-rate-limit";
+import jwt from "jsonwebtoken";
 import { securityConfig } from "../config/security.js";
+import { env } from "../config/env.js";
+
+// Helper to isolate rate limit keys per user instead of throttling shared IPs
+function getRateLimitKey(req) {
+  if (req.user?._id || req.user?.id) {
+    return `user_${req.user._id || req.user.id}`;
+  }
+  const authHeader = req.headers?.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+      const token = authHeader.split(" ")[1];
+      const decoded = jwt.decode(token);
+      if (decoded?.id || decoded?._id) {
+        return `user_${decoded.id || decoded._id}`;
+      }
+    } catch (_) {}
+  }
+  return req.ip;
+}
 
 export const rateLimitMiddleware = rateLimit({
   ...securityConfig.rateLimit,
-  keyGenerator: (req) => (req.user?._id ? `user_${req.user._id}` : req.ip),
+  skip: () => env.isDevelopment(),
+  keyGenerator: getRateLimitKey,
 });
 
 export const authRateLimitMiddleware = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.AUTH_RATE_LIMIT_MAX ? parseInt(process.env.AUTH_RATE_LIMIT_MAX) : 30,
+  max: process.env.AUTH_RATE_LIMIT_MAX ? parseInt(process.env.AUTH_RATE_LIMIT_MAX) : 100,
+  skip: () => env.isDevelopment(),
   standardHeaders: true,
   legacyHeaders: false,
   message: {

@@ -368,6 +368,13 @@ export const eventController = {
     return ApiResponse.success(res, data, "Duty details retrieved");
   }),
 
+  updateCoordinatorSlide: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { slideIndex } = req.body;
+    const data = await eventService.updateCoordinatorSlide(id, slideIndex, req.user);
+    return ApiResponse.success(res, data, "Slide updated");
+  }),
+
   generateMeetLink: asyncHandler(async (req, res) => {
     const { title, description, date, startTime, endTime } = req.body || {};
     const result = await googleMeetService.generateMeetingLink({

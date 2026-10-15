@@ -22,7 +22,7 @@ export const userService = {
   /**
    * Update own user profile
    */
-  updateProfile: async (userId, updateData) => {
+  updateProfile: async (userId, updateData, callerUser = null) => {
     const allowedUpdates = [
       "name",
       "email",
@@ -45,6 +45,23 @@ export const userService = {
     for (const key of allowedUpdates) {
       if (updateData[key] !== undefined) {
         filteredUpdates[key] = updateData[key];
+      }
+    }
+
+    // Security: Prevent non-admin users from escalating to paid tiers via profile update
+    const isAdmin = callerUser && ["central_admin", "country_admin", "state_admin", "chapter_admin"].includes(callerUser.role);
+    if (!isAdmin) {
+      if (filteredUpdates.subscriberTier) {
+        const normalized = String(filteredUpdates.subscriberTier).toLowerCase();
+        if (normalized !== "tier_1" && !normalized.includes("free")) {
+          delete filteredUpdates.subscriberTier;
+        }
+      }
+      if (filteredUpdates.membershipPlan) {
+        const normalized = String(filteredUpdates.membershipPlan).toLowerCase();
+        if (normalized !== "tier_1" && !normalized.includes("free")) {
+          delete filteredUpdates.membershipPlan;
+        }
       }
     }
 

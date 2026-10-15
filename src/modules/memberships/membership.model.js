@@ -19,6 +19,11 @@ const membershipSchema = new mongoose.Schema(
       type: String,
       default: "Free",
     },
+    subscriberTier: {
+      type: String,
+      default: "tier_1",
+      index: true,
+    },
     price: {
       type: Number,
       default: 0,

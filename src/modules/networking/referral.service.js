@@ -4,6 +4,7 @@ import { resolveOwnBusiness, resolveMemberBusiness } from "./networking.utils.js
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../shared/errors/errors.js";
+import { assertFeatureAccess } from "../../shared/utils/feature-access.js";
 
 const POPULATE_FIELDS = [
   ["referrerBusiness", "name logo city"],
@@ -49,6 +50,15 @@ export const referralService = {
     }
     if (!description || !description.trim()) {
       throw new BadRequestError("Please describe the requirement you're referring.");
+    }
+
+    // --- Enforce Plan Tier Networking limits: Tier I=Not Allowed, Tier II+=Allowed ---
+    const { User } = await import("../users/user.model.js");
+    const userDoc = await User.findById(userId).select("membershipPlan subscriberTier role");
+    const isAdmin = ["central_admin", "state_admin", "chapter_admin"].includes(userDoc?.role);
+
+    if (!isAdmin) {
+      await assertFeatureAccess(userId, "networking_groups", 1, ForbiddenError);
     }
 
     const referrerBusiness = await resolveOwnBusiness(userId);

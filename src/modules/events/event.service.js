@@ -1483,6 +1483,11 @@ export const eventService = {
     const event = await Event.findById(eventId);
     if (!event) throw new NotFoundError("Event not found");
 
+    const isAdmin = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user?.role);
+    if (!isAdmin && !isEventLive(event)) {
+      throw new ForbiddenError("Finance entries open once the admin takes this event live.");
+    }
+
     if (!event.finance) {
       event.finance = { moneyIn: [], moneyOut: [], treasurerNotes: "" };
     }
@@ -1851,12 +1856,43 @@ export const eventService = {
         registeredCount: (event.registeredUsers || []).length,
         seats: event.seats,
       };
+      // Remote Live Control: only unlocked when the admin explicitly checked "let the
+      // Event Coordinator run the programme from his own phone" for this event.
+      base.data.allowCoordinatorRemote = Boolean(event.teamAssignments?.allowCoordinatorRemote);
+      base.data.currentSlideIndex = event.currentSlideIndex || 0;
+      base.data.projectorMode = event.projectorMode || "slides";
+      base.data.chapter = event.chapter;
     }
     if (myRoles.includes("photosVideo")) {
       base.data.mediaCount = await eventMediaService.countForEvent(eventId);
     }
 
     return base;
+  },
+
+  /**
+   * Event Coordinator's own Next/Hold slide control (My Duty panel), separate from the
+   * admin-only /operations endpoint — only unlocked when the admin checked "let the Event
+   * Coordinator run the programme from his own phone" for this event.
+   */
+  async updateCoordinatorSlide(eventId, slideIndex, user) {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const isAdmin = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(user.role);
+    if (!isAdmin && !event.teamAssignments?.allowCoordinatorRemote) {
+      throw new ForbiddenError("Remote stage control is not enabled for this event.");
+    }
+
+    const index = Number(slideIndex);
+    const agendaLength = (event.agenda || []).length;
+    if (!Number.isInteger(index) || index < 0 || (agendaLength > 0 && index >= agendaLength)) {
+      throw new BadRequestError("slideIndex is out of range for this event's agenda.");
+    }
+
+    event.currentSlideIndex = index;
+    await event.save();
+    return { currentSlideIndex: index };
   },
 
   /**
@@ -2039,6 +2075,21 @@ export const eventService = {
 
     if (!event || !reg) {
       throw new NotFoundError("Ticket not found.");
+    }
+
+    // Only a chamber admin, or the member this event's admin assigned as Gate/Entrance
+    // Incharge, can check someone in — scoped to that specific event, same as every other
+    // "My Duty" tool.
+    const isAdmin = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(staffUser?.role);
+    if (!isAdmin) {
+      const staffId = staffUser?.id || staffUser?._id;
+      const allowed = staffId && (await eventService.hasEventRole(staffId, event._id, "entranceIncharge"));
+      if (!allowed) {
+        throw new ForbiddenError("You are not assigned as Gate/Entrance Incharge for this event.");
+      }
+      if (!isEventLive(event)) {
+        throw new ForbiddenError("The gate opens once the admin takes this event live.");
+      }
     }
 
     if (reg.ticketStatus === "Cancelled" || reg.status === "Cancelled") {

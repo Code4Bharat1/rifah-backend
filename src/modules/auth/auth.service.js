@@ -575,11 +575,8 @@ export const authService = {
     );
 
     return {
-      message: emailDelivered
-        ? "Verification code sent to your email."
-        : `Verification code: ${otp} (Pre-filled due to SMTP limit)`,
+      message: "Verification code sent to your email.",
       email: cleanEmail,
-      otp, // included for testing and fallback when Google SMTP quota is reached
       emailDelivered: Boolean(emailDelivered),
     };
   },
@@ -678,11 +675,8 @@ export const authService = {
     );
 
     return {
-      message: emailDelivered
-        ? "One-time sign-in code sent to your email."
-        : `Sign-in code: ${otp} (Pre-filled due to SMTP limit)`,
+      message: "One-time sign-in code sent to your email.",
       email: cleanEmail,
-      otp,
       emailDelivered: Boolean(emailDelivered),
     };
   },
@@ -1641,10 +1635,10 @@ export const authService = {
       if (!user || user.status !== "Active") {
         throw new UnauthorizedError("Invalid session or account deactivated");
       }
-      if (
-        user.tokensValidAfter &&
-        decoded.iat < Math.floor(user.tokensValidAfter.getTime() / 1000)
-      ) {
+      const validAfterSec = user.tokensValidAfter
+        ? Math.floor(user.tokensValidAfter.getTime() / 1000) - 2
+        : 0;
+      if (user.tokensValidAfter && decoded.iat < validAfterSec) {
         throw new UnauthorizedError("Session has ended");
       }
 

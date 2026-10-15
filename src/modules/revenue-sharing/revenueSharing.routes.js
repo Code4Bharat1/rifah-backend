@@ -25,8 +25,14 @@ router.get("/dashboard", requireRole(...ANY_ADMIN), revenueSharingController.get
 // Exports — same ?format=csv|pdf convention as /reports/admin/export/revenue
 router.get("/export/ledger", requireRole(...ANY_ADMIN), revenueSharingController.exportLedger);
 
-// Claims — State/Chapter Admin submit for their own org; Central Admin reviews/decides.
-router.post("/claims", requireRole(ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN), revenueSharingController.createClaim);
+// Claims — State/Chapter Admin submit for their own org; Central Admin reviews/decides,
+// and may also create a claim directly against a chapter/state to settle funds without
+// waiting for that org to submit one itself (see revenueClaim.service.js#createClaim).
+router.post(
+  "/claims",
+  requireRole(ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
+  revenueSharingController.createClaim
+);
 router.get("/claims", requireRole(...ANY_ADMIN), revenueSharingController.listClaims);
 router.get("/claims/:id", requireRole(...ANY_ADMIN), validateObjectIdParam("id"), revenueSharingController.getClaim);
 router.patch(
@@ -45,10 +51,13 @@ router.patch(
   revenueSharingController.cancelClaim
 );
 
-// Settlements — Central Admin & Country Admin; reduces outstanding balance.
+// Settlements — reduces outstanding balance. Central/Country Admin can settle any claim;
+// State Admin can also settle a claim it is itself the payer for (its own state-level
+// claims against Central, and its chapters' membership-share claims) — scoped server-side
+// in revenueClaim.service.js#assertSettlementPermission.
 router.post(
   "/claims/:id/settlements",
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN),
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN),
   validateObjectIdParam("id"),
   revenueSharingController.recordSettlement
 );

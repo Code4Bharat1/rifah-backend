@@ -7,24 +7,34 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
+const MEMBER_ROLES = [
+  ROLES.BUSINESS_OWNER,
+  ROLES.CUSTOMER,
+  ROLES.BUYER,
+  ROLES.CHAPTER_ADMIN,
+  ROLES.STATE_ADMIN,
+  ROLES.CENTRAL_ADMIN,
+  ROLES.COUNTRY_ADMIN,
+];
+
 router.post(
   "/",
   authMiddleware,
-  requireRole(ROLES.BUSINESS_OWNER, ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
+  requireRole(...MEMBER_ROLES),
   thankYouNoteController.create
 );
 
 router.get(
   "/me",
   authMiddleware,
-  requireRole(ROLES.BUSINESS_OWNER, ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
+  requireRole(...MEMBER_ROLES),
   thankYouNoteController.listMine
 );
 
 router.get(
   "/summary/me",
   authMiddleware,
-  requireRole(ROLES.BUSINESS_OWNER, ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.CENTRAL_ADMIN),
+  requireRole(...MEMBER_ROLES),
   thankYouNoteController.summaryForMe
 );
 

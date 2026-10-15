@@ -4,7 +4,7 @@ import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/err
 import { ROLES } from "../../shared/constants/roles.js";
 import { storageService } from "../../infrastructure/storage/storage.service.js";
 import { notificationService } from "../notifications/notification.service.js";
-import { resolveMemberPlanContext, assertMembershipValid } from "../../shared/utils/feature-access.js";
+import { resolveMemberPlanContext, assertMembershipValid, assertFeatureAccess } from "../../shared/utils/feature-access.js";
 
 const ADMIN_ROLES = [ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN];
 
@@ -294,42 +294,10 @@ export const postService = {
   createPost: async (data, user) => {
     const userId = user.id || user._id;
 
-    // Check plan permissions: Tier I (Free) cannot create feed posts
+    // Check plan permissions: Tier I (Free) cannot create feed posts; Tier II=5, Tier III=10, Tier IV=20
     const isAdmin = ["central_admin", "secretariat", "state_admin", "chapter_admin"].includes(user.role);
     if (!isAdmin) {
-      const context = await resolveMemberPlanContext(userId);
-      const plan = context.planName;
-      const norm = context.norm;
-      if (context.isFree) {
-        throw new ForbiddenError(
-          "Feed posting is not included in Tier I (Free) plan. Please upgrade your subscription plan to Tier II or above to publish posts in the community feed."
-        );
-      }
-      // BUG-065: see message.service.js sendMessage for why this check exists now.
-      assertMembershipValid(context, ForbiddenError);
-
-      let maxPosts = 5;
-      if (norm.includes("diamond") || norm.includes("platinum")) {
-        maxPosts = Infinity;
-      } else if (norm.includes("tier iv") || norm.includes("tier 4") || norm.includes("enterprise")) {
-        maxPosts = 20;
-      } else if (norm.includes("gold") || norm.includes("tier iii") || norm.includes("tier 3") || norm.includes("growth")) {
-        maxPosts = 15;
-      } else if (norm.includes("silver") || norm.includes("tier ii") || norm.includes("tier 2") || norm.includes("starter") || norm.includes("basic")) {
-        maxPosts = 5;
-      }
-
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const monthlyPostCount = await Post.countDocuments({
-        author: userId,
-        createdAt: { $gte: thirtyDaysAgo },
-      });
-
-      if (isFinite(maxPosts) && monthlyPostCount >= maxPosts) {
-        throw new ForbiddenError(
-          `Monthly feed posting limit reached (${monthlyPostCount}/${maxPosts} posts used this month on ${plan}). Please upgrade your subscription plan to publish more posts.`
-        );
-      }
+      await assertFeatureAccess(userId, "feed_posting", 1, ForbiddenError);
     }
 
     let authorName = data.authorName || user.name || "";

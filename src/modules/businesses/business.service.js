@@ -144,6 +144,8 @@ export const isBusinessEligibleForMemberLink = (business) => {
     business.subscriberTier ||
     business.subscriber_tier ||
     business.owner?.subscriberTier ||
+    business.membershipPlan ||
+    business.owner?.membershipPlan ||
     ""
   ).trim().toLowerCase();
 

@@ -508,19 +508,22 @@ async function fulfillPaymentOrder({
     }
   });
 
+  // Re-fetch fresh user and business documents from DB so the response reflects newly updated tier fields
+  const freshUser = await User.findById(userDoc._id).populate("savedBusinesses");
+  const freshBusiness = finalBusinessId ? await Business.findById(finalBusinessId) : businessDoc;
+
   // Generate refreshed JWT tokens
   const tokenPayload = {
-    id: userDoc._id,
-    email: userDoc.email,
-    role: userDoc.role,
-    chapter: userDoc.chapter,
-    forcePasswordChange: userDoc.forcePasswordChange,
+    id: freshUser._id,
+    email: freshUser.email,
+    role: freshUser.role,
+    chapter: freshUser.chapter,
+    forcePasswordChange: freshUser.forcePasswordChange,
   };
   const accessToken = signAccessToken(tokenPayload);
   const refreshToken = signRefreshToken(tokenPayload);
 
-  await userDoc.populate("savedBusinesses");
-  const userObj = userDoc.toJSON();
+  const userObj = freshUser.toJSON();
   if (Array.isArray(userObj.savedBusinesses)) {
     userObj.savedBusinesses = userObj.savedBusinesses.filter(Boolean);
   }
@@ -529,7 +532,7 @@ async function fulfillPaymentOrder({
     verified: true,
     payment,
     membership: updatedMembership,
-    business: businessDoc,
+    business: freshBusiness,
     user: userObj,
     accessToken,
     refreshToken,
