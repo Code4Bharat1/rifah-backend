@@ -266,19 +266,39 @@ const resolveEventAndRegistration = async (ticketId, populateFields = "name emai
   }
 
   let cleanTicketId = ticketId.trim();
-  // Strip URL prefix if scanner sent full URL
+  try {
+    cleanTicketId = decodeURIComponent(cleanTicketId).trim();
+  } catch (_) {}
+
+  // Strip URL prefix if scanner sent full URL or route path
   if (cleanTicketId.includes("/verify/ticket/")) {
     const parts = cleanTicketId.split("/verify/ticket/");
     if (parts.length > 1) {
-      cleanTicketId = parts[1].split("?")[0].replace(/\//g, "").trim();
+      cleanTicketId = parts[1].trim();
     }
   }
 
-  // 1. Direct match by ticketId or registration _id
+  // Strip query string if any (?token=...)
+  if (cleanTicketId.includes("?")) {
+    cleanTicketId = cleanTicketId.split("?")[0].trim();
+  }
+
+  // Strip leading and trailing slashes
+  cleanTicketId = cleanTicketId.replace(/^\/+|\/+$/g, "").trim();
+
+  // Escape special regex characters
+  const escapedTicketId = cleanTicketId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  // 1. Direct match by ticketId, registration _id, or user ID
   let query = Event.findOne({
     $or: [
-      { "registeredUsers.ticketId": { $regex: new RegExp(`^${cleanTicketId}$`, "i") } },
-      ...(cleanTicketId.match(/^[0-9a-fA-F]{24}$/) ? [{ "registeredUsers._id": cleanTicketId }] : []),
+      { "registeredUsers.ticketId": { $regex: new RegExp(`^${escapedTicketId}$`, "i") } },
+      ...(cleanTicketId.match(/^[0-9a-fA-F]{24}$/)
+        ? [
+            { "registeredUsers._id": cleanTicketId },
+            { "registeredUsers.user": cleanTicketId },
+          ]
+        : []),
     ],
   });
 
@@ -291,13 +311,14 @@ const resolveEventAndRegistration = async (ticketId, populateFields = "name emai
     ? (event.registeredUsers || []).find(
         (r) =>
           (r.ticketId && r.ticketId.toLowerCase() === cleanTicketId.toLowerCase()) ||
-          String(r._id) === cleanTicketId
+          String(r._id) === cleanTicketId ||
+          String(r.user?._id || r.user) === cleanTicketId
       )
     : null;
 
-  // 2. Backward compatibility for legacy fallback QR codes: RIFAH-EVT-YYYY-XXXX (where XXXX is last 4 chars of event _id)
+  // 2. Backward compatibility for legacy fallback QR codes: RIFAH-EVT-YYYY-XXXX (where XXXX is last 4-6 chars)
   if (!reg) {
-    const legacyMatch = cleanTicketId.match(/^RIFAH-EVT-\d{4}-([0-9a-fA-F]{4})$/i);
+    const legacyMatch = cleanTicketId.match(/^RIFAH-EVT-\d{4}-([0-9a-fA-F]{4,6})$/i);
     if (legacyMatch) {
       const eventSuffix = legacyMatch[1].toLowerCase();
       let candidateQuery = Event.find({}).sort({ createdAt: -1 });
@@ -305,23 +326,42 @@ const resolveEventAndRegistration = async (ticketId, populateFields = "name emai
         candidateQuery = candidateQuery.populate("registeredUsers.user", populateFields);
       }
       const candidateEvents = await candidateQuery;
-      const matchedEvent = candidateEvents.find((e) =>
-        String(e._id).toLowerCase().endsWith(eventSuffix)
-      );
+      let matchedEvent = null;
+      let matchedReg = null;
 
-      if (matchedEvent && matchedEvent.registeredUsers && matchedEvent.registeredUsers.length > 0) {
-        event = matchedEvent;
-        // Prefer un-checked-in registration, or the most recent registration
-        const uncheckedReg = [...matchedEvent.registeredUsers]
-          .reverse()
-          .find((r) => !r.checkedIn && r.attendanceStatus !== "Present");
-
-        reg = uncheckedReg || matchedEvent.registeredUsers[matchedEvent.registeredUsers.length - 1];
-
-        if (reg) {
-          reg.ticketId = cleanTicketId;
-          await matchedEvent.save();
+      for (const e of candidateEvents) {
+        if (!e.registeredUsers || e.registeredUsers.length === 0) continue;
+        const found = e.registeredUsers.find(
+          (r) => r.ticketId && r.ticketId.toLowerCase().endsWith(eventSuffix)
+        );
+        if (found) {
+          matchedEvent = e;
+          matchedReg = found;
+          break;
         }
+      }
+
+      if (!matchedEvent) {
+        matchedEvent = candidateEvents.find((e) =>
+          String(e._id).toLowerCase().endsWith(eventSuffix)
+        );
+        if (matchedEvent && matchedEvent.registeredUsers && matchedEvent.registeredUsers.length > 0) {
+          const uncheckedReg = [...matchedEvent.registeredUsers]
+            .reverse()
+            .find((r) => !r.checkedIn && r.attendanceStatus !== "Present");
+
+          matchedReg = uncheckedReg || matchedEvent.registeredUsers[matchedEvent.registeredUsers.length - 1];
+
+          if (matchedReg) {
+            matchedReg.ticketId = cleanTicketId;
+            await matchedEvent.save();
+          }
+        }
+      }
+
+      if (matchedEvent && matchedReg) {
+        event = matchedEvent;
+        reg = matchedReg;
       }
     }
   }
@@ -483,6 +523,24 @@ export const eventService = {
 
     const event = await Event.findOne(query).populate("registeredUsers.user", "name email phone businessName company");
     if (!event) throw new NotFoundError("Event not found");
+
+    // Ensure all registered users have a ticketId and verificationToken
+    if (event && Array.isArray(event.registeredUsers)) {
+      let needsSave = false;
+      for (const reg of event.registeredUsers) {
+        if (!reg.ticketId) {
+          reg.ticketId = `RIFAH-EVT-${new Date().getFullYear()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+          needsSave = true;
+        }
+        if (!reg.verificationToken) {
+          reg.verificationToken = crypto.randomBytes(24).toString("hex");
+          needsSave = true;
+        }
+      }
+      if (needsSave) {
+        await event.save();
+      }
+    }
 
     // ── Access check ────────────────────────────────────────────────────────
     if (event.visibilityScope === "global") {
@@ -1971,8 +2029,8 @@ export const eventService = {
     }
 
     // Validate secure token if provided
-    if (token && token.trim()) {
-      if (reg.verificationToken !== token.trim()) {
+    if (token && token.trim() && !needsSave) {
+      if (reg.verificationToken && reg.verificationToken.trim() && reg.verificationToken.trim() !== token.trim()) {
         return {
           verified: false,
           error: "INVALID_TOKEN",
