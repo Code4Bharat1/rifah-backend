@@ -212,6 +212,29 @@ router.post(
   eventController.addFinance
 );
 
+// ─── Speakers & Guests (admin or the event's assigned Guest & Speaker Manager) ────
+router.post(
+  "/:id/speakers",
+  authMiddleware,
+  requireEventRoleOrAdmin("guestManager"),
+  validateObjectIdParam("id"),
+  eventController.addSpeaker
+);
+router.patch(
+  "/:id/speakers/:speakerId",
+  authMiddleware,
+  requireEventRoleOrAdmin("guestManager"),
+  validateObjectIdParam("id"),
+  eventController.updateSpeaker
+);
+router.delete(
+  "/:id/speakers/:speakerId",
+  authMiddleware,
+  requireEventRoleOrAdmin("guestManager"),
+  validateObjectIdParam("id"),
+  eventController.removeSpeaker
+);
+
 // ─── Event Role Assignments (functional roles → real access) ─────────────
 router.patch(
   "/:id/role-assignments",

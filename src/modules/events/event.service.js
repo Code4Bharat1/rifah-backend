@@ -1620,6 +1620,90 @@ export const eventService = {
   },
 
   /**
+   * Guest & Speaker Manager (admin or the event's assigned guestManager): add one
+   * speaker/guest to this event. Scoped, single-item mutation — mirrors
+   * addFinanceTransaction above — rather than the admin dashboard's own whole-array
+   * `updateOperations({ speakers })` replace, which only admins may call and which two
+   * concurrent editors would silently clobber each other on.
+   */
+  addSpeaker: async (eventId, speakerData) => {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const { name, category, mobile, email, type, organization, designation, topic } = speakerData;
+    if (!isValidName(name)) {
+      throw new BadRequestError("Enter a valid speaker name (letters only).");
+    }
+    if (!mobile || !String(mobile).trim()) {
+      throw new BadRequestError("Please enter the speaker's mobile number.");
+    }
+    if (email && !isValidEmail(email)) {
+      throw new BadRequestError("Enter a valid speaker email address.");
+    }
+
+    const speaker = {
+      id: `sp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      name: name.trim(),
+      category: category || "",
+      mobile: String(mobile).trim(),
+      email: email || "",
+      type: type || "Guest Speaker",
+      organization: organization || "",
+      designation: designation || "",
+      topic: topic || "",
+    };
+
+    event.speakers = [...(event.speakers || []), speaker];
+    await event.save();
+    return event.speakers;
+  },
+
+  updateSpeaker: async (eventId, speakerId, speakerData) => {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const idx = (event.speakers || []).findIndex((s) => s.id === speakerId);
+    if (idx === -1) throw new NotFoundError("Speaker not found on this event");
+
+    const { name, category, mobile, email, type, organization, designation, topic } = speakerData;
+    if (name !== undefined && !isValidName(name)) {
+      throw new BadRequestError("Enter a valid speaker name (letters only).");
+    }
+    if (email && !isValidEmail(email)) {
+      throw new BadRequestError("Enter a valid speaker email address.");
+    }
+
+    // Mutate the subdocument's fields directly rather than spreading it — `{...current}`
+    // on a Mongoose array subdocument does not reliably copy its schema fields (they
+    // aren't all plain own-enumerable properties), which silently dropped `name` and
+    // tripped the schema's required-field validation on save.
+    const current = event.speakers[idx];
+    if (name !== undefined) current.name = name.trim();
+    if (category !== undefined) current.category = category;
+    if (mobile !== undefined) current.mobile = String(mobile).trim();
+    if (email !== undefined) current.email = email;
+    if (type !== undefined) current.type = type;
+    if (organization !== undefined) current.organization = organization;
+    if (designation !== undefined) current.designation = designation;
+    if (topic !== undefined) current.topic = topic;
+
+    await event.save();
+    return event.speakers;
+  },
+
+  removeSpeaker: async (eventId, speakerId) => {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const existed = (event.speakers || []).some((s) => s.id === speakerId);
+    if (!existed) throw new NotFoundError("Speaker not found on this event");
+
+    event.speakers = event.speakers.filter((s) => s.id !== speakerId);
+    await event.save();
+    return event.speakers;
+  },
+
+  /**
    * RIFAH Operations Center: Toggle attendee check-in
    */
   toggleCheckin: async (eventId, attendeeIdOrUserId, attendanceStatus = "Present") => {
@@ -1940,7 +2024,10 @@ export const eventService = {
       base.data.agenda = event.agenda || [];
       base.data.kpi = {
         registeredCount: (event.registeredUsers || []).length,
-        seats: event.seats,
+        // BUG: the Event schema field is `totalSeats`, not `seats` — reading the wrong
+        // (nonexistent) field meant this always showed "0 seats" regardless of the real
+        // configured capacity.
+        seats: event.totalSeats,
       };
       // Remote Live Control: only unlocked when the admin explicitly checked "let the
       // Event Coordinator run the programme from his own phone" for this event.

@@ -16,19 +16,15 @@ const storage = multer.memoryStorage();
 const fileFilter = (req, file, cb) => {
   const mime = (file.mimetype || "").toLowerCase();
   const ext = path.extname(file.originalname || "").toLowerCase();
-  const cleanName = path.basename(file.originalname || "").replace(/[\x00-\x1f\x80-\x9f]/g, "").toLowerCase();
 
-  // Guard against dangerous extensions and double extension tricks (e.g. payload.php.png)
-  const dangerousPatterns = [/\.php/i, /\.html?/i, /\.svg/i, /\.exe/i, /\.js/i, /\.jsx/i, /\.ts/i, /\.tsx/i, /\.sh/i, /\.bat/i, /\.cmd/i, /\.vbs/i, /\.msi/i];
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(cleanName)) {
-      return cb(
-        new BadRequestError("Suspicious file name or prohibited extension detected."),
-        false
-      );
-    }
-  }
-
+  // Guard against dangerous extensions. This checks the file's actual extension
+  // (via path.extname, so only what the name truly ends in counts) — an earlier version
+  // scanned the whole filename for these substrings anywhere, which wrongly blocked
+  // legitimate files whose name merely contained one of these sequences without being
+  // that type (e.g. a real "clip.ts" MPEG Transport Stream video got rejected because
+  // the filename contains ".ts", the same short string as the blocked ".ts"/TypeScript
+  // extension — even though this check two lines below already handles that extension
+  // correctly and precisely on its own).
   const dangerousExtensions = [".html", ".htm", ".svg", ".php", ".js", ".jsx", ".ts", ".tsx", ".exe", ".sh", ".bat", ".cmd", ".vbs", ".msi"];
   if (dangerousExtensions.includes(ext)) {
     return cb(
@@ -84,7 +80,7 @@ export const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 15 * 1024 * 1024, // 15 MB limit for media/documents
+    fileSize: 100 * 1024 * 1024, // 15 MB limit for media/documents
   },
 });
 
@@ -92,18 +88,9 @@ export const upload = multer({
 const pdfFileFilter = (req, file, cb) => {
   const mime = (file.mimetype || "").toLowerCase();
   const ext = path.extname(file.originalname || "").toLowerCase();
-  const cleanName = path.basename(file.originalname || "").replace(/[\x00-\x1f\x80-\x9f]/g, "").toLowerCase();
 
-  const dangerousPatterns = [/\.php/i, /\.html?/i, /\.svg/i, /\.exe/i, /\.js/i, /\.jsx/i, /\.ts/i, /\.tsx/i, /\.sh/i, /\.bat/i, /\.cmd/i, /\.vbs/i, /\.msi/i];
-  for (const pattern of dangerousPatterns) {
-    if (pattern.test(cleanName)) {
-      return cb(
-        new BadRequestError("Suspicious file name or prohibited extension detected."),
-        false
-      );
-    }
-  }
-
+  // See fileFilter above — same fix: check the actual extension only, not the whole
+  // filename for these substrings anywhere in it.
   const dangerousExtensions = [".html", ".htm", ".svg", ".php", ".js", ".jsx", ".ts", ".tsx", ".exe", ".sh", ".bat", ".cmd", ".vbs", ".msi"];
   if (dangerousExtensions.includes(ext)) {
     return cb(

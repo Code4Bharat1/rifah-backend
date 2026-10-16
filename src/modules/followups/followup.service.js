@@ -45,6 +45,7 @@ export const followupService = {
       eventInterested,
       eventCompleted,
       eventOverdue,
+      eventMessaged,
       membershipTotal,
       membershipPending,
       membershipOverdue,
@@ -58,6 +59,8 @@ export const followupService = {
       Followup.countDocuments({ ...eventQuery, status: "interested" }),
       Followup.countDocuments({ ...eventQuery, status: "completed" }),
       Followup.countDocuments({ ...eventQuery, status: "overdue" }),
+      // "Messaged" = has an actual logged message, not just the current status label.
+      Followup.countDocuments({ ...eventQuery, "messageHistory.0": { $exists: true } }),
       Followup.countDocuments({ ...baseQuery, type: "membership" }),
       Followup.countDocuments({ ...baseQuery, type: "membership", status: "pending" }),
       Followup.countDocuments({ ...baseQuery, type: "membership", status: "overdue" }),
@@ -65,6 +68,24 @@ export const followupService = {
       Followup.countDocuments({ ...baseQuery, type: "membership", status: "expired" }),
       Followup.countDocuments({ ...baseQuery, type: "membership", status: "renewed" }),
     ]);
+
+    // "Came more than once" = people in this event's follow-up list whose mobile number
+    // also appears on a Followup record for a DIFFERENT event — a real repeat-attendee
+    // signal, not a guess. Only meaningful when scoped to one event.
+    let eventRepeat = 0;
+    if (eventId) {
+      const mobiles = (await Followup.find(eventQuery).distinct("mobile")).filter(
+        (m) => m && m !== "Not Provided"
+      );
+      if (mobiles.length > 0) {
+        const repeatGroups = await Followup.aggregate([
+          { $match: { type: "event", mobile: { $in: mobiles } } },
+          { $group: { _id: "$mobile", events: { $addToSet: "$event" } } },
+          { $match: { "events.1": { $exists: true } } }, // 2+ distinct events
+        ]);
+        eventRepeat = repeatGroups.length;
+      }
+    }
 
     return {
       event: {
@@ -74,6 +95,8 @@ export const followupService = {
         interested: eventInterested,
         completed: eventCompleted,
         waiting: eventOverdue,
+        messaged: eventMessaged,
+        repeat: eventRepeat,
       },
       membership: {
         total: membershipTotal,

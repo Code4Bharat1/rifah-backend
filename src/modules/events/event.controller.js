@@ -242,6 +242,25 @@ export const eventController = {
     return ApiResponse.success(res, result, "Financial transaction saved");
   }),
 
+  // ─── Speakers & Guests ─────────────────────────────────────────────────────
+  addSpeaker: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const speakers = await eventService.addSpeaker(id, req.body);
+    return ApiResponse.created(res, speakers, "Speaker added");
+  }),
+
+  updateSpeaker: asyncHandler(async (req, res) => {
+    const { id, speakerId } = req.params;
+    const speakers = await eventService.updateSpeaker(id, speakerId, req.body);
+    return ApiResponse.success(res, speakers, "Speaker updated");
+  }),
+
+  removeSpeaker: asyncHandler(async (req, res) => {
+    const { id, speakerId } = req.params;
+    const speakers = await eventService.removeSpeaker(id, speakerId);
+    return ApiResponse.success(res, speakers, "Speaker removed");
+  }),
+
   // ─── Ask & Give Board ──────────────────────────────────────────────────────
   getAskGiveBoard: asyncHandler(async (req, res) => {
     const { id } = req.params;
