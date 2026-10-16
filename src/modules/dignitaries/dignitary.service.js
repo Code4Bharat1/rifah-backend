@@ -101,6 +101,8 @@ export const dignitaryService = {
       if (data.topic) existing.topic = data.topic;
       if (data.email) existing.email = data.email;
       if (data.city) existing.city = data.city;
+      if (data.photo !== undefined) existing.photo = data.photo;
+      if (data.status !== undefined) existing.status = data.status;
       await existing.save();
       return existing.toObject();
     }

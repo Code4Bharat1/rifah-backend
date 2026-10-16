@@ -243,6 +243,12 @@ export const eventController = {
   }),
 
   // ─── Speakers & Guests ─────────────────────────────────────────────────────
+  getSpeakers: asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const data = await eventService.getSpeakers(id, req.user);
+    return ApiResponse.success(res, data, "Speakers retrieved successfully");
+  }),
+
   addSpeaker: asyncHandler(async (req, res) => {
     const { id } = req.params;
     const speakers = await eventService.addSpeaker(id, req.body);
@@ -259,6 +265,32 @@ export const eventController = {
     const { id, speakerId } = req.params;
     const speakers = await eventService.removeSpeaker(id, speakerId);
     return ApiResponse.success(res, speakers, "Speaker removed");
+  }),
+
+  uploadSpeakerPhoto: asyncHandler(async (req, res) => {
+    const { id, speakerId } = req.params;
+    if (!req.file) {
+      return ApiResponse.error(res, "No image uploaded", 400);
+    }
+    const photoUrl = await storageService.uploadFile(req.file, "speakers");
+    const updated = await eventService.updateSpeakerPhoto(id, speakerId, photoUrl, req.user);
+    return ApiResponse.success(
+      res,
+      { photo: photoUrl, speakers: updated.speakers },
+      "Speaker photo uploaded successfully"
+    );
+  }),
+
+  assignSpeakerProgrammeRole: asyncHandler(async (req, res) => {
+    const { id, speakerId } = req.params;
+    const { roleKey, agendaId, topic } = req.body;
+    const result = await eventService.assignSpeakerProgrammeRole(
+      id,
+      speakerId,
+      { roleKey, agendaId, topic },
+      req.user
+    );
+    return ApiResponse.success(res, result, "Speaker programme role assigned successfully");
   }),
 
   // ─── Ask & Give Board ──────────────────────────────────────────────────────

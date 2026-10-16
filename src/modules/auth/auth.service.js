@@ -48,6 +48,12 @@ const WORKSPACE_BY_ROLE = {
   [ROLES.COUNTRY_ADMIN]: "central",
   [ROLES.STATE_ADMIN]: "state",
   [ROLES.CHAPTER_ADMIN]: "chapter",
+  [ROLES.GUEST_SPEAKER_MANAGER]: "chapter",
+  guest_speaker_manager: "chapter",
+  guestManager: "chapter",
+  [ROLES.EVENT_COORDINATOR]: "chapter",
+  event_coordinator: "chapter",
+  eventCoordinator: "chapter",
   [ROLES.BUSINESS_OWNER]: "business",
   [ROLES.CUSTOMER]: "customer",
   [ROLES.BUYER]: "customer",
@@ -61,6 +67,10 @@ const ADMIN_ROLE_LIST = [
   "country_admin",
   "state_admin",
   "chapter_admin",
+  "guest_speaker_manager",
+  "guestManager",
+  "event_coordinator",
+  "eventCoordinator",
 ];
 
 const ADMIN_ROLE_SET = new Set(ADMIN_ROLE_LIST);
@@ -1601,6 +1611,14 @@ export const authService = {
             wsType = "chapter-admin";
             wsLabel = "Chapter Admin Panel";
             wsPath = "/chapter-admin";
+          } else if (sysRole === "guest_speaker_manager" || sysRole === "guestManager") {
+            wsType = "chapter-admin";
+            wsLabel = "Guest & Speaker Manager";
+            wsPath = "/chapter-admin/speakers-guests";
+          } else if (sysRole === "event_coordinator" || sysRole === "eventCoordinator") {
+            wsType = "chapter-admin";
+            wsLabel = "Events Coordinator";
+            wsPath = "/chapter-admin/live-control";
           }
           baseWorkspaces.push({
             type: "system_role",
@@ -1610,7 +1628,19 @@ export const authService = {
             panelType: wsType,
             path: wsPath,
             permissions: [],
-            allowedNavRoutes: [],
+            allowedNavRoutes: sysRole === "guest_speaker_manager" || sysRole === "guestManager"
+              ? ["/chapter-admin/speakers-guests", "/chapter-admin/operations"]
+              : (sysRole === "event_coordinator" || sysRole === "eventCoordinator")
+              ? [
+                  "/chapter-admin/live-control",
+                  "/chapter-admin/operations",
+                  "/chapter-admin/event-setup",
+                  "/chapter-admin/speakers-guests",
+                  "/chapter-admin/scripts",
+                  "/chapter-admin/ask-give",
+                  "/chapter-admin/gallery",
+                ]
+              : [],
           });
         }
         // Add org-role workspaces
@@ -1816,6 +1846,14 @@ export const authService = {
             wsType = "chapter-admin";
             wsLabel = "Chapter Admin Panel";
             wsPath = "/chapter-admin";
+          } else if (user.role === "guest_speaker_manager" || user.role === "guestManager") {
+            wsType = "chapter-admin";
+            wsLabel = "Guest & Speaker Manager";
+            wsPath = "/chapter-admin/speakers-guests";
+          } else if (user.role === "event_coordinator" || user.role === "eventCoordinator") {
+            wsType = "chapter-admin";
+            wsLabel = "Events Coordinator";
+            wsPath = "/chapter-admin/live-control";
           }
           baseWorkspaces.push({
             type: "system_role",
@@ -1825,7 +1863,19 @@ export const authService = {
             panelType: wsType,
             path: wsPath,
             permissions: [],
-            allowedNavRoutes: [],
+            allowedNavRoutes: (user.role === "guest_speaker_manager" || user.role === "guestManager")
+              ? ["/chapter-admin/speakers-guests", "/chapter-admin/operations"]
+              : (user.role === "event_coordinator" || user.role === "eventCoordinator")
+              ? [
+                  "/chapter-admin/live-control",
+                  "/chapter-admin/operations",
+                  "/chapter-admin/event-setup",
+                  "/chapter-admin/speakers-guests",
+                  "/chapter-admin/scripts",
+                  "/chapter-admin/ask-give",
+                  "/chapter-admin/gallery",
+                ]
+              : [],
           });
           userObj.availableWorkspaces = [...baseWorkspaces, ...orgWorkspaces];
         }
@@ -1944,6 +1994,14 @@ export const authService = {
           wsType = "chapter-admin";
           wsLabel = "Chapter Admin Panel";
           wsPath = "/chapter-admin";
+        } else if (user.role === "guest_speaker_manager" || user.role === "guestManager") {
+          wsType = "chapter-admin";
+          wsLabel = "Guest & Speaker Manager";
+          wsPath = "/chapter-admin/speakers-guests";
+        } else if (user.role === "event_coordinator" || user.role === "eventCoordinator") {
+          wsType = "chapter-admin";
+          wsLabel = "Events Coordinator";
+          wsPath = "/chapter-admin/live-control";
         }
         baseWorkspaces.push({
           type: "system_role",
@@ -1953,7 +2011,19 @@ export const authService = {
           panelType: wsType,
           path: wsPath,
           permissions: [],
-          allowedNavRoutes: [],
+          allowedNavRoutes: (user.role === "guest_speaker_manager" || user.role === "guestManager")
+            ? ["/chapter-admin/speakers-guests", "/chapter-admin/operations"]
+            : (user.role === "event_coordinator" || user.role === "eventCoordinator")
+            ? [
+                "/chapter-admin/live-control",
+                "/chapter-admin/operations",
+                "/chapter-admin/event-setup",
+                "/chapter-admin/speakers-guests",
+                "/chapter-admin/scripts",
+                "/chapter-admin/ask-give",
+                "/chapter-admin/gallery",
+              ]
+            : [],
         });
         userObj.availableWorkspaces = [...baseWorkspaces, ...orgWorkspaces];
       }
@@ -2061,6 +2131,14 @@ export const authService = {
           wsType = "chapter-admin";
           wsLabel = "Chapter Admin Panel";
           wsPath = "/chapter-admin";
+        } else if (user.role === "guest_speaker_manager" || user.role === "guestManager") {
+          wsType = "chapter-admin";
+          wsLabel = "Guest & Speaker Manager";
+          wsPath = "/chapter-admin/speakers-guests";
+        } else if (user.role === "event_coordinator" || user.role === "eventCoordinator") {
+          wsType = "chapter-admin";
+          wsLabel = "Events Coordinator";
+          wsPath = "/chapter-admin/live-control";
         }
         baseWorkspaces.push({
           type: "system_role",
@@ -2070,7 +2148,19 @@ export const authService = {
           panelType: wsType,
           path: wsPath,
           permissions: [],
-          allowedNavRoutes: [],
+          allowedNavRoutes: (user.role === "guest_speaker_manager" || user.role === "guestManager")
+            ? ["/chapter-admin/speakers-guests", "/chapter-admin/operations"]
+            : (user.role === "event_coordinator" || user.role === "eventCoordinator")
+            ? [
+                "/chapter-admin/live-control",
+                "/chapter-admin/operations",
+                "/chapter-admin/event-setup",
+                "/chapter-admin/speakers-guests",
+                "/chapter-admin/scripts",
+                "/chapter-admin/ask-give",
+                "/chapter-admin/gallery",
+              ]
+            : [],
         });
         userObj.availableWorkspaces = [...baseWorkspaces, ...orgWorkspaces];
       }
@@ -2464,6 +2554,14 @@ export const authService = {
       ROLES.STATE_ADMIN,
       ROLES.CHAPTER_ADMIN,
       ROLES.SECRETARIAT,
+      ROLES.GUEST_SPEAKER_MANAGER,
+      ROLES.GUEST_MANAGER,
+      ROLES.EVENT_COORDINATOR,
+      ROLES.EVENT_COORDINATOR_CAMEL,
+      "event_coordinator",
+      "eventCoordinator",
+      "guest_speaker_manager",
+      "guestManager",
       "super_admin",
       "admin",
     ];

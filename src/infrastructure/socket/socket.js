@@ -140,3 +140,17 @@ export const emitToUser = (userId, event, payload) => {
     } catch {}
   }
 };
+
+export const emitProjectorUpdate = (chapterOrEventId, data) => {
+  if (!chapterOrEventId || !io) return;
+  const room = `projector_${String(chapterOrEventId).toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`;
+  const merged = { ...(lastProjectorState.get(room) || {}), ...data };
+  lastProjectorState.set(room, merged);
+  io.to(room).emit("projector:update", data);
+  if (process.send) {
+    try {
+      process.send({ type: "SOCKET_IPC_BROADCAST", room, event: "projector:update", payload: data });
+    } catch {}
+  }
+};
+

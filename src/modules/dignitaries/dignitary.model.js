@@ -43,6 +43,15 @@ const dignitarySchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    photo: {
+      type: String,
+      default: "",
+    },
+    status: {
+      type: String,
+      default: "Confirmed",
+      trim: true,
+    },
     notes: {
       type: String,
       default: "",

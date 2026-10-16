@@ -248,23 +248,41 @@ export const userService = {
   assignAdminRole: async (userId, { role }, requester) => {
     if (!requester) throw new ForbiddenError("Authentication required");
 
-    const adminRoles = [ROLES.CHAPTER_ADMIN, ROLES.STATE_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.CENTRAL_ADMIN];
+    const responsibilityRoles = [
+      ROLES.GUEST_SPEAKER_MANAGER,
+      ROLES.GUEST_MANAGER,
+      ROLES.EVENT_COORDINATOR,
+      ROLES.EVENT_COORDINATOR_CAMEL,
+      "event_coordinator",
+      "eventCoordinator",
+      "guest_speaker_manager",
+      "guestManager",
+    ];
+    const adminRoles = [
+      ROLES.CHAPTER_ADMIN,
+      ROLES.STATE_ADMIN,
+      ROLES.COUNTRY_ADMIN,
+      ROLES.CENTRAL_ADMIN,
+      ...responsibilityRoles,
+    ];
     if (!adminRoles.includes(role)) {
       throw new BadRequestError(`Role must be one of: ${adminRoles.join(", ")}`);
     }
 
     // Hierarchy enforcement: who can grant what?
     if (requester.role === ROLES.CHAPTER_ADMIN) {
-      throw new ForbiddenError("Chapter Admins cannot assign admin roles.");
+      if (!responsibilityRoles.includes(role)) {
+        throw new ForbiddenError("Chapter Admins can only assign event responsibility roles (Guest & Speaker Manager, Events Coordinator).");
+      }
     }
     if (requester.role === ROLES.STATE_ADMIN) {
-      if (role !== ROLES.CHAPTER_ADMIN) {
-        throw new ForbiddenError("State Admins can only assign Chapter Admin roles.");
+      if (role !== ROLES.CHAPTER_ADMIN && !responsibilityRoles.includes(role)) {
+        throw new ForbiddenError("State Admins can only assign Chapter Admin or event responsibility roles.");
       }
     }
     if (requester.role === ROLES.COUNTRY_ADMIN) {
-      if (![ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN].includes(role)) {
-        throw new ForbiddenError("Country Admins can only assign State/City Admin or Chapter Admin roles within their country.");
+      if (![ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN, ...responsibilityRoles].includes(role)) {
+        throw new ForbiddenError("Country Admins can only assign State/City Admin, Chapter Admin, or event responsibility roles within their country.");
       }
     }
     // Only Central Admins can assign country_admin or central_admin
@@ -280,20 +298,19 @@ export const userService = {
       throw new NotFoundError("User not found or outside your administrative scope");
     }
 
-    // ==========================================
-    // [COUNTRY_MODULE_DISABLED]
-    // if (role === ROLES.COUNTRY_ADMIN) {
-    //   const targetCountry = (userToUpdate.country || "india").trim().toLowerCase();
-    //   if (!targetCountry || targetCountry === "india") {
-    //     throw new BadRequestError(
-    //       "Cannot assign Country Admin to an India-based user. Central Admin already manages India."
-    //     );
-    //   }
-    // }
-    // ==========================================
-
     // Prevent demoting higher-ranked admins (e.g. Country Admin cannot re-assign a Central Admin)
-    const roleRank = { customer: 0, business_owner: 0, chapter_admin: 1, state_admin: 2, country_admin: 3, central_admin: 4 };
+    const roleRank = {
+      customer: 0,
+      business_owner: 0,
+      guest_speaker_manager: 0.5,
+      guestManager: 0.5,
+      event_coordinator: 0.5,
+      eventCoordinator: 0.5,
+      chapter_admin: 1,
+      state_admin: 2,
+      country_admin: 3,
+      central_admin: 4,
+    };
     if ((roleRank[userToUpdate.role] || 0) >= (roleRank[requester.role] || 0)) {
       throw new ForbiddenError("Cannot modify a user with equal or higher administrative rank.");
     }

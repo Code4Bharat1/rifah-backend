@@ -445,6 +445,10 @@ const eventSchema = new mongoose.Schema(
         organization: { type: String, default: "" },
         designation: { type: String, default: "" },
         topic: { type: String, default: "" },
+        photo: { type: String, default: "" },
+        status: { type: String, default: "Confirmed" },
+        dignitaryId: { type: String, default: "" },
+        assignedRole: { type: String, default: "" },
       },
     ],
     finance: {

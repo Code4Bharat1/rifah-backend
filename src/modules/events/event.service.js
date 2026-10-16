@@ -420,12 +420,40 @@ export const eventService = {
 
       } else if (userRole === ROLES.CHAPTER_ADMIN) {
         if (queryParams.strictAdminScope === "true" || queryParams.strictAdminScope === true) {
-          // Admin Dashboard: only see chapter events
+          // Admin Dashboard: see chapter events or national/global events
           if (userChapter) {
             visibilityConditions.push({ creatorChapter: new RegExp(`^${userChapter}$`, "i") });
+            visibilityConditions.push({ chapter: new RegExp(`^${userChapter}$`, "i") });
+            visibilityConditions.push({ chapter: "Global" });
+            visibilityConditions.push({ chapter: /all chapters/i });
+          } else {
+            visibilityConditions.push({});
           }
         } else {
           // Public browsing: see all events globally
+          visibilityConditions.push({});
+        }
+
+      } else if (
+        userRole === "guest_speaker_manager" ||
+        userRole === "guestManager" ||
+        userRole === "event_coordinator" ||
+        userRole === "eventCoordinator"
+      ) {
+        if (queryParams.strictAdminScope === "true" || queryParams.strictAdminScope === true) {
+          if (userChapter) {
+            visibilityConditions.push({ creatorChapter: new RegExp(`^${userChapter}$`, "i") });
+            visibilityConditions.push({ chapter: new RegExp(`^${userChapter}$`, "i") });
+            visibilityConditions.push({ chapter: "Global" });
+            visibilityConditions.push({ chapter: /all chapters/i });
+          } else {
+            visibilityConditions.push({});
+          }
+          const userId = user.id || user._id;
+          if (userId) {
+            visibilityConditions.push({ "roleAssignments.user": userId });
+          }
+        } else {
           visibilityConditions.push({});
         }
 
@@ -1270,7 +1298,21 @@ export const eventService = {
     // to "Confirmed") was counted as "Approved" too, coupling two independent flows.
     const approvedCount = registeredUsers.filter((r) => r.gateStatus === "approved").length;
 
-    return {
+    const isAdmin =
+      user &&
+      [
+        ROLES.CENTRAL_ADMIN,
+        ROLES.SUPER_ADMIN,
+        ROLES.ADMIN,
+        ROLES.SECRETARIAT,
+        ROLES.COUNTRY_ADMIN,
+        ROLES.STATE_ADMIN,
+        ROLES.CHAPTER_ADMIN,
+        "super_admin",
+        "admin",
+      ].includes(user.role);
+
+    const ops = {
       event: {
         _id: event._id,
         title: event.title,
@@ -1282,15 +1324,15 @@ export const eventService = {
         chapter: event.chapter,
         seats: event.seats,
         isPaid: event.isPaid,
-        ticketPrice: event.ticketPrice,
-        fee: event.fee,
+        ticketPrice: isAdmin ? event.ticketPrice : undefined,
+        fee: isAdmin ? event.fee : undefined,
         stageStatus: event.stageStatus || "IDLE",
         currentSlideIndex: event.currentSlideIndex || 0,
         activeAnnouncement: event.activeAnnouncement || "",
         moderatorNotes: event.moderatorNotes || "",
         projectorMode: event.projectorMode || "auto",
         speakers: event.speakers || [],
-        finance: event.finance || { moneyIn: [], moneyOut: [], treasurerNotes: "" },
+        finance: isAdmin ? (event.finance || { moneyIn: [], moneyOut: [], treasurerNotes: "" }) : { moneyIn: [], moneyOut: [], treasurerNotes: "" },
         teamAssignments: event.teamAssignments || [],
         signatories: event.signatories || { signatory1: "Chapter President", signatory2: "Chapter Secretary" },
         agenda: event.agenda || [],
@@ -1300,10 +1342,10 @@ export const eventService = {
         certificateSettings: event.certificateSettings || { theme: "classic-gold", language: "English", enabled: true },
         membershipRules: event.membershipRules || "Members enter free with valid Chamber ID.",
         visitorSignIn: event.visitorSignIn !== false,
-        memberFee: event.memberFee !== undefined ? event.memberFee : 0,
-        nonMemberFee: event.nonMemberFee !== undefined ? event.nonMemberFee : 500,
-        paymentCodes: event.paymentCodes || [],
-        staffCodes: event.staffCodes || [],
+        memberFee: isAdmin ? (event.memberFee !== undefined ? event.memberFee : 0) : undefined,
+        nonMemberFee: isAdmin ? (event.nonMemberFee !== undefined ? event.nonMemberFee : 500) : undefined,
+        paymentCodes: isAdmin ? (event.paymentCodes || []) : [],
+        staffCodes: isAdmin ? (event.staffCodes || []) : [],
         membershipJoiningLink: event.membershipJoiningLink || "",
         membershipQrImage: event.membershipQrImage || "",
         // eventPoster is legacy Operations-Centre-only storage; posterImage is the field
@@ -1335,14 +1377,14 @@ export const eventService = {
         approved: approvedCount,
         members: membersCount,
         checkedIn: checkedIn,
-        fees: totalFees,
+        fees: isAdmin ? totalFees : 0,
       },
       kpis: {
         registered: totalRegistered,
         approved: approvedCount,
         members: membersCount,
         checkedIn: checkedIn,
-        fees: totalFees,
+        fees: isAdmin ? totalFees : 0,
       },
       attendees: registeredUsers.map((reg, idx) => {
         const u = reg.user || {};
@@ -1380,12 +1422,60 @@ export const eventService = {
         };
       }),
     };
+
+    return ops;
   },
 
   /**
    * RIFAH Operations Center: Update operations data for an event
    */
   updateOperations: async (eventId, data, user) => {
+    const isAdmin =
+      user &&
+      [
+        ROLES.CENTRAL_ADMIN,
+        ROLES.SUPER_ADMIN,
+        ROLES.ADMIN,
+        ROLES.SECRETARIAT,
+        ROLES.COUNTRY_ADMIN,
+        ROLES.STATE_ADMIN,
+        ROLES.CHAPTER_ADMIN,
+        "super_admin",
+        "admin",
+      ].includes(user.role);
+
+    if (!isAdmin) {
+      const restrictedFields = [
+        "finance",
+        "isPaid",
+        "ticketPrice",
+        "fee",
+        "memberFee",
+        "nonMemberFee",
+        "paymentCodes",
+        "staffCodes",
+        "signatories",
+        "signatory1Role",
+        "signatory1Name",
+        "signatory1Image",
+        "signatory2Role",
+        "signatory2Name",
+        "signatory2Image",
+        "certificateSettings",
+        "certificateDesign",
+        "certificateDesignV2",
+        "certificateStyle",
+        "certificateAccentColor",
+      ];
+      for (const field of restrictedFields) {
+        if (data[field] !== undefined) {
+          throw new ForbiddenError(
+            `Access denied. You are not authorized to modify ${field}.`
+          );
+        }
+      }
+    }
+
     const allowedFields = [
       "stageStatus",
       "currentSlideIndex",
@@ -1477,14 +1567,20 @@ export const eventService = {
     if (Array.isArray(updateObj.speakers)) {
       for (const sp of updateObj.speakers) {
         if (!sp || typeof sp !== "object") continue;
-        if (sp.name !== undefined && sp.name !== "" && !isValidName(sp.name)) {
+        const spName = sp.name !== undefined && sp.name !== null ? String(sp.name).trim() : "";
+        if (spName !== "" && !isValidName(spName)) {
           throw new BadRequestError(`Speaker name "${sp.name}" must contain only letters`);
         }
-        if (sp.mobile !== undefined && sp.mobile !== "" && !isValidPhone(sp.mobile)) {
+        const spMobile = sp.mobile !== undefined && sp.mobile !== null ? String(sp.mobile).trim() : "";
+        if (spMobile !== "" && !isValidPhone(spMobile)) {
           throw new BadRequestError(`Speaker mobile number "${sp.mobile}" is invalid`);
         }
-        if (sp.email !== undefined && sp.email !== "" && !isValidEmail(sp.email)) {
+        const spEmail = sp.email !== undefined && sp.email !== null ? String(sp.email).trim() : "";
+        if (spEmail !== "" && !isValidEmail(spEmail)) {
           throw new BadRequestError(`Speaker email "${sp.email}" is invalid`);
+        }
+        if (sp.email !== undefined) {
+          sp.email = spEmail ? spEmail.toLowerCase() : "";
         }
       }
     }
@@ -1539,6 +1635,25 @@ export const eventService = {
       } catch (err) {
         // Non-blocking sync error
       }
+    }
+
+    // Real-time projector and live control sync
+    try {
+      const { emitProjectorUpdate } = await import("../../infrastructure/socket/socket.js");
+      const broadcastPayload = {
+        target: updated.chapter || updated._id,
+        slideIndex: updated.currentSlideIndex,
+        stageStatus: updated.stageStatus,
+        mode: updated.projectorMode,
+        announcement: updated.activeAnnouncement,
+        moderatorNotes: updated.moderatorNotes,
+      };
+      if (updated.chapter) {
+        emitProjectorUpdate(updated.chapter, broadcastPayload);
+      }
+      emitProjectorUpdate(String(updated._id), { ...broadcastPayload, target: String(updated._id) });
+    } catch (_) {
+      // Non-blocking socket emission
     }
 
     return updated;
@@ -1630,31 +1745,81 @@ export const eventService = {
     const event = await Event.findById(eventId);
     if (!event) throw new NotFoundError("Event not found");
 
-    const { name, category, mobile, email, type, organization, designation, topic } = speakerData;
-    if (!isValidName(name)) {
+    const {
+      name,
+      category,
+      mobile,
+      email,
+      type,
+      organization,
+      org,
+      designation,
+      topic,
+      photo,
+      status,
+      dignitaryId,
+      assignedRole,
+    } = speakerData;
+
+    const trimmedName = name ? String(name).trim() : "";
+    const trimmedMobile = mobile ? String(mobile).trim() : "";
+    const cleanEmail = email !== undefined && email !== null ? String(email).trim() : "";
+
+    if (!trimmedName || !isValidName(trimmedName)) {
       throw new BadRequestError("Enter a valid speaker name (letters only).");
     }
-    if (!mobile || !String(mobile).trim()) {
+    if (!trimmedMobile) {
       throw new BadRequestError("Please enter the speaker's mobile number.");
     }
-    if (email && !isValidEmail(email)) {
+    if (cleanEmail && !isValidEmail(cleanEmail)) {
       throw new BadRequestError("Enter a valid speaker email address.");
     }
 
     const speaker = {
       id: `sp-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      name: name.trim(),
+      name: trimmedName,
       category: category || "",
-      mobile: String(mobile).trim(),
-      email: email || "",
+      mobile: trimmedMobile,
+      email: cleanEmail ? cleanEmail.toLowerCase() : "",
       type: type || "Guest Speaker",
-      organization: organization || "",
+      organization: organization || org || "",
       designation: designation || "",
       topic: topic || "",
+      photo: photo || "",
+      status: status || "Confirmed",
+      dignitaryId: dignitaryId || null,
+      assignedRole: assignedRole || "",
     };
 
     event.speakers = [...(event.speakers || []), speaker];
     await event.save();
+
+    // If linked or matches a dignitary in directory, sync
+    try {
+      const { Dignitary } = await import("../dignitaries/dignitary.model.js");
+      const filter = dignitaryId
+        ? { _id: dignitaryId }
+        : { mobile: speaker.mobile };
+      await Dignitary.findOneAndUpdate(
+        filter,
+        {
+          $set: {
+            name: speaker.name,
+            mobile: speaker.mobile,
+            email: speaker.email,
+            org: speaker.organization,
+            designation: speaker.designation,
+            category: speaker.category,
+            type: speaker.type,
+            topic: speaker.topic,
+            photo: speaker.photo,
+            status: speaker.status,
+          },
+        },
+        { new: true }
+      );
+    } catch (_) {}
+
     return event.speakers;
   },
 
@@ -1662,32 +1827,79 @@ export const eventService = {
     const event = await Event.findById(eventId);
     if (!event) throw new NotFoundError("Event not found");
 
-    const idx = (event.speakers || []).findIndex((s) => s.id === speakerId);
+    const idx = (event.speakers || []).findIndex(
+      (s) => s.id === speakerId || String(s._id) === String(speakerId)
+    );
     if (idx === -1) throw new NotFoundError("Speaker not found on this event");
 
-    const { name, category, mobile, email, type, organization, designation, topic } = speakerData;
-    if (name !== undefined && !isValidName(name)) {
+    const {
+      name,
+      category,
+      mobile,
+      email,
+      type,
+      organization,
+      org,
+      designation,
+      topic,
+      photo,
+      status,
+      dignitaryId,
+      assignedRole,
+    } = speakerData;
+
+    const trimmedName = name !== undefined && name !== null ? String(name).trim() : undefined;
+    const cleanEmail = email !== undefined && email !== null ? String(email).trim() : undefined;
+
+    if (trimmedName !== undefined && !isValidName(trimmedName)) {
       throw new BadRequestError("Enter a valid speaker name (letters only).");
     }
-    if (email && !isValidEmail(email)) {
+    if (cleanEmail !== undefined && cleanEmail !== "" && !isValidEmail(cleanEmail)) {
       throw new BadRequestError("Enter a valid speaker email address.");
     }
 
-    // Mutate the subdocument's fields directly rather than spreading it — `{...current}`
-    // on a Mongoose array subdocument does not reliably copy its schema fields (they
-    // aren't all plain own-enumerable properties), which silently dropped `name` and
-    // tripped the schema's required-field validation on save.
     const current = event.speakers[idx];
-    if (name !== undefined) current.name = name.trim();
+    if (trimmedName !== undefined) current.name = trimmedName;
     if (category !== undefined) current.category = category;
     if (mobile !== undefined) current.mobile = String(mobile).trim();
-    if (email !== undefined) current.email = email;
+    if (cleanEmail !== undefined) current.email = cleanEmail ? cleanEmail.toLowerCase() : "";
     if (type !== undefined) current.type = type;
-    if (organization !== undefined) current.organization = organization;
+    if (organization !== undefined || org !== undefined) current.organization = organization || org || "";
     if (designation !== undefined) current.designation = designation;
     if (topic !== undefined) current.topic = topic;
+    if (photo !== undefined) current.photo = photo;
+    if (status !== undefined) current.status = status;
+    if (dignitaryId !== undefined) current.dignitaryId = dignitaryId;
+    if (assignedRole !== undefined) current.assignedRole = assignedRole;
 
     await event.save();
+
+    // Sync to dignitary directory
+    try {
+      const { Dignitary } = await import("../dignitaries/dignitary.model.js");
+      const filter = current.dignitaryId
+        ? { _id: current.dignitaryId }
+        : { mobile: current.mobile };
+      await Dignitary.findOneAndUpdate(
+        filter,
+        {
+          $set: {
+            name: current.name,
+            mobile: current.mobile,
+            email: current.email,
+            org: current.organization,
+            designation: current.designation,
+            category: current.category,
+            type: current.type,
+            topic: current.topic,
+            photo: current.photo,
+            status: current.status,
+          },
+        },
+        { new: true }
+      );
+    } catch (_) {}
+
     return event.speakers;
   },
 
@@ -1695,12 +1907,105 @@ export const eventService = {
     const event = await Event.findById(eventId);
     if (!event) throw new NotFoundError("Event not found");
 
-    const existed = (event.speakers || []).some((s) => s.id === speakerId);
+    const existed = (event.speakers || []).some(
+      (s) => s.id === speakerId || String(s._id) === String(speakerId)
+    );
     if (!existed) throw new NotFoundError("Speaker not found on this event");
 
-    event.speakers = event.speakers.filter((s) => s.id !== speakerId);
+    event.speakers = event.speakers.filter(
+      (s) => s.id !== speakerId && String(s._id) !== String(speakerId)
+    );
     await event.save();
     return event.speakers;
+  },
+
+  getSpeakers: async (eventId, user) => {
+    const event = await Event.findById(eventId).lean();
+    if (!event) throw new NotFoundError("Event not found");
+
+    return {
+      eventId: event._id,
+      eventTitle: event.title,
+      eventDate: event.date,
+      eventTime: event.time,
+      chapter: event.chapter,
+      venue: event.venue,
+      city: event.city,
+      speakers: event.speakers || [],
+      agenda: event.agenda || [],
+      teamAssignments: event.teamAssignments || [],
+    };
+  },
+
+  updateSpeakerPhoto: async (eventId, speakerId, photoUrl, user) => {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const idx = (event.speakers || []).findIndex(
+      (s) => s.id === speakerId || String(s._id) === String(speakerId)
+    );
+    if (idx === -1) throw new NotFoundError("Speaker not found on this event");
+
+    event.speakers[idx].photo = photoUrl;
+    await event.save();
+
+    try {
+      const { Dignitary } = await import("../dignitaries/dignitary.model.js");
+      const sp = event.speakers[idx];
+      if (sp.dignitaryId) {
+        await Dignitary.findByIdAndUpdate(sp.dignitaryId, { photo: photoUrl });
+      } else if (sp.mobile) {
+        await Dignitary.findOneAndUpdate({ mobile: sp.mobile }, { photo: photoUrl });
+      }
+    } catch (_) {}
+
+    return { photo: photoUrl, speakers: event.speakers };
+  },
+
+  assignSpeakerProgrammeRole: async (eventId, speakerId, { roleKey, agendaId, topic }, user) => {
+    const event = await Event.findById(eventId);
+    if (!event) throw new NotFoundError("Event not found");
+
+    const idx = (event.speakers || []).findIndex(
+      (s) => s.id === speakerId || String(s._id) === String(speakerId)
+    );
+    if (idx === -1) throw new NotFoundError("Speaker not found on this event");
+
+    const speaker = event.speakers[idx];
+    if (roleKey !== undefined) {
+      speaker.assignedRole = roleKey;
+    }
+    if (topic !== undefined && topic !== "") {
+      speaker.topic = topic;
+    }
+
+    if (roleKey && Array.isArray(event.teamAssignments)) {
+      const teamIdx = event.teamAssignments.findIndex(
+        (t) => t.role === roleKey || t.roleName === roleKey
+      );
+      if (teamIdx !== -1) {
+        event.teamAssignments[teamIdx].member = speaker.name;
+        event.teamAssignments[teamIdx].topic = topic || speaker.topic || "";
+      }
+    }
+
+    if (agendaId && Array.isArray(event.agenda)) {
+      const agendaIdx = event.agenda.findIndex(
+        (a) => a.id === agendaId || String(a._id) === String(agendaId)
+      );
+      if (agendaIdx !== -1) {
+        event.agenda[agendaIdx].speaker = speaker.name;
+        if (topic) event.agenda[agendaIdx].title = topic;
+      }
+    }
+
+    await event.save();
+    return {
+      speaker,
+      speakers: event.speakers,
+      teamAssignments: event.teamAssignments,
+      agenda: event.agenda,
+    };
   },
 
   /**
@@ -1943,11 +2248,13 @@ export const eventService = {
   },
 
   async getUserEventRoles(userId) {
+    const user = await User.findById(userId).select("role chapter").lean();
     const events = await Event.find({ "roleAssignments.user": userId })
       .select("title date chapter creatorState visibilityScope status stageStatus roleAssignments")
       .lean();
 
     const assignments = [];
+    const seenEventIds = new Set();
     for (const event of events) {
       for (const a of event.roleAssignments || []) {
         if (String(a.user) === String(userId)) {
@@ -1963,9 +2270,51 @@ export const eventService = {
             isLive: isEventLive(event),
             role: a.role,
           });
+          seenEventIds.add(String(event._id));
         }
       }
     }
+
+    if (
+      user &&
+      (user.role === "guest_speaker_manager" ||
+        user.role === "guestManager" ||
+        user.role === "event_coordinator" ||
+        user.role === "eventCoordinator")
+    ) {
+      const chapterQuery = user.chapter
+        ? { $or: [{ chapter: user.chapter }, { chapter: "Global" }, { chapter: { $regex: /all chapters/i } }] }
+        : {};
+      const chapterEvents = await Event.find(chapterQuery)
+        .select("title date chapter creatorState visibilityScope status stageStatus roleAssignments")
+        .sort({ date: -1 })
+        .limit(20)
+        .lean();
+
+      const defaultRole =
+        user.role === "event_coordinator" || user.role === "eventCoordinator"
+          ? "eventCoordinator"
+          : "guestManager";
+
+      for (const ev of chapterEvents) {
+        if (!seenEventIds.has(String(ev._id))) {
+          assignments.push({
+            eventId: ev._id,
+            eventTitle: ev.title,
+            eventDate: ev.date,
+            chapter: ev.chapter,
+            state: ev.creatorState || "",
+            scope: ev.visibilityScope || "global",
+            status: ev.status,
+            stageStatus: ev.stageStatus,
+            isLive: isEventLive(ev),
+            role: defaultRole,
+          });
+          seenEventIds.add(String(ev._id));
+        }
+      }
+    }
+
     return assignments;
   },
 
@@ -1978,6 +2327,25 @@ export const eventService = {
     const assignedRoles = (event.roleAssignments || [])
       .filter((a) => String(a.user) === String(userId))
       .map((a) => a.role);
+
+    const isDirectGuestManager =
+      user.role === "guest_speaker_manager" ||
+      user.role === "guestManager" ||
+      (user.chapter && (event.chapter === user.chapter || event.chapter === "Global"));
+
+    if (
+      (user.role === "guest_speaker_manager" || user.role === "guestManager") &&
+      !assignedRoles.includes("guestManager")
+    ) {
+      assignedRoles.push("guestManager");
+    }
+
+    if (
+      (user.role === "event_coordinator" || user.role === "eventCoordinator") &&
+      !assignedRoles.includes("eventCoordinator")
+    ) {
+      assignedRoles.push("eventCoordinator");
+    }
 
     // Admins can preview every tool; members only ever see what they were assigned.
     const myRoles = isAdmin ? Array.from(new Set([...FUNCTIONAL_ROLES, ...assignedRoles])) : assignedRoles;
@@ -1998,9 +2366,9 @@ export const eventService = {
       state: event.creatorState || "",
       status: event.status,
       stageStatus: event.stageStatus,
-      // Tools stay read-only until the admin takes the event live. Admins are never gated.
+      // Tools stay read-only until the admin takes the event live. Guest managers and event coordinators can always act on their assigned domains.
       isLive: live,
-      canAct: live || isAdmin,
+      canAct: live || isAdmin || myRoles.includes("guestManager") || myRoles.includes("eventCoordinator"),
       myRoles,
       myFunctionalRoles: myRoles.filter((r) => FUNCTIONAL_ROLES.includes(r)),
       myStageRoles: myRoles.filter((r) => STAGE_ROLES.includes(r)),
@@ -2019,6 +2387,8 @@ export const eventService = {
     }
     if (myRoles.includes("guestManager")) {
       base.data.speakers = event.speakers || [];
+      base.data.agenda = event.agenda || [];
+      base.data.teamAssignments = event.teamAssignments || [];
     }
     if (myRoles.includes("eventCoordinator")) {
       base.data.agenda = event.agenda || [];

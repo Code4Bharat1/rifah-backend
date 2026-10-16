@@ -175,7 +175,7 @@ router.delete(
 router.get(
   "/:id/operations",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireEventRoleOrAdmin("guestManager", "eventCoordinator"),
   validateObjectIdParam("id"),
   eventController.getOperations
 );
@@ -183,7 +183,7 @@ router.get(
 router.patch(
   "/:id/operations",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireEventRoleOrAdmin("guestManager", "eventCoordinator"),
   validateObjectIdParam("id"),
   eventController.updateOperations
 );
@@ -213,6 +213,13 @@ router.post(
 );
 
 // ─── Speakers & Guests (admin or the event's assigned Guest & Speaker Manager) ────
+router.get(
+  "/:id/speakers",
+  authMiddleware,
+  requireEventRoleOrAdmin("guestManager"),
+  validateObjectIdParam("id"),
+  eventController.getSpeakers
+);
 router.post(
   "/:id/speakers",
   authMiddleware,
@@ -233,6 +240,21 @@ router.delete(
   requireEventRoleOrAdmin("guestManager"),
   validateObjectIdParam("id"),
   eventController.removeSpeaker
+);
+router.post(
+  "/:id/speakers/:speakerId/photo",
+  authMiddleware,
+  requireEventRoleOrAdmin("guestManager"),
+  validateObjectIdParam("id"),
+  upload.single("photo"),
+  eventController.uploadSpeakerPhoto
+);
+router.patch(
+  "/:id/speakers/:speakerId/assign-role",
+  authMiddleware,
+  requireEventRoleOrAdmin("guestManager"),
+  validateObjectIdParam("id"),
+  eventController.assignSpeakerProgrammeRole
 );
 
 // ─── Event Role Assignments (functional roles → real access) ─────────────
@@ -255,7 +277,7 @@ router.patch(
 router.get(
   "/:id/role-assignments",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireEventRoleOrAdmin("eventCoordinator", "guestManager"),
   validateObjectIdParam("id"),
   eventController.getRoleAssignments
 );
@@ -279,7 +301,7 @@ router.patch(
 router.get(
   "/:id/ask-give-board",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireEventRoleOrAdmin("eventCoordinator", "guestManager"),
   validateObjectIdParam("id"),
   eventController.getAskGiveBoard
 );
@@ -296,7 +318,7 @@ router.patch(
 router.get(
   "/:id/scripts",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireEventRoleOrAdmin("eventCoordinator", "guestManager"),
   validateObjectIdParam("id"),
   eventController.getScripts
 );
@@ -304,7 +326,7 @@ router.get(
 router.patch(
   "/:id/scripts/:segmentId",
   authMiddleware,
-  requireRole(ROLES.CENTRAL_ADMIN, ROLES.STATE_ADMIN, ROLES.CHAPTER_ADMIN),
+  requireEventRoleOrAdmin("eventCoordinator", "guestManager"),
   validateObjectIdParam("id"),
   eventController.updateScript
 );

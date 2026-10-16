@@ -24,12 +24,8 @@ export const DISPOSABLE_OR_DUMMY_DOMAINS = new Set([
 ]);
 
 export const DUMMY_USERNAMES = new Set([
-  "test",
-  "tester",
-  "testing",
   "dummy",
   "fake",
-  "sample",
   "asdf",
   "asdfgh",
   "qwerty",
@@ -95,7 +91,9 @@ export const validateLegitimateEmail = (email) => {
 };
 
 export const isValidEmail = (email) => {
-  return Boolean(email && validateLegitimateEmail(email).valid);
+  if (!email) return false;
+  const clean = typeof email === "string" ? email.trim() : String(email).trim();
+  return Boolean(clean && validateLegitimateEmail(clean).valid);
 };
 
 export const isValidPhone = (phone) => {
