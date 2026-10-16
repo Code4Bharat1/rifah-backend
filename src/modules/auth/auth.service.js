@@ -1386,6 +1386,9 @@ export const authService = {
     ) {
       try {
         isMatch = await comparePassword(password, user.passwordHash);
+        if (!isMatch && typeof password === "string" && password.trim() !== password) {
+          isMatch = await comparePassword(password.trim(), user.passwordHash);
+        }
       } catch (pwErr) {
         isMatch = false;
       }
