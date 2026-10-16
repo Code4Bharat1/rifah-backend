@@ -5,6 +5,7 @@ import { Event } from "./event.model.js";
 import { User } from "../users/user.model.js";
 import { env } from "../../config/env.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
@@ -917,6 +918,18 @@ export const eventService = {
             meetingLink: updatedEvent.meetingLink || "",
             isGuest: attendeeRole === "guest" || user?.role === "guest",
           });
+        }
+
+        if (user?.phone) {
+          whatsappService.sendEventTicket({
+            phone: user.phone,
+            userName: user.name,
+            eventTitle: updatedEvent.title,
+            eventDate: updatedEvent.date || "Upcoming Chamber Event",
+            location: updatedEvent.venue || updatedEvent.location || "Chamber Main Hall",
+            ticketId,
+            verificationUrl,
+          }).catch(waErr => console.error("[WHATSAPP EVENT TICKET ERROR]:", waErr?.message || waErr));
         }
 
         const dateCityInfo = [updatedEvent.date, updatedEvent.city].filter(Boolean).join(" • ");

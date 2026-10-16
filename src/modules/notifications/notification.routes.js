@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { notificationController } from "./notification.controller.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 import { authMiddleware } from "../../middleware/auth.middleware.js";
 import { requireRole } from "../../middleware/role.middleware.js";
 import { validateObjectIdParam } from "../../shared/validators/object-id.validation.js";
@@ -7,6 +8,7 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
+router.post("/test-whatsapp", notificationController.testWhatsApp);
 router.get("/", authMiddleware, notificationController.getMyNotifications);
 router.get("/me", authMiddleware, notificationController.getMyNotifications);
 router.patch("/:id/read", authMiddleware, validateObjectIdParam("id"), notificationController.markAsRead);

@@ -9,6 +9,7 @@ import { membershipService } from "../memberships/membership.service.js";
 import { Plan } from "../memberships/plan.model.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 import { generateReferenceId, generateSlug } from "../../shared/utils/generate-id.js";
 import { getNextInvoiceNumber } from "../../shared/utils/sequence-generator.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
@@ -422,6 +423,17 @@ async function fulfillPaymentOrder({
         }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
       }
 
+      const targetPhone = userDoc?.phone || businessDoc?.phone;
+      if (targetPhone && isMembership) {
+        whatsappService.sendPaymentReceipt({
+          phone: targetPhone,
+          userName: userDoc?.name || "Member",
+          amount: payment.amount,
+          purpose: membershipPlan?.name || "RIFAH Membership",
+          receiptNumber: payment.invoiceNumber,
+        }).catch((waErr) => logger.warn("[PAYMENT] Async WhatsApp invoice alert failed:", waErr?.message || waErr));
+      }
+
       // Notify chapter and country admins
       if (!isUserTier) {
         const bizChapter = (businessDoc?.chapter || userDoc?.chapter || "").trim();
@@ -664,7 +676,7 @@ export const paymentService = {
       throw new BadRequestError("Amount must be greater than zero to create a Stripe session");
     }
 
-    const origin = payload.origin || "http://localhost:3000";
+    const origin = payload.origin || env.FRONTEND_URL || "https://rifah.nexcorealliance.com";
     let successUrl = payload.successUrl;
     let cancelUrl = payload.cancelUrl;
 
@@ -1043,6 +1055,17 @@ export const paymentService = {
           transactionId: payment.transactionId,
           paymentMethod: data.method || "Online Transfer",
         }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
+      }
+
+      const targetPhoneManual = userDoc?.phone || businessDoc?.phone;
+      if (targetPhoneManual) {
+        whatsappService.sendPaymentReceipt({
+          phone: targetPhoneManual,
+          userName: userDoc?.name || "Member",
+          amount: payment.amount,
+          purpose: (data.itemType || "Membership").toUpperCase(),
+          receiptNumber: payment.invoiceNumber,
+        }).catch((waErr) => logger.warn("[PAYMENT] Async WhatsApp invoice alert failed:", waErr?.message || waErr));
       }
 
       // 1. Notify Chapter Admin of the specific Chapter only

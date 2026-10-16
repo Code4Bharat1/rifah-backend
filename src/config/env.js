@@ -28,7 +28,7 @@ export const env = {
     ORIGIN: process.env.CORS_ORIGIN || "http://localhost:3000",
   },
 
-  FRONTEND_URL: process.env.FRONTEND_URL || process.env.APP_URL || process.env.CORS_ORIGIN || "http://localhost:3000",
+  FRONTEND_URL: (process.env.FRONTEND_URL || process.env.APP_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, ""),
 
   RATE_LIMIT: {
     WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10),
@@ -86,6 +86,14 @@ export const env = {
     API_KEY: process.env.CLOUDINARY_API_KEY || "",
     API_SECRET: process.env.CLOUDINARY_API_SECRET || "",
     URL: process.env.CLOUDINARY_URL || "",
+  },
+
+  WHATSAPP: {
+    ENABLED: process.env.WHATSAPP_ENABLED === "true",
+    PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID || "",
+    BUSINESS_ACCOUNT_ID: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "",
+    ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN || "",
+    API_VERSION: process.env.WHATSAPP_API_VERSION || "v25.0",
   },
 
   isDevelopment: () => (process.env.NODE_ENV || "development") === "development",

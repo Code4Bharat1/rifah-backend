@@ -85,7 +85,7 @@ export const emailService = {
    */
   sendStateAdminInvite: async (email, password, stateName, adminName) => {
     const subject = `RIFAH Chamber: State Admin Access Credentials for ${stateName}`;
-    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/login`;
+    const portalUrl = `${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/login`;
 
     const text = `
 Dear ${adminName},
@@ -203,7 +203,7 @@ RIFAH Chamber of Commerce & Industry
    */
   sendStateAdminUpgradeEmail: async (email, stateName, adminName) => {
     const subject = `RIFAH Chamber: Appointment as State Admin for ${stateName}`;
-    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/login`;
+    const portalUrl = `${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/login`;
 
     const text = `
 Dear ${adminName},
@@ -289,7 +289,7 @@ RIFAH Chamber of Commerce & Industry
    */
   sendChapterAdminInvite: async (email, password, chapterName, adminName) => {
     const subject = `RIFAH Chamber: ${chapterName} Chapter Admin Credentials`;
-    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/login`;
+    const portalUrl = `${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/login`;
 
     const text = `
 Dear ${adminName},
@@ -397,7 +397,7 @@ RIFAH Chamber of Commerce & Industry
         <p>Congratulations! You have been appointed as the <strong>Chapter Admin</strong> for <strong>${chapterName}</strong>.</p>
         <p>Your login credentials (email and password) remain exactly the same. The next time you log in, you will have the option to log in as Chapter Admin or switch to your existing profile directly from your dashboard.</p>
         <div style="background-color: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
-          <p style="margin: 0 0 10px 0;"><strong>Portal:</strong> <a href="http://localhost:3000/login">http://localhost:3000/login</a></p>
+          <p style="margin: 0 0 10px 0;"><strong>Portal:</strong> <a href="${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/login">${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/login</a></p>
           <p style="margin: 0 0 10px 0;"><strong>Email:</strong> ${email}</p>
         </div>
         <p style="color: #64748b; font-size: 14px;">You can now manage your chapter's members, businesses, events, and announcements.</p>
@@ -454,7 +454,7 @@ RIFAH Chamber of Commerce & Industry
    */
   sendMemberInvite: async (email, chapterName, adminName) => {
     const subject = `Invitation to join RIFAH Chamber: ${chapterName}`;
-    const registrationLink = `http://localhost:3000/register?chapter=${encodeURIComponent(chapterName)}`;
+    const registrationLink = `${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/register?chapter=${encodeURIComponent(chapterName)}`;
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #0284c7;">You are invited to RIFAH Chamber of Commerce & Industry</h2>
@@ -508,7 +508,7 @@ RIFAH Chamber of Commerce & Industry
           </div>
 
           <div style="margin-top: 24px;">
-            <a href="http://localhost:3000/login" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Log In Now →</a>
+            <a href="${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/login" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Log In Now →</a>
           </div>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
           <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Administration</p>
@@ -545,7 +545,7 @@ RIFAH Chamber of Commerce & Industry
           <p style="color: #475569; font-size: 14px; line-height: 1.6;">Please log in to your account to review your business details and submit your verification documents for approval.</p>
           
           <div style="margin-top: 24px; text-align: center;">
-            <a href="http://localhost:3000/login" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 14px; text-decoration: none; padding: 12px 24px; border-radius: 8px;">Login to Dashboard</a>
+            <a href="${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/login" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 14px; text-decoration: none; padding: 12px 24px; border-radius: 8px;">Login to Dashboard</a>
           </div>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;" />
           <p style="color: #94a3b8; font-size: 12px; text-align: center; margin: 0;">If you have any questions, please contact the RIFAH Central Admin.</p>
@@ -837,7 +837,7 @@ RIFAH Chamber of Commerce & Industry
           </table>
 
           <div style="text-align: center; margin: 28px 0 10px 0;">
-            <a href="http://localhost:3000/admin/payments" style="display: inline-block; background-color: #0b192c; color: #ffffff; padding: 12px 28px; font-size: 13px; font-weight: 700; border-radius: 10px; text-decoration: none;">
+            <a href="${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/admin/payments" style="display: inline-block; background-color: #0b192c; color: #ffffff; padding: 12px 28px; font-size: 13px; font-weight: 700; border-radius: 10px; text-decoration: none;">
               Open Admin Payments Ledger →
             </a>
           </div>
@@ -879,7 +879,7 @@ RIFAH Chamber of Commerce & Industry
     const subject = businessName
       ? `🎉 Chamber of Commerce & Industry, ${businessName}!`
       : `Chamber of Commerce & Industry! 🎉`;
-    const portalUrl = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+    const portalUrl = (env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "");
 
     const html = `
       <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; background-color: #ffffff; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
@@ -967,7 +967,7 @@ RIFAH Chamber of Commerce & Industry
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
     const subject = `👋 New Member Alert: "${businessName}" has joined ${chapter || "your chapter"}!`;
-    const portalUrl = (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
+    const portalUrl = (env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "");
 
     const html = `
       <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 18px; overflow: hidden; background-color: #ffffff; box-shadow: 0 8px 20px rgba(0,0,0,0.04);">
@@ -1035,7 +1035,7 @@ RIFAH Chamber of Commerce & Industry
   }) => {
     const logoPath = "C:/Users/HP/OneDrive/Desktop/RIFAH/rifah-frontend/public/rifah1-logo.png";
     const hasLogo = fs.existsSync(logoPath);
-    const portalUrl = (env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "");
+    const portalUrl = (env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "");
     const subject = `📩 New Business Enquiry: ${enquiryTitle || "Direct Requirement"}`;
     const html = `
       <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
@@ -1108,7 +1108,7 @@ RIFAH Chamber of Commerce & Industry
           </div>
 
           <div style="margin-top: 24px;">
-            <a href="http://localhost:3000/biz/enquiries" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Lead & Send Quotation →</a>
+            <a href="${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/biz/enquiries" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">View Lead & Send Quotation →</a>
           </div>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
           <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · Lead Desk</p>
@@ -1225,7 +1225,7 @@ RIFAH Chamber of Commerce & Industry
       }
 
           <div style="margin-top: 24px; margin-bottom: 24px;">
-            <a href="http://localhost:3000/biz/verification" style="background-color: ${buttonBg}; color: #ffffff; padding: 13px 28px; border-radius: 10px; font-weight: 700; text-decoration: none; display: inline-block; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+            <a href="${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/biz/verification" style="background-color: ${buttonBg}; color: #ffffff; padding: 13px 28px; border-radius: 10px; font-weight: 700; text-decoration: none; display: inline-block; font-size: 14px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
               ${buttonText}
             </a>
           </div>
@@ -1521,7 +1521,7 @@ RIFAH Chamber of Commerce & Industry
           </p>
 
           <div style="margin-top: 24px; text-align: center;">
-            <a href="http://localhost:3000/events/${eventId}" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Pay Installment Online →</a>
+            <a href="${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/events/${eventId}" style="background-color: #0284c7; color: #ffffff; padding: 12px 28px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">Pay Installment Online →</a>
           </div>
           <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 28px 0 20px 0;" />
           <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">RIFAH Chamber of Commerce & Industry · International Delegations Desk</p>
@@ -1753,7 +1753,7 @@ RIFAH Chamber of Commerce & Industry
     const subject = `🎉 Happy Birthday from RIFAH Chamber of Commerce! 🎂`;
     const logoPath = path.join(process.cwd(), "public", "rifah1-logo.png");
     const hasLogo = fs.existsSync(logoPath);
-    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/biz`;
+    const portalUrl = `${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/biz`;
 
     const html = `
       <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
@@ -1810,7 +1810,7 @@ RIFAH Chamber of Commerce & Industry
     const subject = `🎉 Happy ${ordinal} Anniversary with RIFAH Chamber of Commerce! 🎊`;
     const logoPath = path.join(process.cwd(), "public", "rifah1-logo.png");
     const hasLogo = fs.existsSync(logoPath);
-    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/biz`;
+    const portalUrl = `${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/biz`;
 
     const html = `
       <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
@@ -1887,7 +1887,7 @@ RIFAH Chamber of Commerce & Industry
 
     const logoPath = path.join(process.cwd(), "public", "rifah1-logo.png");
     const hasLogo = fs.existsSync(logoPath);
-    const portalUrl = `${(env.CORS?.ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/biz/membership`;
+    const portalUrl = `${(env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "")}/biz/membership`;
 
     const formattedDate = endDate
       ? new Date(endDate).toLocaleDateString("en-IN", {

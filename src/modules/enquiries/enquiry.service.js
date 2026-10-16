@@ -3,6 +3,7 @@ import { Business } from "../businesses/business.model.js";
 import { User } from "../users/user.model.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 import { generateReferenceId } from "../../shared/utils/generate-id.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../../shared/errors/errors.js";
@@ -199,6 +200,18 @@ export const enquiryService = {
               buyerPhone: enquiry.guestPhone || (user?.phone) || "",
               description: enquiry.description,
             });
+          }
+
+          const targetPhone = targetBiz.phone || ownerUser?.phone;
+          if (targetPhone) {
+            whatsappService.sendNewEnquiry({
+              phone: targetPhone,
+              ownerName,
+              enquiryTitle: enquiry.title,
+              buyerName: enquiry.requesterName || enquiry.guestName || "Prospective Buyer",
+              buyerPhone: enquiry.guestPhone || (user?.phone) || "",
+              message: enquiry.description,
+            }).catch(waErr => console.error("[WHATSAPP ENQUIRY ALERT ERROR]:", waErr?.message || waErr));
           }
 
           const { leadService } = await import("../leads/lead.service.js");

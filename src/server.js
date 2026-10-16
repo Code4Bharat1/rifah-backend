@@ -15,12 +15,15 @@ import dns from "dns";
 import cluster from "node:cluster";
 import os from "node:os";
 dns.setDefaultResultOrder("ipv4first");
+
 try {
   dns.setServers(["8.8.8.8", "1.1.1.1"]);
 } catch (dnsErr) {
   // fallback to system resolver
 }
+
 let server;
+// Reload trigger for WhatsApp Cloud API integration
 
 
 const ensureChapters = async () => {

@@ -2,6 +2,7 @@ import { User } from "../users/user.model.js";
 import { Business } from "../businesses/business.model.js";
 import { Message } from "../messages/message.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
 
@@ -141,6 +142,16 @@ export const birthdayService = {
           link: "/biz",
         });
 
+        const targetPhone = userDoc?.phone || myBiz?.phone;
+        if (targetPhone) {
+          whatsappService.sendBirthdayWish({
+            phone: targetPhone,
+            name: userDoc.name,
+            businessName: myBiz?.name || "",
+            chapter: effectiveChapter,
+          }).catch((waErr) => logger.warn("[WHATSAPP BIRTHDAY ERROR]", waErr?.message || waErr));
+        }
+
         userDoc.lastBirthdayWishYear = getCurrentYear(effectiveTimezone);
         await userDoc.save();
         logger.info(`[BIRTHDAY EMAIL & NOTIFICATION SENT LIVE] To: ${userDoc.email}`);
@@ -266,6 +277,16 @@ export const birthdayService = {
             body: "RIFAH Chamber of Commerce wishes you continued success, good health and many more milestones ahead.",
             link: "/biz",
           });
+
+          const targetPhone = user?.phone || biz?.phone;
+          if (targetPhone) {
+            whatsappService.sendBirthdayWish({
+              phone: targetPhone,
+              name: user.name,
+              businessName: biz?.name || "",
+              chapter: user.chapter || "",
+            }).catch((waErr) => logger.warn("[WHATSAPP CRON BIRTHDAY ERROR]", waErr?.message || waErr));
+          }
 
           user.lastBirthdayWishYear = currentYear;
           await user.save();

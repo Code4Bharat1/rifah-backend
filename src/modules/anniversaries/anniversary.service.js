@@ -5,6 +5,7 @@ import { Message } from "../messages/message.model.js";
 import { hashPassword } from "../../infrastructure/auth/password.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
 
@@ -187,6 +188,17 @@ export const anniversaryService = {
           link: "/biz",
         });
 
+        const targetPhone = userDoc?.phone || myBiz?.phone;
+        if (targetPhone) {
+          whatsappService.sendAnniversaryWish({
+            phone: targetPhone,
+            name: userDoc.name,
+            businessName: myBiz?.name || "",
+            years: selfYearsCompleted,
+            chapter: effectiveChapter,
+          }).catch((waErr) => logger.warn("[WHATSAPP ANNIVERSARY ERROR]", waErr?.message || waErr));
+        }
+
         userDoc.lastAnniversaryWishYear = currentYr;
         await userDoc.save();
 
@@ -321,6 +333,17 @@ export const anniversaryService = {
                 body: `Congratulations on completing ${yearsCompleted} year${yearsCompleted > 1 ? "s" : ""} with RIFAH Chamber of Commerce & Industry. Together for a brighter tomorrow!`,
                 link: "/biz",
               });
+
+              const targetPhone = user?.phone || biz?.phone;
+              if (targetPhone) {
+                whatsappService.sendAnniversaryWish({
+                  phone: targetPhone,
+                  name: user.name,
+                  businessName: biz.name,
+                  years: yearsCompleted,
+                  chapter: biz.chapter || "",
+                }).catch((waErr) => logger.warn("[WHATSAPP CRON ANNIVERSARY ERROR]", waErr?.message || waErr));
+              }
 
               user.lastAnniversaryWishYear = currentYear;
               await user.save();

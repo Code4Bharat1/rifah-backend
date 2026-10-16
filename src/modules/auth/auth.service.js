@@ -37,6 +37,7 @@ import { OAuth2Client } from "google-auth-library";
 import { env } from "../../config/env.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { resolveChapterIdByName } from "../../shared/utils/chapter-scope.js";
+import { validateLegitimateEmail } from "../../shared/validators/common.validation.js";
 
 const googleClient = new OAuth2Client(env.GOOGLE.CLIENT_ID || undefined);
 
@@ -471,6 +472,17 @@ export const authService = {
     }
     const cleanEmail = email.toLowerCase().trim();
 
+    // Check if legitimate / non-dummy email
+    const legCheck = validateLegitimateEmail(cleanEmail);
+    if (!legCheck.valid) {
+      return {
+        available: false,
+        exists: false,
+        hasBusiness: false,
+        message: legCheck.message,
+      };
+    }
+
     // 1. Check if an account already exists with this email
     const existingUser = await User.findOne({ email: cleanEmail })
       .select("_id")
@@ -525,6 +537,12 @@ export const authService = {
       throw new BadRequestError("A valid email address is required");
     }
     const cleanEmail = email.toLowerCase().trim();
+
+    // Prevent OTP sending to dummy, fake, or disposable email addresses
+    const legCheck = validateLegitimateEmail(cleanEmail);
+    if (!legCheck.valid) {
+      throw new BadRequestError(legCheck.message);
+    }
 
     // Check if user already exists
     const existing = await User.findOne({ email: cleanEmail });
@@ -623,6 +641,7 @@ export const authService = {
       valid: true,
       message: "Email verified successfully.",
       verifiedToken,
+      email: cleanEmail,
     };
   },
 
