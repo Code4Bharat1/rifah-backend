@@ -14,6 +14,11 @@ export const validateRegister = (data = {}) => {
   if (data.phone !== undefined && data.phone !== "" && !isValidPhone(data.phone)) {
     errors.push({ field: "phone", message: "Enter a valid phone number" });
   }
+  if (!data.isGuestCheckout && !data.businessId && !data.membershipId) {
+    if (!data.businessName || typeof data.businessName !== "string" || data.businessName.trim().length < 2) {
+      errors.push({ field: "businessName", message: "Business / Organization name is required (at least 2 characters)" });
+    }
+  }
   return { valid: errors.length === 0, errors };
 };
 
