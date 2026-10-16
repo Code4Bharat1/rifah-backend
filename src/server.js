@@ -15,7 +15,11 @@ import dns from "dns";
 import cluster from "node:cluster";
 import os from "node:os";
 dns.setDefaultResultOrder("ipv4first");
-dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch (dnsErr) {
+  // fallback to system resolver
+}
 let server;
 
 
@@ -121,31 +125,34 @@ const startServer = async () => {
     // 1. Connect to MongoDB
     await connectDatabase();
 
-    // 1.1 Ensure Categories & Subcategories are populated (500+ items)
-    await seedInitialCategories();
+    // 2. Start HTTP Server immediately so port 5000 is open in < 1 second!
+    server = app.listen(env.PORT, "0.0.0.0", () => {
+      logger.info(`Port:${env.PORT}`);
+      logger.info(`Health Check: http://localhost:${env.PORT}/health`);
+    });
 
-    // 1.2 Ensure test chapters across multiple states exist
-    await ensureChapters();
+    // 3. Initialize Socket.io Server
+    initSocket(server);
 
-    // 1.3 Ensure businesses and payments use latest RCCI/{STATE}/0001 and RCCI/{FY}/0001 formats
-    await migrateExistingFormats();
+    // 4. Run background seeders and format migrations asynchronously without blocking port availability
+    (async () => {
+      try {
+        await seedInitialCategories();
+        await ensureChapters();
+        await migrateExistingFormats();
+        try {
+          await anniversaryService.cleanAnniversaryTestData();
+          await anniversaryService.seedAnniversaryTestData({ chapter: "Mumbai" });
+        } catch (err) {
+          logger.warn("[ANNIVERSARY SEED ERROR] Skipping demo data:", err?.message || err);
+        }
+        logger.info("[STARTUP] Background seeds and format checks completed.");
+      } catch (bgErr) {
+        logger.warn("[BACKGROUND INIT NOTICE]", bgErr?.message || bgErr);
+      }
+    })();
 
-    // BUG-057: demo/fixture data for the Anniversary feature — not required for the
-    // server to function, so (like ensureChapters above) a failure here must only be
-    // logged, never take the whole API down via the catch block's process.exit(1)
-    // below. This previously crashed boot outright on an E11000 duplicate-key error
-    // (see anniversary.service.js for the underlying race-condition fix).
-    try {
-      // 1.4 Clean up any seeded Anniversary Test Data
-      await anniversaryService.cleanAnniversaryTestData();
-
-      // 1.3 Ensure Anniversary Test Data
-      await anniversaryService.seedAnniversaryTestData({ chapter: "Mumbai" });
-    } catch (err) {
-      logger.error("[ANNIVERSARY SEED ERROR] Skipping demo data, server will continue starting:", err);
-    }
-
-    // 2. Start Scheduled Background Tasks (Only run schedulers on primary worker to prevent duplicate jobs)
+    // 5. Start Scheduled Background Tasks (Only run schedulers on primary worker to prevent duplicate jobs)
     const isPrimaryWorker = !cluster.isWorker || cluster.worker?.id === 1;
     if (isPrimaryWorker) {
       logger.info("[SCHEDULER] Primary worker initialized background schedulers.");
@@ -164,15 +171,6 @@ const startServer = async () => {
         }
       }, 1000 * 60 * 60); // Once every 1 hour
     }
-
-    // 3. Start HTTP Server
-    server = app.listen(env.PORT, "0.0.0.0", () => {
-      logger.info(`Port:${env.PORT}`);
-      logger.info(`Health Check: http://localhost:${env.PORT}/health`);
-    });
-
-    // 3. Initialize Socket.io Server
-    initSocket(server);
   } catch (error) {
     logger.error("Failed to start server:", error);
     process.exit(1);

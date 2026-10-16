@@ -8,13 +8,41 @@ import { revenueShareService } from "../revenue-sharing/revenueShare.service.js"
 import { logger } from "../../infrastructure/logger/logger.js";
 import { getChapterCode, getStateCode } from "../../shared/utils/sequence-generator.js";
 
+function normalizeInvoiceNumber(input) {
+  if (!input || typeof input !== "string") return "";
+  let clean = input.trim();
+  try {
+    clean = decodeURIComponent(clean).trim();
+  } catch (_) {}
+
+  // Strip URL prefix if full URL was passed
+  if (clean.includes("/verify/invoice/")) {
+    const parts = clean.split("/verify/invoice/");
+    if (parts.length > 1) {
+      clean = parts[1].trim();
+    }
+  }
+
+  // Strip query string if any (?token=...)
+  if (clean.includes("?")) {
+    clean = clean.split("?")[0].trim();
+  }
+
+  // Strip leading hash if present (#RCCI/...)
+  clean = clean.replace(/^#+/, "").trim();
+  // Strip leading/trailing slashes
+  clean = clean.replace(/^\/+|\/+$/g, "").trim();
+  return clean;
+}
+
 export const invoiceService = {
   /**
    * Public Secure Verification for an Official RIFAH Payment Invoice
    * Never exposes internal database IDs, passwords, API keys or sensitive billing info.
    */
   verifyInvoice: async (invoiceNumber, token = null) => {
-    if (!invoiceNumber || typeof invoiceNumber !== "string") {
+    const cleanInvoiceNumber = normalizeInvoiceNumber(invoiceNumber);
+    if (!cleanInvoiceNumber) {
       return {
         verified: false,
         error: "INVALID_REQUEST",
@@ -22,12 +50,12 @@ export const invoiceService = {
       };
     }
 
-    const cleanInvoiceNumber = invoiceNumber.trim();
     const escaped = cleanInvoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const payment = await Payment.findOne({
       $or: [
         { invoiceNumber: cleanInvoiceNumber },
-        { invoiceNumber: { $regex: new RegExp(`^${escaped}$`, "i") } },
+        { invoiceNumber: `#${cleanInvoiceNumber}` },
+        { invoiceNumber: { $regex: new RegExp(`^#?${escaped}$`, "i") } },
       ],
     })
       .populate("payer", "name email phone chapter state membershipId subscriberTier businessName")
@@ -42,8 +70,10 @@ export const invoiceService = {
     }
 
     // Ensure legacy payment has a verificationToken
+    let isNewlyGeneratedToken = false;
     if (!payment.verificationToken) {
       payment.verificationToken = crypto.randomBytes(24).toString("hex");
+      isNewlyGeneratedToken = true;
       await payment.save();
     }
 
@@ -61,8 +91,8 @@ export const invoiceService = {
     }
 
     // Validate verification token if passed
-    if (token && token.trim()) {
-      if (payment.verificationToken !== token.trim()) {
+    if (token && token.trim() && !isNewlyGeneratedToken) {
+      if (payment.verificationToken && payment.verificationToken.trim() && payment.verificationToken.trim() !== token.trim()) {
         return {
           verified: false,
           error: "INVALID_TOKEN",
@@ -157,12 +187,13 @@ export const invoiceService = {
    * Secure PDF Buffer Retrieval for Verified Invoices
    */
   getInvoicePdf: async (invoiceNumber, token = null) => {
-    const cleanInvoiceNumber = invoiceNumber.trim();
+    const cleanInvoiceNumber = normalizeInvoiceNumber(invoiceNumber);
     const escaped = cleanInvoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const payment = await Payment.findOne({
       $or: [
         { invoiceNumber: cleanInvoiceNumber },
-        { invoiceNumber: { $regex: new RegExp(`^${escaped}$`, "i") } },
+        { invoiceNumber: `#${cleanInvoiceNumber}` },
+        { invoiceNumber: { $regex: new RegExp(`^#?${escaped}$`, "i") } },
       ],
     })
       .populate("payer", "name email phone chapter state membershipId subscriberTier businessName")
@@ -203,12 +234,13 @@ export const invoiceService = {
    * Admin Revocation of an Invoice
    */
   revokeInvoice: async (invoiceNumber, reason, revokedByUserId) => {
-    const cleanInvoiceNumber = (invoiceNumber || "").trim();
+    const cleanInvoiceNumber = normalizeInvoiceNumber(invoiceNumber);
     const escaped = cleanInvoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const payment = await Payment.findOne({
       $or: [
         { invoiceNumber: cleanInvoiceNumber },
-        { invoiceNumber: { $regex: new RegExp(`^${escaped}$`, "i") } },
+        { invoiceNumber: `#${cleanInvoiceNumber}` },
+        { invoiceNumber: { $regex: new RegExp(`^#?${escaped}$`, "i") } },
       ],
     });
 
