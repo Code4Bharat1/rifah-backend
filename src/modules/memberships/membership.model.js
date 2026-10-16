@@ -71,5 +71,11 @@ const membershipSchema = new mongoose.Schema(
   }
 );
 
+// `endDate` backs the hourly membership-expiry scheduler's full-collection scan
+// (membership.service.js) and `{business,status}` backs the common "is this business's
+// membership active" lookup — neither had an index before.
+membershipSchema.index({ endDate: 1 });
+membershipSchema.index({ business: 1, status: 1 });
+
 export const Membership = mongoose.model("Membership", membershipSchema);
 export default Membership;

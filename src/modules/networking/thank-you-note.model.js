@@ -27,6 +27,8 @@ const thankYouNoteSchema = new mongoose.Schema(
 
 thankYouNoteSchema.index({ giverState: 1 });
 thankYouNoteSchema.index({ receiverState: 1 });
+thankYouNoteSchema.index({ giverBusiness: 1 });
+thankYouNoteSchema.index({ receiverBusiness: 1 });
 
 export const ThankYouNote = mongoose.model("ThankYouNote", thankYouNoteSchema);
 export default ThankYouNote;

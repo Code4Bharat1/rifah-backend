@@ -950,7 +950,10 @@ export const eventService = {
       throw new NotFoundError("Event not found or you don't have permission to view registrations");
     }
 
-    const registrations = [];
+    // Resolve every entry's userId first, then fetch all Users and all Businesses in two
+    // batched queries instead of 2 sequential queries per attendee (was an N+1: 2×N
+    // round-trips for an event with N registrations).
+    const parsedEntries = [];
     for (const entry of (event.registeredUsers || [])) {
       // Handle all possible formats: plain string, ObjectId, or { user: ObjectId }
       let userId;
@@ -971,11 +974,23 @@ export const eventService = {
       }
 
       if (!userId) continue;
+      parsedEntries.push({ entry, userId, registeredAt, status, _id, gateStatus });
+    }
 
-      const userData = await User.findById(userId).select("name email phone role chapter businessName").lean();
-      const BusinessModel = mongoose.model("Business");
-      const business = await BusinessModel.findOne({ owner: userId }).lean();
-      
+    const userIds = parsedEntries.map((p) => p.userId);
+    const BusinessModel = mongoose.model("Business");
+    const [users, businesses] = await Promise.all([
+      User.find({ _id: { $in: userIds } }).select("name email phone role chapter businessName").lean(),
+      BusinessModel.find({ owner: { $in: userIds } }).lean(),
+    ]);
+    const userMap = new Map(users.map((u) => [String(u._id), u]));
+    const businessMap = new Map(businesses.map((b) => [String(b.owner), b]));
+
+    const registrations = [];
+    for (const { entry, userId, registeredAt, status, _id, gateStatus } of parsedEntries) {
+      const userData = userMap.get(String(userId)) || null;
+      const business = businessMap.get(String(userId)) || null;
+
       let computedRole = "guest";
       if (userData && userData.role !== "customer") {
         if (business) {

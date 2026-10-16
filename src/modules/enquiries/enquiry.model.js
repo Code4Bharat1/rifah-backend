@@ -156,5 +156,10 @@ const enquirySchema = new mongoose.Schema(
   }
 );
 
+// Compound indexes for the admin queue/dashboard filter+sort combos — the existing
+// single-field indexes on chapterId/targetBusiness/status don't combine efficiently.
+enquirySchema.index({ chapterId: 1, status: 1, createdAt: -1 });
+enquirySchema.index({ targetBusiness: 1, status: 1 });
+
 export const Enquiry = mongoose.model("Enquiry", enquirySchema);
 export default Enquiry;

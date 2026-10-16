@@ -27,6 +27,8 @@ const oneToOneSchema = new mongoose.Schema(
 
 oneToOneSchema.index({ initiatorState: 1 });
 oneToOneSchema.index({ memberState: 1 });
+oneToOneSchema.index({ initiatorBusiness: 1 });
+oneToOneSchema.index({ memberBusiness: 1 });
 
 export const OneToOne = mongoose.model("OneToOne", oneToOneSchema);
 export default OneToOne;

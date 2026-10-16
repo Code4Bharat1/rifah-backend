@@ -35,35 +35,48 @@ export const leadService = {
       }
     }
 
-    const createdLeads = [];
-    for (const businessId of businessIds) {
-      const existing = await Lead.findOne({ enquiry: enquiryId, business: businessId });
-      if (!existing) {
-        const lead = await Lead.create({
+    // Batched instead of a per-business findOne+create+findById loop (was 3 sequential
+    // queries × N businesses): one query to find which businesses already have a lead for
+    // this enquiry, one bulk insert for the rest, one batched business lookup for the
+    // owner-notification step.
+    const existingLeads = await Lead.find({
+      enquiry: enquiryId,
+      business: { $in: businessIds },
+    }).select("business");
+    const alreadyRouted = new Set(existingLeads.map((l) => String(l.business)));
+    const newBusinessIds = businessIds.filter((id) => !alreadyRouted.has(String(id)));
+
+    let createdLeads = [];
+    if (newBusinessIds.length > 0) {
+      createdLeads = await Lead.insertMany(
+        newBusinessIds.map((businessId) => ({
           enquiry: enquiryId,
           business: businessId,
           status: "New",
-        });
-        createdLeads.push(lead);
+        }))
+      );
 
-        try {
-          const biz = await Business.findById(businessId);
-          if (biz) {
-            // Notify Business Owner in-app (portal notification only, email disabled for general leads)
-            if (biz.owner) {
-              await notificationService.createNotification({
-                recipientId: biz.owner,
+      try {
+        const businesses = await Business.find({ _id: { $in: newBusinessIds } }).select("owner");
+        const businessMap = new Map(businesses.map((b) => [String(b._id), b]));
+        // allSettled, not all: one lead's notification failing must not be reported as
+        // affecting the others, matching the original per-business try/catch isolation.
+        await Promise.allSettled(
+          createdLeads
+            .filter((lead) => businessMap.get(String(lead.business))?.owner)
+            .map((lead) =>
+              notificationService.createNotification({
+                recipientId: businessMap.get(String(lead.business)).owner,
                 type: "Lead",
                 title: "New Lead Assigned",
                 body: `You have received a new lead matching your business: "${enquiry.title}".`,
                 link: "/biz/enquiries",
-                entityId: lead._id
-              });
-            }
-          }
-        } catch (err) {
-          console.error("Error sending lead notification:", err);
-        }
+                entityId: lead._id,
+              })
+            )
+        );
+      } catch (err) {
+        console.error("Error sending lead notification:", err);
       }
     }
 

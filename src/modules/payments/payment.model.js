@@ -192,5 +192,13 @@ const paymentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Compound indexes for the actual admin/report filter+sort combos (business ledger,
+// payer history, chapter revenue reports by date) — the existing single-field indexes
+// above don't combine efficiently for these multi-predicate queries at scale.
+paymentSchema.index({ business: 1, status: 1 });
+paymentSchema.index({ payer: 1, createdAt: -1 });
+paymentSchema.index({ chapter: 1, status: 1, createdAt: -1 });
+paymentSchema.index({ paidAt: 1 });
+
 export const Payment = mongoose.model("Payment", paymentSchema);
 export default Payment;

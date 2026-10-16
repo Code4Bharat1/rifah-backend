@@ -120,5 +120,8 @@ followupSchema.index({ type: 1, status: 1 });
 followupSchema.index({ event: 1 });
 followupSchema.index({ chapter: 1 });
 followupSchema.index({ mobile: 1 });
+followupSchema.index({ user: 1 });
+followupSchema.index({ business: 1 });
+followupSchema.index({ nextFollowUpAt: 1 });
 
 export const Followup = mongoose.model("Followup", followupSchema);

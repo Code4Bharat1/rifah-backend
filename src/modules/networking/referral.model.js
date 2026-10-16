@@ -30,6 +30,8 @@ const referralSchema = new mongoose.Schema(
 
 referralSchema.index({ referrerState: 1 });
 referralSchema.index({ referredState: 1 });
+referralSchema.index({ referrerBusiness: 1 });
+referralSchema.index({ referredBusiness: 1 });
 
 export const Referral = mongoose.model("Referral", referralSchema);
 export default Referral;

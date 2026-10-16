@@ -52,6 +52,16 @@ export const initSocket = (httpServer) => {
         lastProjectorState.set(room, merged);
         socket.to(room).emit("projector:update", data);
         logger.info(`Socket ${socket.id} broadcasted projector update to ${room}`);
+
+        // Under clustering, the admin's socket and a projector's socket can land on
+        // different worker processes (no sticky session guarantee), and socket.to(room)
+        // only reaches sockets on THIS worker. Relay over the same cluster IPC channel
+        // emitToUser already uses, so sibling workers' projector sockets get it too.
+        if (process.send) {
+          try {
+            process.send({ type: "SOCKET_IPC_BROADCAST", room, event: "projector:update", payload: data });
+          } catch {}
+        }
       }
     });
 
@@ -88,6 +98,13 @@ export const initSocket = (httpServer) => {
         if (msg.userId) {
           io.to(String(msg.userId)).emit(msg.event, msg.payload);
         } else if (msg.room) {
+          // Keep this worker's own replay cache in sync too, so a projector socket that
+          // reconnects and lands on THIS worker (no sticky session guarantee) still gets
+          // the latest state, not just whichever worker last saw it directly.
+          if (msg.event === "projector:update") {
+            const merged = { ...(lastProjectorState.get(msg.room) || {}), ...msg.payload };
+            lastProjectorState.set(msg.room, merged);
+          }
           io.to(msg.room).emit(msg.event, msg.payload);
         } else {
           io.emit(msg.event, msg.payload);

@@ -61,5 +61,11 @@ const auditSchema = new mongoose.Schema(
   }
 );
 
+// This is a high-write collection (one row per admin action); pulling one entity's
+// history (targetModel+targetId) or the recent log view (createdAt) previously had no
+// supporting index at all.
+auditSchema.index({ targetModel: 1, targetId: 1, createdAt: -1 });
+auditSchema.index({ createdAt: -1 });
+
 export const Audit = mongoose.model("Audit", auditSchema);
 export default Audit;
