@@ -10,7 +10,7 @@ class GoogleDriveService {
   constructor() {
     this.clientId = env.GOOGLE.DRIVE_CLIENT_ID || env.GOOGLE.CLIENT_ID;
     this.clientSecret = env.GOOGLE.DRIVE_CLIENT_SECRET || env.GOOGLE.CLIENT_SECRET;
-    this.redirectUri = env.GOOGLE.DRIVE_REDIRECT_URI || "http://localhost:5000/api/v1/google-drive/oauth-callback";
+    this.redirectUri = env.GOOGLE.DRIVE_REDIRECT_URI || env.GOOGLE.REDIRECT_URI || "http://localhost:5000/api/v1/events/google/oauth-callback";
   }
 
   /**
@@ -75,8 +75,8 @@ class GoogleDriveService {
   /**
    * Exchanges authorization code for tokens
    */
-  async exchangeCodeForTokens(code) {
-    const oauth2Client = this.getOAuthClient();
+  async exchangeCodeForTokens(code, customRedirectUri = null) {
+    const oauth2Client = this.getOAuthClient(customRedirectUri);
     if (!oauth2Client) {
       throw new Error("Google OAuth client is not configured");
     }

@@ -39,6 +39,7 @@ import { env } from "../../config/env.js";
 import { generateSlug } from "../../shared/utils/generate-id.js";
 import { resolveChapterIdByName } from "../../shared/utils/chapter-scope.js";
 import { validateLegitimateEmail } from "../../shared/validators/common.validation.js";
+import { googleDriveSyncService } from "../google-drive/google-drive-sync.service.js";
 
 const googleClient = new OAuth2Client(env.GOOGLE.CLIENT_ID || undefined);
 
@@ -481,6 +482,11 @@ export const authService = {
 
     const accessToken = signAccessToken(tokenPayload);
     const refreshToken = signRefreshToken(tokenPayload);
+
+    // Automatically queue debounced Google Drive sync for Users spreadsheet
+    try {
+      googleDriveSyncService.queueSync("users");
+    } catch (_) {}
 
     return { user, accessToken, refreshToken };
   },
@@ -1317,6 +1323,12 @@ export const authService = {
 
     const accessToken = signAccessToken(tokenPayload);
     const refreshToken = signRefreshToken(tokenPayload);
+
+    // Automatically queue debounced Google Drive sync for Users and Businesses spreadsheets
+    try {
+      googleDriveSyncService.queueSync("users");
+      googleDriveSyncService.queueSync("businesses");
+    } catch (_) {}
 
     return {
       user,

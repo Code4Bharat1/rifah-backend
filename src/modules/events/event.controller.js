@@ -6,6 +6,7 @@ import { storageService } from "../../infrastructure/storage/storage.service.js"
 import { pdfService } from "../../infrastructure/pdf/pdf.service.js";
 
 import { auditService } from "../audit/audit.service.js";
+import { googleDriveController } from "../google-drive/google-drive.controller.js";
 
 export const eventController = {
   listEvents: asyncHandler(async (req, res) => {
@@ -55,12 +56,12 @@ export const eventController = {
     if (!paymentId) {
       return ApiResponse.error(res, "Payment details are required for paid events", 400);
     }
-    const event = await eventService.registerUserForEvent(id, req.user.id, { 
-      paymentId, 
-      transactionId, 
-      amount, 
-      baseAmount, 
-      gstAmount 
+    const event = await eventService.registerUserForEvent(id, req.user.id, {
+      paymentId,
+      transactionId,
+      amount,
+      baseAmount,
+      gstAmount
     });
     return ApiResponse.success(res, event, "Paid registration for event successful");
   }),
@@ -150,7 +151,7 @@ export const eventController = {
       return ApiResponse.error(res, "No image uploaded", 400);
     }
     const slot = req.body?.slot === "logo" ? "logo" : req.body?.slot === "2" ? "2" : "1";
-    
+
     let field;
     if (slot === "logo") field = "logoImage";
     else if (slot === "2") field = "signatory2Image";
@@ -394,7 +395,7 @@ export const eventController = {
       "Content-Disposition": `inline; filename="Certificate-${attendeeName.replace(/\s+/g, '_')}.pdf"`,
       "Content-Length": pdfBuffer.length
     });
-    
+
     res.end(pdfBuffer);
   }),
 
@@ -444,7 +445,14 @@ export const eventController = {
   }),
 
   handleGoogleMeetCallback: asyncHandler(async (req, res) => {
-    const { code } = req.query;
+    const { code, state } = req.query;
+
+    // Check if this callback was initiated by Google Drive
+    if (state && (state.startsWith("rifah-") || state.includes("drive"))) {
+      req.customRedirectUri = "http://localhost:5000/api/v1/events/google/oauth-callback";
+      return googleDriveController.handleOAuthCallback(req, res);
+    }
+
     if (!code) {
       return res.status(400).send("<h3>Authorization code missing</h3>");
     }

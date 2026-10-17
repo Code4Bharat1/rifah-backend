@@ -6,6 +6,7 @@ import { ERROR_CODES } from "../../shared/errors/error-codes.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
+import { googleDriveSyncService } from "../google-drive/google-drive-sync.service.js";
 
 export const userService = {
   /**
@@ -91,6 +92,11 @@ export const userService = {
         console.error("[USER SERVICE] Failed to sync business subscriberTier:", err);
       }
     }
+
+    // Automatically queue debounced Google Drive sync for Users spreadsheet
+    try {
+      googleDriveSyncService.queueSync("users");
+    } catch (_) {}
 
     return updatedUser;
   },
