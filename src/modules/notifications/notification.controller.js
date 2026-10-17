@@ -19,13 +19,12 @@ export const notificationController = {
   }),
 
   restartWhatsApp: asyncHandler(async (req, res) => {
-    try {
-      await whatsappService.reconnect();
-    } catch (err) {
+    whatsappService.reconnect().catch((err) => {
       console.error("[WHATSAPP RESTART ERROR]:", err?.message || err);
-    }
+    });
+    await new Promise((r) => setTimeout(r, 2000));
     const status = whatsappService.getStatus();
-    return ApiResponse.success(res, status, "WhatsApp reconnection attempted");
+    return ApiResponse.success(res, status, "WhatsApp reconnection started");
   }),
 
   debugWhatsApp: asyncHandler(async (req, res) => {
