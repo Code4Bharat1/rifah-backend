@@ -56,6 +56,7 @@ export const googleDriveController = {
    * Generates Google OAuth authorization URL for Central Admin
    */
   getAuthUrl: asyncHandler(async (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     const authUrl = googleDriveService.getAuthUrl("rifah-admin-connect");
     return ApiResponse.success(res, { authUrl }, "Google Drive auth URL generated");
   }),
@@ -76,7 +77,12 @@ export const googleDriveController = {
     }
 
     try {
-      const { tokens, userInfo } = await googleDriveService.exchangeCodeForTokens(code);
+      const isEventsEndpoint = req.originalUrl?.includes("/events/google/oauth-callback") || req.customRedirectUri?.includes("/events/google/oauth-callback");
+      const effectiveRedirectUri = isEventsEndpoint
+        ? (env.GOOGLE.REDIRECT_URI || "http://localhost:5000/api/v1/events/google/oauth-callback")
+        : (env.GOOGLE.DRIVE_REDIRECT_URI || "http://localhost:5000/api/v1/google-drive/oauth-callback");
+
+      const { tokens, userInfo } = await googleDriveService.exchangeCodeForTokens(code, effectiveRedirectUri);
 
       const settings = await googleDriveSyncService.getSettings(true);
       settings.isConnected = true;
@@ -108,8 +114,8 @@ export const googleDriveController = {
       await settings.save();
 
       // Trigger initial permission reconciliation and full sync in background
-      googleDriveSyncService.reconcileAdminPermissions().catch(() => {});
-      googleDriveSyncService.fullSyncAll().catch(() => {});
+      googleDriveSyncService.reconcileAdminPermissions().catch(() => { });
+      googleDriveSyncService.fullSyncAll().catch(() => { });
 
       await auditService.logAction({
         actor: req.user || { name: "Central Admin", role: "central_admin" },
