@@ -67,9 +67,10 @@ export const validateLogin = (data = {}) => {
   return { valid: errors.length === 0, errors };
 };
 
-export const validateRefreshToken = (data = {}) => {
+export const validateRefreshToken = (data = {}, req) => {
   const errors = [];
-  if (!data.refreshToken || typeof data.refreshToken !== "string") {
+  const token = data.refreshToken || req?.cookies?.rifah_refresh_token;
+  if (!token || typeof token !== "string") {
     errors.push({ field: "refreshToken", message: "Refresh token is required" });
   }
   return { valid: errors.length === 0, errors };

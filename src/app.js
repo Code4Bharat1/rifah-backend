@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
+import cookieParser from "cookie-parser";
 import path from "path";
 import { fileURLToPath } from "url";
 import morgan from "morgan";
@@ -47,6 +48,7 @@ app.use(
   })
 );
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
 
 // NoSQL Query & Body Sanitization (Blocks MongoDB operator injections)
 app.use(mongoSanitizeMiddleware);

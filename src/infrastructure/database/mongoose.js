@@ -25,22 +25,6 @@ export const connectDatabase = async () => {
     return conn;
   } catch (error) {
     logger.error("MongoDB initial connection error:", error.message);
-
-    const localUri = "mongodb://127.0.0.1:27017/rifah_db";
-    if (databaseConfig.uri !== localUri) {
-      try {
-        logger.warn(`Attempting connection fallback to local MongoDB (${localUri})...`);
-        const fallbackConn = await mongoose.connect(localUri, {
-          ...databaseConfig.options,
-          serverSelectionTimeoutMS: 3000,
-        });
-        logger.info("Connected to local MongoDB successfully!");
-        return fallbackConn;
-      } catch (localErr) {
-        logger.error("Local MongoDB fallback also unavailable.");
-      }
-    }
-
     throw error;
   }
 };

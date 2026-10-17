@@ -13,7 +13,7 @@ export const env = {
   API_PREFIX: process.env.API_PREFIX || "/api/v1",
 
   DATABASE: {
-    URI: process.env.MONGODB_URI || "mongodb://localhost:27017/rifah_db",
+    URI: process.env.MONGODB_URI || "",
   },
 
   JWT: {
@@ -25,10 +25,10 @@ export const env = {
   },
 
   CORS: {
-    ORIGIN: process.env.CORS_ORIGIN || "http://localhost:3000",
+    ORIGIN: process.env.CORS_ORIGIN || "",
   },
 
-  FRONTEND_URL: (process.env.FRONTEND_URL || process.env.APP_URL || process.env.CORS_ORIGIN || "http://localhost:3000").replace(/\/$/, ""),
+  FRONTEND_URL: (process.env.FRONTEND_URL || process.env.APP_URL || process.env.CORS_ORIGIN || "").replace(/\/$/, ""),
 
   RATE_LIMIT: {
     WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10),
@@ -65,10 +65,10 @@ export const env = {
     CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
     MEET_REFRESH_TOKEN: process.env.GOOGLE_MEET_REFRESH_TOKEN || process.env.GOOGLE_REFRESH_TOKEN || "",
     MEET_API_KEY: process.env.GOOGLE_MEET_API_KEY || process.env.GOOGLE_CALENDAR_API_KEY || "",
-    REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || "http://localhost:5000/api/v1/events/google/oauth-callback",
+    REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || "",
     DRIVE_CLIENT_ID: process.env.GOOGLE_DRIVE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
     DRIVE_CLIENT_SECRET: process.env.GOOGLE_DRIVE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || "",
-    DRIVE_REDIRECT_URI: process.env.GOOGLE_DRIVE_REDIRECT_URI || "http://localhost:5000/api/v1/google-drive/oauth-callback",
+    DRIVE_REDIRECT_URI: process.env.GOOGLE_DRIVE_REDIRECT_URI || "",
   },
 
   GSTINAPI: {

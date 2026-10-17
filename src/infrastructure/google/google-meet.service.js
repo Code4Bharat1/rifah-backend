@@ -23,7 +23,7 @@ class GoogleMeetService {
   constructor() {
     this.clientId = env.GOOGLE.CLIENT_ID;
     this.clientSecret = env.GOOGLE.CLIENT_SECRET;
-    this.redirectUri = env.GOOGLE.REDIRECT_URI || "http://localhost:5000/api/v1/events/google/oauth-callback";
+    this.redirectUri = env.GOOGLE.REDIRECT_URI || "";
   }
 
   /**

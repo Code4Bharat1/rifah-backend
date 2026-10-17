@@ -449,7 +449,7 @@ export const eventController = {
 
     // Check if this callback was initiated by Google Drive
     if (state && (state.startsWith("rifah-") || state.includes("drive"))) {
-      req.customRedirectUri = "http://localhost:5000/api/v1/events/google/oauth-callback";
+      req.customRedirectUri = env.GOOGLE.REDIRECT_URI || "";
       return googleDriveController.handleOAuthCallback(req, res);
     }
 

@@ -79,8 +79,8 @@ export const googleDriveController = {
     try {
       const isEventsEndpoint = req.originalUrl?.includes("/events/google/oauth-callback") || req.customRedirectUri?.includes("/events/google/oauth-callback");
       const effectiveRedirectUri = isEventsEndpoint
-        ? (env.GOOGLE.REDIRECT_URI || "http://localhost:5000/api/v1/events/google/oauth-callback")
-        : (env.GOOGLE.DRIVE_REDIRECT_URI || "http://localhost:5000/api/v1/google-drive/oauth-callback");
+        ? (env.GOOGLE.REDIRECT_URI || "")
+        : (env.GOOGLE.DRIVE_REDIRECT_URI || "");
 
       const { tokens, userInfo } = await googleDriveService.exchangeCodeForTokens(code, effectiveRedirectUri);
 

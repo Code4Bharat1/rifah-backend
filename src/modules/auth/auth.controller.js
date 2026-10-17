@@ -3,6 +3,32 @@ import { storageService } from "../../infrastructure/storage/storage.service.js"
 import { asyncHandler } from "../../shared/utils/async-handler.js";
 import { ApiResponse } from "../../shared/utils/response.js";
 
+const getCookieOptions = () => {
+  const isProd = process.env.NODE_ENV === "production";
+  const options = {
+    httpOnly: true,
+    secure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === "true" : isProd,
+    sameSite: process.env.COOKIE_SAME_SITE || (isProd ? "none" : "lax"),
+    path: "/",
+  };
+  if (process.env.COOKIE_DOMAIN) {
+    options.domain = process.env.COOKIE_DOMAIN;
+  }
+  return options;
+};
+
+const setRefreshTokenCookie = (res, refreshToken) => {
+  if (!refreshToken) return;
+  res.cookie("rifah_refresh_token", refreshToken, {
+    ...getCookieOptions(),
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  });
+};
+
+const clearRefreshTokenCookie = (res) => {
+  res.clearCookie("rifah_refresh_token", getCookieOptions());
+};
+
 export const authController = {
   uploadRegistrationPhoto: asyncHandler(async (req, res) => {
     if (!req.file) {
@@ -14,22 +40,37 @@ export const authController = {
 
   register: asyncHandler(async (req, res) => {
     const result = await authService.register(req.body);
+    if (result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
     return ApiResponse.created(res, result, "Account registered successfully");
   }),
 
   registerBusiness: asyncHandler(async (req, res) => {
     const result = await authService.registerBusinessOwner(req.body);
+    if (result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
     return ApiResponse.created(res, result, "Business account registered successfully");
   }),
 
   login: asyncHandler(async (req, res) => {
     const result = await authService.login(req.body);
+    if (result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
     return ApiResponse.success(res, result, "Logged in successfully");
   }),
 
   refreshToken: asyncHandler(async (req, res) => {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies?.rifah_refresh_token || req.body?.refreshToken;
+    if (!refreshToken) {
+      return ApiResponse.unauthorized(res, "Refresh token is required");
+    }
     const result = await authService.refreshToken(refreshToken);
+    if (result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
     return ApiResponse.success(res, result, "Access token refreshed successfully");
   }),
 
@@ -37,6 +78,9 @@ export const authController = {
     const targetRole = req.body.targetRole || req.body.role;
     const targetWorkspaceId = req.body.targetWorkspaceId || null;
     const result = await authService.switchRole(req.user.id, targetRole, targetWorkspaceId);
+    if (result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
     return ApiResponse.success(res, result, "Role switched successfully");
   }),
 
@@ -51,13 +95,11 @@ export const authController = {
   }),
 
   logout: asyncHandler(async (req, res) => {
-    await authService.logout(req.user.id);
+    clearRefreshTokenCookie(res);
+    if (req.user?.id && typeof authService.logout === "function") {
+      await authService.logout(req.user.id);
+    }
     return ApiResponse.success(res, null, "Logged out successfully");
-  }),
-
-  changePassword: asyncHandler(async (req, res) => {
-    const result = await authService.changePassword(req.user.id, req.body);
-    return ApiResponse.success(res, result, "Password updated successfully");
   }),
 
   forgotPassword: asyncHandler(async (req, res) => {
@@ -78,6 +120,9 @@ export const authController = {
 
   googleAuth: asyncHandler(async (req, res) => {
     const result = await authService.googleAuth(req.body);
+    if (result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
     return ApiResponse.success(res, result, "Google authentication successful");
   }),
 
@@ -107,6 +152,9 @@ export const authController = {
   verifyLoginOtp: asyncHandler(async (req, res) => {
     const { email, otp } = req.body;
     const result = await authService.verifyLoginOtp({ email, otp });
+    if (result?.refreshToken) {
+      setRefreshTokenCookie(res, result.refreshToken);
+    }
     return ApiResponse.success(res, result, "Signed in successfully");
   }),
 

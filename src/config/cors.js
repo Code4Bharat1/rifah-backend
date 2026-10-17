@@ -5,16 +5,16 @@ export const corsConfig = {
     // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
     if (!origin) return callback(null, true);
 
-    const allowedOrigins = env.CORS.ORIGIN.split(",").map((o) => o.trim());
+    const allowedOrigins = (env.CORS.ORIGIN || "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean);
+
     if (
       allowedOrigins.includes(origin) ||
       allowedOrigins.includes("*") ||
-      origin.includes("vercel.app") ||
-      origin.includes("netlify.app") ||
-      origin.includes("onrender.com") ||
-      origin.includes("localhost") ||
-      origin.includes("127.0.0.1") ||
-      env.isDevelopment()
+      (env.FRONTEND_URL && origin === env.FRONTEND_URL) ||
+      (env.FRONTEND_URL && env.FRONTEND_URL.split(",").map((u) => u.trim()).includes(origin))
     ) {
       return callback(null, true);
     }

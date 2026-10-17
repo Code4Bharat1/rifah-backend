@@ -10,7 +10,7 @@ class GoogleDriveService {
   constructor() {
     this.clientId = env.GOOGLE.DRIVE_CLIENT_ID || env.GOOGLE.CLIENT_ID;
     this.clientSecret = env.GOOGLE.DRIVE_CLIENT_SECRET || env.GOOGLE.CLIENT_SECRET;
-    this.redirectUri = env.GOOGLE.DRIVE_REDIRECT_URI || env.GOOGLE.REDIRECT_URI || "http://localhost:5000/api/v1/events/google/oauth-callback";
+    this.redirectUri = env.GOOGLE.DRIVE_REDIRECT_URI || env.GOOGLE.REDIRECT_URI || "";
   }
 
   /**

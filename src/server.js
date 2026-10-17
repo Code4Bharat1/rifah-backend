@@ -131,8 +131,8 @@ const startServer = async () => {
 
     // 2. Start HTTP Server immediately so port 5000 is open in < 1 second!
     server = app.listen(env.PORT, "0.0.0.0", () => {
-      logger.info(`Port:${env.PORT}`);
-      logger.info(`Health Check: http://localhost:${env.PORT}/health`);
+      logger.info(`Port: ${env.PORT}`);
+      logger.info(`Health Check: /health`);
     });
 
     // 3. Initialize Socket.io Server
