@@ -1,9 +1,11 @@
 import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
+import QRCode from "qrcode";
 import { env } from "../../config/env.js";
 import { logger } from "../logger/logger.js";
 import { generateInvoicePdfBuffer } from "../../shared/utils/pdf-generator.js";
+import { generateEventTicketPdfBuffer } from "../../shared/utils/ticket-pdf-generator.js";
 
 const getTransporter = () => {
   const user = String(env.EMAIL?.USER || process.env.SMTP_USER || "").trim();
@@ -1246,12 +1248,105 @@ RIFAH Chamber of Commerce & Industry
   /**
    * Sends Event Registration / RSVP confirmation email
    */
-  sendEventRegistrationEmail: async ({ email, userName, eventTitle, eventDate, location, ticketType, ticketId, verificationUrl, isPaid, ticketPrice, paymentId, transactionId, invoiceNumber, chapter, meetingLink, isGuest = false }) => {
+  sendEventRegistrationEmail: async ({
+    email,
+    userName,
+    eventTitle,
+    eventDate,
+    location,
+    ticketType,
+    ticketId,
+    verificationUrl,
+    isPaid,
+    ticketPrice,
+    amountPaid,
+    baseAmount,
+    gstAmount,
+    paymentId,
+    transactionId,
+    invoiceNumber,
+    chapter,
+    meetingLink,
+    isGuest = false,
+  }) => {
     const frontendBaseUrl = env.FRONTEND_URL || "https://rifah.nexcorealliance.com";
     const passUrl = verificationUrl || (ticketId ? `${frontendBaseUrl}/verify/ticket/${ticketId}` : `${frontendBaseUrl}/events`);
 
-    // Standard high-reliability HTTPS QR image URL (loads 100% reliably in Gmail, Outlook, Apple Mail without file attachments)
-    const qrImgSrc = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=2&data=${encodeURIComponent(passUrl)}`;
+    const finalPaidAmount = Number(
+      amountPaid !== undefined && amountPaid !== null && Number(amountPaid) > 0
+        ? amountPaid
+        : (ticketPrice || 0)
+    );
+    const effectiveBase = Number(baseAmount || (finalPaidAmount > 0 ? Math.round(finalPaidAmount / 1.18) : 0));
+    const effectiveGst = Number(gstAmount || (finalPaidAmount > 0 ? (finalPaidAmount - effectiveBase) : 0));
+    const hasGst = effectiveGst > 0;
+
+    // 1. Generate high-resolution local QR code buffer
+    let qrPngBuffer = null;
+    try {
+      qrPngBuffer = await QRCode.toBuffer(passUrl, {
+        type: "png",
+        width: 360,
+        margin: 2,
+        errorCorrectionLevel: "M",
+        color: {
+          dark: "#071328",
+          light: "#ffffff",
+        },
+      });
+    } catch (qrErr) {
+      logger.error("[sendEventRegistrationEmail] QR code generation failed:", qrErr);
+    }
+
+    // Attach inline CID QR image so email clients load it internally without external network dependency
+    const attachments = [];
+    let qrImgSrc = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=2&data=${encodeURIComponent(passUrl)}`;
+
+    if (qrPngBuffer) {
+      qrImgSrc = "cid:event-entry-qr";
+      attachments.push({
+        filename: "event-entry-qr.png",
+        content: qrPngBuffer,
+        cid: "event-entry-qr",
+        contentType: "image/png",
+        contentDisposition: "inline",
+      });
+    }
+
+    // 2. Generate official Event Entry Pass PDF with embedded QR code
+    try {
+      const ticketPdfBuffer = await generateEventTicketPdfBuffer({
+        eventTitle,
+        eventDate,
+        location,
+        chapter,
+        userName,
+        ticketType: ticketType || (isPaid ? `Paid Pass (Rs. ${finalPaidAmount})` : (isGuest ? "Guest Pass" : "Member Pass")),
+        ticketId,
+        passUrl,
+        isPaid,
+        ticketPrice: finalPaidAmount,
+        amountPaid: finalPaidAmount,
+        baseAmount: effectiveBase,
+        gstAmount: effectiveGst,
+        paymentId,
+        transactionId,
+        invoiceNumber,
+        isGuest,
+        qrPngBuffer,
+      });
+
+      if (ticketPdfBuffer) {
+        const safeTicketId = (ticketId || "Pass").replace(/[^a-zA-Z0-9_-]/g, "");
+        attachments.push({
+          filename: `RIFAH-Event-Pass-${safeTicketId}.pdf`,
+          content: ticketPdfBuffer,
+          contentType: "application/pdf",
+        });
+      }
+    } catch (pdfErr) {
+      logger.error("[sendEventRegistrationEmail] Failed to generate ticket PDF attachment:", pdfErr);
+    }
 
     // GUEST CONFIRMATION EMAIL (Clean, QR Code pass, strict single-entry confidentiality warning)
     if (isGuest) {
@@ -1266,7 +1361,7 @@ RIFAH Chamber of Commerce & Industry
           </div>
           
           <div style="display: inline-block; background-color: #dcfce7; color: #166534; font-size: 11px; font-weight: 700; padding: 4px 14px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
-            ✓ REGISTRATION CONFIRMED
+            ✓ ${isPaid ? "PAYMENT & REGISTRATION CONFIRMED" : "REGISTRATION CONFIRMED"}
           </div>
           
           <h2 style="color: #0f172a; font-size: 20px; font-weight: 800; margin: 0 0 8px 0; line-height: 1.3;">${eventTitle}</h2>
@@ -1287,6 +1382,16 @@ RIFAH Chamber of Commerce & Industry
             </div>` : ""}
 
             <p style="margin: 10px 0 0 0; font-size: 11px; color: #64748b;">Please present this QR code at the entrance gate for check-in</p>
+          </div>
+
+          <!-- PDF Ticket Attachment Banner -->
+          <div style="background-color: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 14px 18px; margin: 0 auto 20px auto; max-width: 440px; text-align: center;">
+            <p style="margin: 0; color: #166534; font-size: 13px; font-weight: 800;">
+              📎 Official PDF Entry Pass Attached
+            </p>
+            <p style="margin: 4px 0 0 0; color: #15803d; font-size: 11.5px; line-height: 1.4;">
+              Your printable Event Entry Pass (PDF) with the official check-in QR code is attached to this email. You can present this email or the PDF pass at the gate.
+            </p>
           </div>
 
           <!-- Confidential Warning -->
@@ -1315,6 +1420,16 @@ RIFAH Chamber of Commerce & Industry
                 <td style="padding: 5px 0; color: #64748b; font-weight: 600;">Chapter:</td>
                 <td style="padding: 5px 0; color: #0f172a; text-align: right;">${chapter}</td>
               </tr>` : ""}
+              ${isPaid && (paymentId || transactionId) ? `
+              <tr>
+                <td style="padding: 5px 0; color: #64748b; font-weight: 600;">Amount Paid:</td>
+                <td style="padding: 5px 0; font-weight: 800; color: #16a34a; text-align: right;">₹${finalPaidAmount} ${hasGst ? `<span style="font-size: 11px; font-weight: 600; color: #64748b;">(incl. GST)</span>` : ""}</td>
+              </tr>
+              <tr>
+                <td style="padding: 5px 0; color: #64748b; font-weight: 600;">Payment Ref:</td>
+                <td style="padding: 5px 0; font-family: monospace; font-size: 11.5px; color: #0f172a; text-align: right;">${paymentId || transactionId}</td>
+              </tr>
+              ` : ""}
             </table>
           </div>
 
@@ -1324,7 +1439,7 @@ RIFAH Chamber of Commerce & Industry
       </div>
       `;
 
-      return emailService.sendEmail({ to: email, subject: guestSubject, html: guestHtml });
+      return emailService.sendEmail({ to: email, subject: guestSubject, html: guestHtml, attachments });
     }
 
     const subject = isPaid
@@ -1339,8 +1454,18 @@ RIFAH Chamber of Commerce & Industry
             <table style="width: 100%; border-collapse: collapse; font-size: 13px; color: #475569;">
               <tr>
                 <td style="padding: 6px 0; border-bottom: 1px solid #e2e8f0;"><strong>Amount Paid</strong></td>
-                <td style="text-align: right; font-weight: 800; color: #15803d; font-size: 16px; padding: 6px 0; border-bottom: 1px solid #e2e8f0;">₹${ticketPrice || 0}</td>
+                <td style="text-align: right; font-weight: 800; color: #15803d; font-size: 16px; padding: 6px 0; border-bottom: 1px solid #e2e8f0;">₹${finalPaidAmount} ${hasGst ? `<span style="font-size: 12px; font-weight: 500; color: #64748b;">(incl. 18% GST)</span>` : ""}</td>
               </tr>
+              ${hasGst && effectiveBase > 0 && effectiveGst > 0 ? `
+              <tr>
+                <td style="padding: 4px 0; font-size: 12px; color: #64748b;">Base Pass Fee</td>
+                <td style="text-align: right; font-size: 12px; color: #64748b; padding: 4px 0;">₹${effectiveBase}</td>
+              </tr>
+              <tr>
+                <td style="padding: 4px 0; font-size: 12px; color: #64748b; border-bottom: 1px solid #e2e8f0;">GST (18%)</td>
+                <td style="text-align: right; font-size: 12px; color: #64748b; padding: 4px 0; border-bottom: 1px solid #e2e8f0;">₹${effectiveGst}</td>
+              </tr>
+              ` : ""}
               <tr>
                 <td style="padding: 6px 0; border-bottom: 1px solid #e2e8f0;"><strong>Payment ID</strong></td>
                 <td style="text-align: right; color: #0f172a; font-family: monospace; font-size: 12px; padding: 6px 0; border-bottom: 1px solid #e2e8f0;">${paymentId || "N/A"}</td>
@@ -1383,7 +1508,7 @@ RIFAH Chamber of Commerce & Industry
               <tr><td style="padding: 4px 0;"><strong>Date & Time:</strong></td><td style="text-align: right; font-weight: bold; color: #0f172a;">${eventDate || "Upcoming Event"}</td></tr>
               <tr><td style="padding: 4px 0;"><strong>Venue / Location:</strong></td><td style="text-align: right; color: #0f172a;">${location || "Chamber Hall"}</td></tr>
               ${chapter ? `<tr><td style="padding: 4px 0;"><strong>Chapter:</strong></td><td style="text-align: right; color: #0f172a;">${chapter}</td></tr>` : ""}
-              <tr><td style="padding: 4px 0;"><strong>Ticket Type:</strong></td><td style="text-align: right; font-weight: bold; color: #0284c7;">${isPaid ? `Paid Pass (₹${ticketPrice})` : (ticketType || "Member Pass")}</td></tr>
+              <tr><td style="padding: 4px 0;"><strong>Ticket Type:</strong></td><td style="text-align: right; font-weight: bold; color: #0284c7;">${isPaid ? `Paid Pass (₹${finalPaidAmount})` : (ticketType || "Member Pass")}</td></tr>
             </table>
           </div>
 
@@ -1395,6 +1520,16 @@ RIFAH Chamber of Commerce & Industry
             </div>
             ${ticketId ? `<div style="margin-top: 10px;"><span style="font-family: monospace; font-size: 14px; font-weight: 800; color: #0284c7;">${ticketId}</span></div>` : ""}
             <p style="margin: 8px 0 0 0; font-size: 11px; color: #64748b;">Scan this code at the gate on arrival</p>
+          </div>
+
+          <!-- PDF Ticket Attachment Banner -->
+          <div style="background-color: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px; padding: 14px 18px; margin: 18px 0; text-align: center;">
+            <p style="margin: 0; color: #166534; font-size: 13px; font-weight: 800;">
+              📎 Official Entry Pass (PDF) Attached
+            </p>
+            <p style="margin: 4px 0 0 0; color: #15803d; font-size: 11.5px; line-height: 1.4;">
+              Your official Event Pass PDF with the QR code is attached to this email. You can download or print it for entry check-in.
+            </p>
           </div>
 
           <!-- Confidential Warning -->
@@ -1422,7 +1557,7 @@ RIFAH Chamber of Commerce & Industry
       </div>
     `;
 
-    return emailService.sendEmail({ to: email, subject, html });
+    return emailService.sendEmail({ to: email, subject, html, attachments });
   },
 
   /**

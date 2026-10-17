@@ -27,3 +27,6 @@ uploads/posts/*
 
 #Lock files
 package-lock.json
+
+# WhatsApp Web session
+.wwebjs_auth/

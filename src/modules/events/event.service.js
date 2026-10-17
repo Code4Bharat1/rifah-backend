@@ -928,6 +928,10 @@ export const eventService = {
     setImmediate(async () => {
       try {
         const user = await User.findById(userId);
+        const finalPaidAmount = amountPaid || initialAmountPaid || (event.isPaid ? Math.round((event.ticketPrice || 0) * 1.18) : (event.ticketPrice || 0));
+        const effectiveBaseAmount = baseAmount || (finalPaidAmount > 0 ? Math.round(finalPaidAmount / 1.18) : 0);
+        const effectiveGstAmount = gstAmount || (finalPaidAmount > 0 ? (finalPaidAmount - effectiveBaseAmount) : 0);
+
         if (user?.email) {
           await emailService.sendEventRegistrationEmail({
             email: user.email,
@@ -939,7 +943,10 @@ export const eventService = {
             ticketId,
             verificationUrl,
             isPaid: event.isPaid,
-            ticketPrice: event.ticketPrice,
+            ticketPrice: finalPaidAmount,
+            amountPaid: finalPaidAmount,
+            baseAmount: effectiveBaseAmount,
+            gstAmount: effectiveGstAmount,
             paymentId: paymentData?.paymentId || null,
             transactionId: paymentData?.transactionId || null,
             chapter: updatedEvent.chapter || "",
@@ -985,7 +992,7 @@ export const eventService = {
           type: "Event",
           title: "Event Registration Confirmed",
           body: event.isPaid
-            ? `Your payment of ₹${event.ticketPrice} for "${updatedEvent.title}" is confirmed!${dateCityInfo ? ` (${dateCityInfo})` : ""}`
+            ? `Your payment of ₹${finalPaidAmount} for "${updatedEvent.title}" is confirmed!${dateCityInfo ? ` (${dateCityInfo})` : ""}`
             : `Your registration for "${updatedEvent.title}" is confirmed!${dateCityInfo ? ` (${dateCityInfo})` : ""}`,
           entityId: updatedEvent._id,
           eventDate: updatedEvent.date,
@@ -2612,7 +2619,9 @@ export const eventService = {
       ticketType: reg.ticketType || (event.isPaid ? "Paid Pass" : "Member Pass"),
       registrationStatus: reg.status || "Confirmed",
       paymentStatus: reg.paymentStatus || (event.isPaid ? "Paid" : "Free"),
-      amountPaid: reg.amountPaid || (event.isPaid ? event.ticketPrice : 0),
+      amountPaid: reg.amountPaid || (event.isPaid ? Math.round((event.ticketPrice || 0) * 1.18) : 0),
+      baseAmount: reg.baseAmount || (reg.amountPaid ? Math.round(reg.amountPaid / 1.18) : (event.isPaid ? event.ticketPrice : 0)),
+      gstAmount: reg.gstAmount || (reg.amountPaid ? reg.amountPaid - Math.round(reg.amountPaid / 1.18) : 0),
       checkedIn: isCheckedIn,
       checkedInAt: reg.checkedInAt || (isCheckedIn ? reg.gateApprovedAt || null : null),
       checkedInBy: reg.checkedInBy || (isCheckedIn ? "Event Staff" : ""),
