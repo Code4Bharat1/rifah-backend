@@ -56,12 +56,27 @@ let lastErrorMessage = null;
  */
 const killOrphanWwebBrowsers = () => {
   try {
+    // 1. Try wmic for command line match
+    try {
+      execSync('wmic process where "name=\'chrome.exe\' and commandline like \'%.wwebjs_auth%\'" call terminate', { stdio: "ignore", timeout: 4000 });
+    } catch {}
+
+    // 2. Try taskkill for headless chrome windows
+    try {
+      execSync('taskkill /F /FI "WINDOWTITLE eq about:blank" /IM chrome.exe', { stdio: "ignore", timeout: 4000 });
+    } catch {}
+
+    // 3. Terminate via PowerShell CIM
     const psPath = fs.existsSync("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
       ? "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
       : "powershell";
 
-    const cmd = `"${psPath}" -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'chrome.exe' -and ($_.CommandLine -like '*wwebjs*' -or $_.CommandLine -like '*userDataDir*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`;
-    execSync(cmd, { stdio: "ignore", timeout: 8000 });
+    const psScript = `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'chrome.exe' -and ($_.CommandLine -like '*wwebjs*' -or $_.CommandLine -like '*.wwebjs_auth*' -or $_.CommandLine -like '*user-data-dir*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+    spawnSync(psPath, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psScript], {
+      stdio: "ignore",
+      timeout: 6000,
+    });
+
     // Pause briefly for Windows file system handle releases
     try {
       execSync("ping 127.0.0.1 -n 2 > nul", { stdio: "ignore", timeout: 3000 });
@@ -97,11 +112,21 @@ const cleanupStaleLocks = (authDir) => {
       for (const file of lockFiles) {
         const p = path.join(dir, file);
         if (fs.existsSync(p)) {
-          try {
-            fs.unlinkSync(p);
-            logger.info(`[WHATSAPP] Cleaned up stale lock file: ${p}`);
-          } catch (delErr) {
-            logger.warn(`[WHATSAPP] Could not unlink ${file}:`, delErr?.message);
+          let removed = false;
+          for (let i = 0; i < 3; i++) {
+            try {
+              fs.unlinkSync(p);
+              logger.info(`[WHATSAPP] Cleaned up stale lock file: ${p}`);
+              removed = true;
+              break;
+            } catch (delErr) {
+              try {
+                execSync("ping 127.0.0.1 -n 1 > nul", { stdio: "ignore", timeout: 1000 });
+              } catch {}
+            }
+          }
+          if (!removed) {
+            logger.warn(`[WHATSAPP] Could not unlink ${file}`);
           }
         }
       }
@@ -314,6 +339,26 @@ export const whatsappService = {
     cleanupStaleLocks(authDir);
 
     return whatsappService.init();
+  },
+
+  /**
+   * Graceful destruction of WhatsApp client on server shutdown
+   */
+  destroy: async () => {
+    logger.info("[WHATSAPP] Destroying WhatsApp client...");
+    try {
+      if (client) {
+        await client.destroy().catch(() => {});
+      }
+    } catch {}
+    client = null;
+    clientStatus = "NOT_INITIALIZED";
+    currentQrDataUrl = null;
+    currentQrRaw = null;
+    clientInfo = null;
+    initPromise = null;
+    lastErrorMessage = null;
+    killOrphanWwebBrowsers();
   },
 
   /**
