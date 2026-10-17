@@ -423,15 +423,31 @@ async function fulfillPaymentOrder({
         }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
       }
 
-      const targetPhone = userDoc?.phone || businessDoc?.phone || payment?.payerPhone;
+      const targetPhone =
+        payload.billingPhone ||
+        payload.phone ||
+        userDoc?.whatsapp ||
+        userDoc?.phone ||
+        businessDoc?.whatsapp ||
+        businessDoc?.phone ||
+        payment?.payerPhone;
+
       if (targetPhone) {
-        whatsappService.sendPaymentReceipt({
-          phone: targetPhone,
-          userName: userDoc?.name || payment?.payerName || "Member",
-          amount: payment.amount,
-          purpose: membershipPlan?.name || payment.notes || "RIFAH Chamber Service",
-          receiptNumber: payment.invoiceNumber,
-        }).catch((waErr) => logger.warn("[PAYMENT] Async WhatsApp invoice alert failed:", waErr?.message || waErr));
+        const frontendBaseUrl = (env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "");
+        const invoiceUrl = `${frontendBaseUrl}/verify/invoice/${encodeURIComponent(payment.invoiceNumber)}${
+          payment.verificationToken ? `?token=${payment.verificationToken}` : ""
+        }`;
+
+        whatsappService
+          .sendPaymentReceipt({
+            phone: targetPhone,
+            userName: userDoc?.name || businessDoc?.name || payment?.payerName || "Member",
+            amount: payment.amount,
+            purpose: membershipPlan?.name || courseDoc?.title || payment.purpose || payment.notes || "RIFAH Chamber Service",
+            receiptNumber: payment.invoiceNumber,
+            invoiceUrl,
+          })
+          .catch((waErr) => logger.warn("[PAYMENT] Async WhatsApp invoice alert failed:", waErr?.message || waErr));
       }
 
       // Notify chapter and country admins
@@ -1057,15 +1073,30 @@ export const paymentService = {
         }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
       }
 
-      const targetPhoneManual = userDoc?.phone || businessDoc?.phone;
+      const targetPhoneManual =
+        data.billingPhone ||
+        data.phone ||
+        userDoc?.whatsapp ||
+        userDoc?.phone ||
+        businessDoc?.whatsapp ||
+        businessDoc?.phone;
+
       if (targetPhoneManual) {
-        whatsappService.sendPaymentReceipt({
-          phone: targetPhoneManual,
-          userName: userDoc?.name || "Member",
-          amount: payment.amount,
-          purpose: (data.itemType || "Membership").toUpperCase(),
-          receiptNumber: payment.invoiceNumber,
-        }).catch((waErr) => logger.warn("[PAYMENT] Async WhatsApp invoice alert failed:", waErr?.message || waErr));
+        const frontendBaseUrl = (env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "");
+        const invoiceUrl = `${frontendBaseUrl}/verify/invoice/${encodeURIComponent(payment.invoiceNumber)}${
+          payment.verificationToken ? `?token=${payment.verificationToken}` : ""
+        }`;
+
+        whatsappService
+          .sendPaymentReceipt({
+            phone: targetPhoneManual,
+            userName: userDoc?.name || businessDoc?.name || data.businessName || "Member",
+            amount: payment.amount,
+            purpose: (data.itemType || "Membership").toUpperCase(),
+            receiptNumber: payment.invoiceNumber,
+            invoiceUrl,
+          })
+          .catch((waErr) => logger.warn("[PAYMENT] Async WhatsApp invoice alert failed:", waErr?.message || waErr));
       }
 
       // 1. Notify Chapter Admin of the specific Chapter only

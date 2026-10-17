@@ -489,8 +489,13 @@ export const whatsappService = {
    * 2. Payment Receipt / Invoice
    */
   sendPaymentReceipt: async ({ phone, userName, amount, purpose, receiptNumber, invoiceUrl }) => {
+    const frontendBaseUrl = (env.FRONTEND_URL || "https://rifah.nexcorealliance.com").replace(/\/$/, "");
+    const finalInvoiceUrl =
+      invoiceUrl ||
+      (receiptNumber ? `${frontendBaseUrl}/verify/invoice/${encodeURIComponent(receiptNumber)}` : "");
+
     const text = `🧾 *Payment Receipt - RIFAH Chamber*\n\nDear *${userName}*,\nWe have received your payment of *₹${amount}* for *${purpose}*. ✅\n\n📄 *Receipt / Invoice No:* ${receiptNumber}\n\n${
-      invoiceUrl ? `🔗 *Download Invoice:* ${invoiceUrl}\n\n` : ""
+      finalInvoiceUrl ? `🔗 *Download Invoice:* ${finalInvoiceUrl}\n\n` : ""
     }Thank you for your association with RIFAH Chamber!\n\n_RIFAH Chamber of Commerce & Industry_`;
 
     return whatsappService.sendTextMessage({ to: phone, text });
