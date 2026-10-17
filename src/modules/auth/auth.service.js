@@ -23,6 +23,7 @@ import {
   verifyRefreshToken,
 } from "../../infrastructure/auth/jwt.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 import { logger } from "../../infrastructure/logger/logger.js";
 import { notificationService } from "../notifications/notification.service.js";
 import {
@@ -448,7 +449,7 @@ export const authService = {
       }
     }
 
-    // Scaled for 10k/50k users: Async non-blocking welcome email
+    // Scaled for 10k/50k users: Async non-blocking welcome email & WhatsApp
     emailService
       .sendWelcomeEmail({ email: user.email, name: user.name, role: user.role })
       .catch((err) =>
@@ -457,6 +458,17 @@ export const authService = {
           err?.message || err,
         ),
       );
+
+    if (user.phone) {
+      whatsappService
+        .sendWelcomeMessage({ phone: user.phone, name: user.name, role: user.role })
+        .catch((waErr) =>
+          logger.warn(
+            "[AUTH] Failed to send WhatsApp welcome:",
+            waErr?.message || waErr,
+          ),
+        );
+    }
 
     const tokenPayload = {
       id: user._id,
@@ -1150,6 +1162,22 @@ export const authService = {
           err?.message || err,
         ),
       );
+
+    const welcomePhone = user.phone || business.phone;
+    if (welcomePhone) {
+      whatsappService
+        .sendWelcomeMessage({
+          phone: welcomePhone,
+          name: user.name,
+          role: user.role,
+        })
+        .catch((waErr) =>
+          logger.warn(
+            "[AUTH] Failed to send WhatsApp welcome:",
+            waErr?.message || waErr,
+          ),
+        );
+    }
 
     // 1. Notify the Chapter Admin(s) of the chapter selected during registration
     try {

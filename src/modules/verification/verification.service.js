@@ -4,6 +4,7 @@ import { isSubscriberTierBusiness } from "../businesses/business.service.js";
 import { User } from "../users/user.model.js";
 import { Payment } from "../payments/payment.model.js";
 import { emailService } from "../../infrastructure/email/email.service.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 import { notificationService } from "../notifications/notification.service.js";
 import { NotFoundError, BadRequestError, ForbiddenError } from "../../shared/errors/errors.js";
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
@@ -425,6 +426,19 @@ export const verificationService = {
             entityId: business._id,
             link: "/biz/profile",
           });
+
+          if (isApproved) {
+            const ownerUser = await User.findById(business.owner).select("name phone email");
+            const targetPhone = ownerUser?.phone || business.phone;
+            if (targetPhone) {
+              whatsappService.sendMembershipWelcome({
+                phone: targetPhone,
+                name: ownerUser?.name || business.name,
+                tier: business.membership || "Verified Business",
+                businessName: business.name,
+              }).catch(waErr => console.error("[WHATSAPP BIZ APPROVAL ERROR]:", waErr?.message || waErr));
+            }
+          }
         } catch (err) {
           console.error("Failed to send verification status email/notification:", err);
         }

@@ -4,6 +4,7 @@ import { parsePagination, buildPaginationMeta } from "../../shared/utils/paginat
 import { ROLES } from "../../shared/constants/roles.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../shared/errors/errors.js";
 import { resolveMemberPlanContext, assertMembershipValid, assertFeatureAccess } from "../../shared/utils/feature-access.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 
 const POPULATE_FIELDS = [
   ["initiatorBusiness", "name logo city"],
@@ -85,7 +86,36 @@ export const oneToOneService = {
       initiatedBy,
     });
 
-    return withPopulate(OneToOne.findById(record._id));
+    const populated = await withPopulate(OneToOne.findById(record._id));
+
+    // Send WhatsApp notification to the member who was met / invited
+    try {
+      const counterpart = populated?.memberUser;
+      const initiator = populated?.initiatorUser;
+      const formattedDate = new Date(meetingDate).toLocaleDateString("en-IN", {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+
+      if (counterpart?.phone) {
+        whatsappService.sendOneToOneMeeting({
+          phone: counterpart.phone,
+          counterpartName: counterpart.name || "Member",
+          requesterName: initiator?.name || "Fellow Member",
+          requesterBusiness: populated?.initiatorBusiness?.name || "Business Associate",
+          meetingDate: formattedDate,
+          meetingTime: meetingTime.trim(),
+          location: location.trim(),
+          description: description.trim(),
+        }).catch((err) => console.error("[WHATSAPP 1-TO-1 ERROR]:", err?.message || err));
+      }
+    } catch (waErr) {
+      console.error("[WHATSAPP 1-TO-1 NOTICE]:", waErr?.message || waErr);
+    }
+
+    return populated;
   },
 
   listMine: async (userId, queryParams = {}) => {

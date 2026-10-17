@@ -11,6 +11,7 @@ import { membershipService } from "./modules/memberships/membership.service.js";
 import { seedInitialCategories } from "./modules/categories/categories.data.js";
 import { Chapter } from "./modules/chapters/chapter.model.js";
 import { migrateExistingFormats } from "./shared/utils/migrate-formats.js";
+import { whatsappService } from "./infrastructure/whatsapp/whatsapp.service.js";
 import dns from "dns";
 import cluster from "node:cluster";
 import os from "node:os";
@@ -23,7 +24,7 @@ try {
 }
 
 let server;
-// Reload trigger for WhatsApp Cloud API integration
+// Reload trigger: WhatsApp Web integration update at 2026-10-17T09:34:00
 
 
 const ensureChapters = async () => {
@@ -163,6 +164,9 @@ const startServer = async () => {
       birthdayService.startBirthdayScheduler();
       anniversaryService.startAnniversaryScheduler();
       membershipService.startMembershipExpiryScheduler();
+      whatsappService.init().catch((wErr) => {
+        logger.warn("[WHATSAPP INIT NOTICE]", wErr?.message || wErr);
+      });
 
       // Scaled for 10k/50k users: Periodic background sync of copilot knowledge base off the request path
       setInterval(async () => {
@@ -186,6 +190,7 @@ const gracefulShutdown = async (signal) => {
   if (server) {
     server.close(async () => {
       logger.info("HTTP server closed.");
+      await whatsappService.destroy().catch(() => {});
       await disconnectDatabase();
       process.exit(0);
     });

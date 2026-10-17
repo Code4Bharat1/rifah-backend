@@ -8,6 +8,13 @@ import { ROLES } from "../../shared/constants/roles.js";
 
 const router = Router();
 
+router.get("/whatsapp-status", notificationController.getWhatsAppStatus);
+router.get("/whatsapp-qr", notificationController.getWhatsAppQR);
+router.get("/whatsapp-restart", notificationController.restartWhatsApp);
+router.post("/whatsapp-restart", notificationController.restartWhatsApp);
+router.get("/whatsapp-debug", notificationController.debugWhatsApp);
+router.get("/whatsapp-force-ready", notificationController.forceReadyWhatsApp);
+router.get("/test-whatsapp", notificationController.testWhatsApp);
 router.post("/test-whatsapp", notificationController.testWhatsApp);
 router.get("/", authMiddleware, notificationController.getMyNotifications);
 router.get("/me", authMiddleware, notificationController.getMyNotifications);

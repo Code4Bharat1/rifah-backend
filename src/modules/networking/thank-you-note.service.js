@@ -4,6 +4,7 @@ import { resolveOwnBusiness, resolveMemberBusiness } from "./networking.utils.js
 import { parsePagination, buildPaginationMeta } from "../../shared/utils/pagination.js";
 import { ROLES } from "../../shared/constants/roles.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../shared/errors/errors.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 
 const POPULATE_FIELDS = [
   ["giverBusiness", "name logo city slug"],
@@ -72,7 +73,29 @@ export const thankYouNoteService = {
       referral: referralId || null,
     });
 
-    return withPopulate(ThankYouNote.findById(record._id));
+    const populated = await withPopulate(ThankYouNote.findById(record._id));
+
+    // Send WhatsApp notification to the member who is being thanked (giver)
+    try {
+      const giver = populated?.giverUser;
+      const receiver = populated?.receiverUser;
+      const receiverBiz = populated?.receiverBusiness;
+
+      if (giver?.phone) {
+        whatsappService.sendThankYouNote({
+          phone: giver.phone,
+          giverName: giver.name || "Member",
+          receiverName: receiver?.name || "Fellow Member",
+          receiverBusiness: receiverBiz?.name || "Business Associate",
+          amount: numericAmount,
+          note: (note || "").trim(),
+        }).catch((err) => console.error("[WHATSAPP THANK-YOU ERROR]:", err?.message || err));
+      }
+    } catch (waErr) {
+      console.error("[WHATSAPP THANK-YOU NOTICE]:", waErr?.message || waErr);
+    }
+
+    return populated;
   },
 
   listMine: async (userId, queryParams = {}) => {

@@ -948,16 +948,35 @@ export const eventService = {
           });
         }
 
-        if (user?.phone) {
+        let targetPhone = user?.phone || user?.whatsapp || paymentData?.payerPhone;
+        let targetName = user?.name || paymentData?.payerName || "Attendee";
+
+        if (!targetPhone) {
+          try {
+            const BusinessModel = mongoose.model("Business");
+            const userBiz = await BusinessModel.findOne({ owner: userId }).select("phone whatsapp name");
+            if (userBiz) {
+              targetPhone = userBiz.whatsapp || userBiz.phone;
+              if (!targetName || targetName === "Attendee") {
+                targetName = userBiz.name;
+              }
+            }
+          } catch (bizErr) {}
+        }
+
+        if (targetPhone) {
+          logger.info(`[EVENT TICKET] Sending WhatsApp event ticket to ${targetPhone} for event: ${updatedEvent.title}`);
           whatsappService.sendEventTicket({
-            phone: user.phone,
-            userName: user.name,
+            phone: targetPhone,
+            userName: targetName,
             eventTitle: updatedEvent.title,
             eventDate: updatedEvent.date || "Upcoming Chamber Event",
             location: updatedEvent.venue || updatedEvent.location || "Chamber Main Hall",
             ticketId,
             verificationUrl,
           }).catch(waErr => console.error("[WHATSAPP EVENT TICKET ERROR]:", waErr?.message || waErr));
+        } else {
+          logger.warn(`[EVENT TICKET] No phone number found on User or Business profile for user ID ${userId}. WhatsApp ticket skipped.`);
         }
 
         const dateCityInfo = [updatedEvent.date, updatedEvent.city].filter(Boolean).join(" • ");

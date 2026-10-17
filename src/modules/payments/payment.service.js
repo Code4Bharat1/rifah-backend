@@ -423,13 +423,13 @@ async function fulfillPaymentOrder({
         }).catch((mailErr) => logger.warn("[PAYMENT] Async invoice email failed:", mailErr?.message || mailErr));
       }
 
-      const targetPhone = userDoc?.phone || businessDoc?.phone;
-      if (targetPhone && isMembership) {
+      const targetPhone = userDoc?.phone || businessDoc?.phone || payment?.payerPhone;
+      if (targetPhone) {
         whatsappService.sendPaymentReceipt({
           phone: targetPhone,
-          userName: userDoc?.name || "Member",
+          userName: userDoc?.name || payment?.payerName || "Member",
           amount: payment.amount,
-          purpose: membershipPlan?.name || "RIFAH Membership",
+          purpose: membershipPlan?.name || payment.notes || "RIFAH Chamber Service",
           receiptNumber: payment.invoiceNumber,
         }).catch((waErr) => logger.warn("[PAYMENT] Async WhatsApp invoice alert failed:", waErr?.message || waErr));
       }

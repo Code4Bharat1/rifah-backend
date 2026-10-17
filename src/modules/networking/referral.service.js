@@ -5,6 +5,7 @@ import { parsePagination, buildPaginationMeta } from "../../shared/utils/paginat
 import { ROLES } from "../../shared/constants/roles.js";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../shared/errors/errors.js";
 import { assertFeatureAccess } from "../../shared/utils/feature-access.js";
+import { whatsappService } from "../../infrastructure/whatsapp/whatsapp.service.js";
 
 const POPULATE_FIELDS = [
   ["referrerBusiness", "name logo city"],
@@ -86,7 +87,30 @@ export const referralService = {
       description: description.trim(),
     });
 
-    return withPopulate(Referral.findById(record._id));
+    const populated = await withPopulate(Referral.findById(record._id));
+
+    // Send WhatsApp notification to the member receiving the referral
+    try {
+      const recipient = populated?.referredUser;
+      const referrer = populated?.referrerUser;
+      const referrerBiz = populated?.referrerBusiness;
+
+      if (recipient?.phone) {
+        whatsappService.sendReferralAlert({
+          phone: recipient.phone,
+          recipientName: recipient.name || "Member",
+          referrerName: referrer?.name || "Fellow Member",
+          referrerBusiness: referrerBiz?.name || "RIFAH Member",
+          leadName: leadName.trim(),
+          leadContact: (leadContact || "").trim(),
+          description: description.trim(),
+        }).catch((err) => console.error("[WHATSAPP REFERRAL ERROR]:", err?.message || err));
+      }
+    } catch (waErr) {
+      console.error("[WHATSAPP REFERRAL NOTICE]:", waErr?.message || waErr);
+    }
+
+    return populated;
   },
 
   /**

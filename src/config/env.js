@@ -89,11 +89,7 @@ export const env = {
   },
 
   WHATSAPP: {
-    ENABLED: process.env.WHATSAPP_ENABLED === "true",
-    PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID || "",
-    BUSINESS_ACCOUNT_ID: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || "",
-    ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN || "",
-    API_VERSION: process.env.WHATSAPP_API_VERSION || "v25.0",
+    ENABLED: process.env.WHATSAPP_ENABLED !== "false",
   },
 
   isDevelopment: () => (process.env.NODE_ENV || "development") === "development",
