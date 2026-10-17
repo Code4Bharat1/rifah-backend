@@ -591,6 +591,7 @@ export const authService = {
       { email: cleanEmail, purpose },
       {
         otp,
+        attempts: 0,
         verified: false,
         verifiedToken: null,
         expiresAt,
@@ -616,9 +617,11 @@ export const authService = {
       console.error("Failed to send registration OTP email:", err);
     }
 
-    console.log(
-      `\n========================================\n[${type.toUpperCase()} REGISTRATION OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? "YES" : "NO - SMTP LIMIT REACHED"})\n========================================\n`,
-    );
+    if (env.isDevelopment()) {
+      console.log(
+        `\n========================================\n[${type.toUpperCase()} REGISTRATION OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? "YES" : "NO - SMTP LIMIT REACHED"})\n========================================\n`,
+      );
+    }
 
     return {
       message: "Verification code sent to your email.",
@@ -647,11 +650,24 @@ export const authService = {
     const record = await OtpVerification.findOne({
       email: cleanEmail,
       purpose: { $in: allowedPurposes },
-      otp: cleanOtp,
       expiresAt: { $gt: new Date() },
     });
 
     if (!record) {
+      throw new BadRequestError(
+        "Invalid or expired verification code. Please try again.",
+      );
+    }
+
+    if ((record.attempts || 0) >= 5) {
+      throw new BadRequestError(
+        "Too many failed verification attempts. Please request a new verification code.",
+      );
+    }
+
+    if (record.otp !== cleanOtp) {
+      record.attempts = (record.attempts || 0) + 1;
+      await record.save();
       throw new BadRequestError(
         "Invalid or expired verification code. Please try again.",
       );
@@ -700,6 +716,7 @@ export const authService = {
       { email: cleanEmail, purpose: "login_otp" },
       {
         otp,
+        attempts: 0,
         verified: false,
         verifiedToken: null,
         expiresAt,
@@ -717,9 +734,11 @@ export const authService = {
       console.error("Failed to send login OTP email:", err);
     }
 
-    console.log(
-      `\n========================================\n[LOGIN OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? "YES" : "NO - SMTP LIMIT REACHED"})\n========================================\n`,
-    );
+    if (env.isDevelopment()) {
+      console.log(
+        `\n========================================\n[LOGIN OTP] Code for ${cleanEmail}: ${otp}\n(Email Delivered via SMTP: ${emailDelivered ? "YES" : "NO - SMTP LIMIT REACHED"})\n========================================\n`,
+      );
+    }
 
     return {
       message: "One-time sign-in code sent to your email.",
@@ -743,11 +762,24 @@ export const authService = {
     const record = await OtpVerification.findOne({
       email: cleanEmail,
       purpose: "login_otp",
-      otp: cleanOtp,
       expiresAt: { $gt: new Date() },
     });
 
     if (!record) {
+      throw new BadRequestError(
+        "Invalid or expired sign-in code. Please try again.",
+      );
+    }
+
+    if ((record.attempts || 0) >= 5) {
+      throw new BadRequestError(
+        "Too many failed verification attempts. Please request a new sign-in code.",
+      );
+    }
+
+    if (record.otp !== cleanOtp) {
+      record.attempts = (record.attempts || 0) + 1;
+      await record.save();
       throw new BadRequestError(
         "Invalid or expired sign-in code. Please try again.",
       );
@@ -1460,13 +1492,6 @@ export const authService = {
         }
       } catch (pwErr) {
         isMatch = false;
-      }
-    }
-
-    // Convenience fallback for local admin accounts during dev testing
-    if (!isMatch && (password === "Shweta@9696" || password === "User@123456")) {
-      if (user.email === "admin.pune-chapter@rifah.org" || user.role === "chapter_admin") {
-        isMatch = true;
       }
     }
 
@@ -2299,7 +2324,12 @@ export const authService = {
 
     // Generate 6-digit verification code
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-    user.resetPasswordToken = resetCode;
+    const hashedResetToken = crypto
+      .createHash("sha256")
+      .update(resetCode)
+      .digest("hex");
+
+    user.resetPasswordToken = hashedResetToken;
     user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
     await user.save();
 
@@ -2316,7 +2346,6 @@ export const authService = {
     return {
       message: "Password reset verification code has been sent to your email.",
       email: user.email,
-      resetToken: resetCode,
     };
   },
 
@@ -2329,10 +2358,17 @@ export const authService = {
     }
     const cleanEmail = email.toLowerCase().trim();
     const cleanToken = String(resetToken).trim();
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(cleanToken)
+      .digest("hex");
 
     const user = await User.findOne({
       email: cleanEmail,
-      resetPasswordToken: cleanToken,
+      $or: [
+        { resetPasswordToken: hashedToken },
+        { resetPasswordToken: cleanToken },
+      ],
       resetPasswordExpires: { $gt: new Date() },
     });
 
@@ -2354,10 +2390,17 @@ export const authService = {
     }
     const cleanEmail = email.toLowerCase().trim();
     const cleanToken = String(resetToken).trim();
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(cleanToken)
+      .digest("hex");
 
     const user = await User.findOne({
       email: cleanEmail,
-      resetPasswordToken: cleanToken,
+      $or: [
+        { resetPasswordToken: hashedToken },
+        { resetPasswordToken: cleanToken },
+      ],
       resetPasswordExpires: { $gt: new Date() },
     }).select("+passwordHash +resetPasswordToken +resetPasswordExpires");
 
@@ -2449,16 +2492,39 @@ export const authService = {
       );
     }
 
+    // Verify audience if present on payload
+    const trustedAudiences = [
+      env.GOOGLE.CLIENT_ID,
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_ID,
+    ].filter(Boolean);
+
+    if (trustedAudiences.length > 0 && googlePayload.aud) {
+      if (!trustedAudiences.includes(googlePayload.aud)) {
+        throw new UnauthorizedError("Google authentication token audience mismatch");
+      }
+    }
+
     const email = googlePayload.email.toLowerCase().trim();
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      // SECURITY GUARD: Strictly block Admin Google OAuth login
-      if (
-        existingUser.role === ROLES.CENTRAL_ADMIN ||
-        existingUser.role === ROLES.STATE_ADMIN ||
-        existingUser.role === ROLES.CHAPTER_ADMIN
-      ) {
+      // SECURITY GUARD: Strictly block Admin Google OAuth login across all tiers
+      const ALL_ADMIN_ROLES = [
+        ROLES.CENTRAL_ADMIN,
+        ROLES.SECRETARIAT,
+        ROLES.COUNTRY_ADMIN,
+        ROLES.STATE_ADMIN,
+        ROLES.CHAPTER_ADMIN,
+        "central_admin",
+        "super_admin",
+        "admin",
+        "secretariat",
+        "country_admin",
+        "state_admin",
+        "chapter_admin",
+      ];
+      if (ALL_ADMIN_ROLES.includes(existingUser.role)) {
         throw new UnauthorizedError(
           "Administrative accounts must sign in using email and password credentials.",
           ERROR_CODES.FORBIDDEN,

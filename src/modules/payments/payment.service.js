@@ -501,8 +501,7 @@ async function fulfillPaymentOrder({
         targetAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
       }
 
-      const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
-      const adminEmails = [...new Set([adminFallbackEmail, ...targetAdmins.map((a) => a.email)].filter(Boolean))];
+      const adminEmails = [...new Set([env.EMAIL?.USER, ...targetAdmins.map((a) => a.email)].filter(Boolean))];
 
       for (const adminMail of adminEmails) {
         emailService.sendAdminPaymentReceiptAlert({
@@ -772,7 +771,18 @@ export const paymentService = {
       .update(body.toString())
       .digest("hex");
 
-    if (expectedSignature !== razorpay_signature) {
+    let isValidSignature = false;
+    try {
+      const expectedBuf = Buffer.from(expectedSignature, "utf8");
+      const receivedBuf = Buffer.from(razorpay_signature, "utf8");
+      if (expectedBuf.length === receivedBuf.length) {
+        isValidSignature = crypto.timingSafeEqual(expectedBuf, receivedBuf);
+      }
+    } catch (_) {
+      isValidSignature = false;
+    }
+
+    if (!isValidSignature) {
       throw new BadRequestError("Invalid payment signature");
     }
 
@@ -1161,8 +1171,7 @@ export const paymentService = {
           targetAdmins = await User.find({ role: ROLES.CENTRAL_ADMIN }).select("_id email name");
         }
 
-        const adminFallbackEmail = env.EMAIL?.USER || "rs9940806@gmail.com";
-        const adminEmails = [...new Set([adminFallbackEmail, ...targetAdmins.map((a) => a.email)].filter(Boolean))];
+        const adminEmails = [...new Set([env.EMAIL?.USER, ...targetAdmins.map((a) => a.email)].filter(Boolean))];
 
         for (const adminMail of adminEmails) {
           await emailService.sendAdminPaymentReceiptAlert({

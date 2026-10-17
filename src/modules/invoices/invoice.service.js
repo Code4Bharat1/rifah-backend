@@ -90,13 +90,13 @@ export const invoiceService = {
       };
     }
 
-    // Validate verification token if passed
-    if (token && token.trim() && !isNewlyGeneratedToken) {
-      if (payment.verificationToken && payment.verificationToken.trim() && payment.verificationToken.trim() !== token.trim()) {
+    // Require valid verification token to inspect invoice and prevent unauthenticated ID enumeration
+    if (!isNewlyGeneratedToken && payment.verificationToken) {
+      if (!token || payment.verificationToken.trim() !== token.trim()) {
         return {
           verified: false,
           error: "INVALID_TOKEN",
-          message: "The verification token is invalid or does not match this invoice record.",
+          message: "A valid verification token is required to inspect this invoice record.",
         };
       }
     }

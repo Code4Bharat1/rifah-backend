@@ -17,9 +17,9 @@ export const env = {
   },
 
   JWT: {
-    SECRET: process.env.JWT_SECRET || "rifah_jwt_access_secret_key_change_in_production_32char",
+    SECRET: process.env.JWT_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("FATAL: JWT_SECRET must be set in production"); })() : "rifah_jwt_access_secret_key_change_in_production_32char"),
     EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
-    REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || "rifah_jwt_refresh_secret_key_change_in_production_32char",
+    REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || (process.env.NODE_ENV === "production" ? (() => { throw new Error("FATAL: JWT_REFRESH_SECRET must be set in production"); })() : "rifah_jwt_refresh_secret_key_change_in_production_32char"),
     REFRESH_EXPIRES_IN: process.env.JWT_REFRESH_EXPIRES_IN || "30d",
     BCRYPT_SALT_ROUNDS: parseInt(process.env.BCRYPT_SALT_ROUNDS || "10", 10),
   },
@@ -49,8 +49,8 @@ export const env = {
   },
 
   RAZORPAY: {
-    KEY_ID: process.env.RAZORPAY_KEY_ID || "rzp_test_TTykh9OVkLKNHl",
-    KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || "7F7NmMGfMcDVTHqlO35raX2u",
+    KEY_ID: process.env.RAZORPAY_KEY_ID || "",
+    KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || "",
   },
 
   STRIPE: {

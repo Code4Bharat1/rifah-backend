@@ -10,12 +10,17 @@ export const corsConfig = {
       .map((o) => o.trim())
       .filter(Boolean);
 
-    if (
+    const frontendUrls = (env.FRONTEND_URL || "")
+      .split(",")
+      .map((u) => u.trim())
+      .filter(Boolean);
+
+    const isExplicitlyAllowed =
       allowedOrigins.includes(origin) ||
-      allowedOrigins.includes("*") ||
-      (env.FRONTEND_URL && origin === env.FRONTEND_URL) ||
-      (env.FRONTEND_URL && env.FRONTEND_URL.split(",").map((u) => u.trim()).includes(origin))
-    ) {
+      frontendUrls.includes(origin) ||
+      (env.isDevelopment() && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
+
+    if (isExplicitlyAllowed) {
       return callback(null, true);
     }
 

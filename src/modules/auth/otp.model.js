@@ -26,6 +26,10 @@ const otpVerificationSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    attempts: {
+      type: Number,
+      default: 0,
+    },
     expiresAt: {
       type: Date,
       required: true,

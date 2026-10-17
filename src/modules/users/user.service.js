@@ -7,6 +7,7 @@ import { parsePagination, buildPaginationMeta } from "../../shared/utils/paginat
 import { ROLES } from "../../shared/constants/roles.js";
 import { getChapterFilter } from "../../shared/utils/chapter-scope.js";
 import { googleDriveSyncService } from "../google-drive/google-drive-sync.service.js";
+import { escapeRegex } from "../../middleware/sanitize.middleware.js";
 
 export const userService = {
   /**
@@ -173,13 +174,16 @@ export const userService = {
     }
 
     if (queryParams.search) {
-      andConditions.push({
-        $or: [
-          { name: { $regex: queryParams.search, $options: "i" } },
-          { email: { $regex: queryParams.search, $options: "i" } },
-          { phone: { $regex: queryParams.search, $options: "i" } },
-        ]
-      });
+      const safeSearch = escapeRegex(String(queryParams.search).trim());
+      if (safeSearch) {
+        andConditions.push({
+          $or: [
+            { name: { $regex: safeSearch, $options: "i" } },
+            { email: { $regex: safeSearch, $options: "i" } },
+            { phone: { $regex: safeSearch, $options: "i" } },
+          ],
+        });
+      }
     }
 
     const filter = andConditions.length > 0 ? (andConditions.length === 1 ? andConditions[0] : { $and: andConditions }) : {};

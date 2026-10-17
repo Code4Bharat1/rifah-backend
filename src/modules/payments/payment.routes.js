@@ -18,6 +18,7 @@ router.post("/stripe/webhook", paymentController.handleStripeWebhook);
 router.post(
   "/",
   authMiddleware,
+  requireRole(ROLES.CENTRAL_ADMIN, ROLES.COUNTRY_ADMIN, ROLES.STATE_ADMIN, ROLES.SECRETARIAT),
   validateRequest(validateCreatePayment),
   paymentController.createPayment
 );

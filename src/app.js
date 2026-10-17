@@ -219,10 +219,17 @@ app.use(
       res.removeHeader("X-Frame-Options");
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-      res.setHeader("Content-Security-Policy", "frame-ancestors *");
+      res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors *");
       res.setHeader("Content-Type", "image/svg+xml");
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       
+      const safeFilename = String(filename || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+
       const svg = `
         <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
           <rect width="100%" height="100%" fill="#f1f5f9"/>
@@ -230,7 +237,7 @@ app.use(
             Placeholder Image
           </text>
           <text x="50%" y="55%" font-family="system-ui, sans-serif" font-size="16" fill="#94a3b8" text-anchor="middle">
-            ${filename}
+            ${safeFilename}
           </text>
         </svg>
       `;

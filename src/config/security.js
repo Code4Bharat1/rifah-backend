@@ -18,7 +18,8 @@ export const securityConfig = {
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
-    frameguard: false,
+    frameguard: { action: "sameorigin" },
+    hidePoweredBy: true,
   },
   bcrypt: {
     saltRounds: env.JWT.BCRYPT_SALT_ROUNDS,
